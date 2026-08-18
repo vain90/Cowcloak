@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Aliases · Cowcloak{% endblock %}
+{% block content %}
+<header class="topbar">
+  <div>
+    <p class="eyebrow">{{ domain }}</p>
+    <h1>Your aliases</h1>
+    <p class="muted">Signed in as {{ user }}</p>
+  </div>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button ghost" type="submit">Sign out</button>
+  </form>
+</header>
+
+<section class="grid two">
+  <div class="card">
+    <h2>Create alias</h2>
+    <form method="post" action="/aliases" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Description<input name="description" maxlength="160" required placeholder="Amazon, hotel, newsletter …"></label>
+      <label>Address style
+        <select name="mode" data-mode-select>
+          <option value="readable">Readable random</option>
+          <option value="named">Name + random suffix</option>
+          <option value="custom">Custom local part</option>
+        </select>
+      </label>
+      <label class="hidden" data-custom-local-part>Custom address
+        <div class="address-input"><input name="local_part" maxlength="63" placeholder="my-alias" autocomplete="off"><span>@{{ domain }}</span></div>
+      </label>
+      <p class="hint">The address is created on {{ domain }} and never changes when you rename its description.</p>
+      <button class="button primary" type="submit">Create alias</button>
+    </form>
+  </div>
+
+  <div class="card" id="pool">
+    <div class="section-head">
+      <div><h2>Offline pool</h2><p class="muted">Prepare active aliases and keep them in your phone notes.</p></div>
+      <span class="count">{{ reserved|length }}</span>
+    </div>
+    <div class="button-row">
+      {% for amount in [1, 5, 10, 20] %}
+      <form method="post" action="/aliases/pool">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="count" value="{{ amount }}">
+        <button class="button compact" type="submit">+{{ amount }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% if reserved %}
+    <div class="pool-list">
+      {% for alias in reserved %}
+      <div class="pool-item"><code data-pool-address>{{ alias.address }}</code><button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button></div>
+      {% endfor %}
+    </div>
+    <div class="button-row top-gap"><button class="button ghost" type="button" data-copy-pool>Copy all</button><a class="button ghost" href="/aliases/pool.txt">Plain text</a></div>
+    {% else %}<p class="empty">No prepared aliases yet.</p>{% endif %}
+  </div>
+</section>
+
+<section class="card top-gap">
+  <div class="section-head"><div><h2>Assigned aliases</h2><p class="muted">Only aliases pointing exclusively to your mailbox are shown.</p></div><input class="search" type="search" placeholder="Search" data-search></div>
+  <div class="alias-list">
+    {% for alias in assigned %}
+    <article class="alias-row" data-search-text="{{ alias.description|lower }} {{ alias.address|lower }}">
+      <div class="alias-main"><strong>{{ alias.description or "No description" }}</strong><code>{{ alias.address }}</code><span class="status {{ 'on' if alias.active else 'off' }}">{{ 'Active' if alias.active else 'Disabled' }}</span></div>
+      <div class="alias-actions">
+        <button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button>
+        <details><summary class="button compact">Edit</summary><div class="edit-panel"><form method="post" action="/aliases/{{ alias.id }}/description" class="stack small"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>Description<input name="description" maxlength="160" required value="{{ alias.description }}"></label><p class="hint">The alias address stays unchanged.</p><button class="button primary compact" type="submit">Save</button></form></div></details>
+        <form method="post" action="/aliases/{{ alias.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button compact {{ 'danger' if alias.active else '' }}" type="submit">{{ 'Disable' if alias.active else 'Enable' }}</button></form>
+      </div>
+    </article>
+    {% else %}<p class="empty">No assigned aliases yet.</p>{% endfor %}
+  </div>
+</section>
+
+{% if reserved %}
+<section class="card top-gap">
+  <h2>Assign a prepared alias</h2>
+  <p class="muted">After using one offline, add its purpose here. Only the mailcow comment changes.</p>
+  <div class="alias-list">
+    {% for alias in reserved %}
+    <article class="alias-row"><div class="alias-main"><code>{{ alias.address }}</code></div><form method="post" action="/aliases/{{ alias.id }}/description" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="description" maxlength="160" required placeholder="Used for …"><button class="button primary compact" type="submit">Assign</button></form></article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
