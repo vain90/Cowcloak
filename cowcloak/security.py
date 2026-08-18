@@ -25,5 +25,8 @@ def validate_csrf(request: Request, supplied: str | None) -> None:
 def require_user(request: Request) -> str:
     email = request.session.get("user_email")
     if not email:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
     return str(email).lower()
