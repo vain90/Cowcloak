@@ -18,7 +18,9 @@
     <h2>Create alias</h2>
     <form method="post" action="/aliases" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>Description<input name="description" maxlength="160" required placeholder="Amazon, hotel, newsletter …"></label>
+      <label>Description
+        <input name="description" maxlength="160" required placeholder="Amazon, hotel, newsletter …">
+      </label>
       <label>Address style
         <select name="mode" data-mode-select>
           <option value="readable">Readable random</option>
@@ -27,16 +29,24 @@
         </select>
       </label>
       <label class="hidden" data-custom-local-part>Custom address
-        <div class="address-input"><input name="local_part" maxlength="63" placeholder="my-alias" autocomplete="off"><span>@{{ domain }}</span></div>
+        <div class="address-input">
+          <input name="local_part" maxlength="63" placeholder="my-alias" autocomplete="off">
+          <span>@{{ domain }}</span>
+        </div>
       </label>
-      <p class="hint">The address is created on {{ domain }} and never changes when you rename its description.</p>
+      <p class="hint">
+        The address is created on {{ domain }} and never changes when you rename its description.
+      </p>
       <button class="button primary" type="submit">Create alias</button>
     </form>
   </div>
 
   <div class="card" id="pool">
     <div class="section-head">
-      <div><h2>Offline pool</h2><p class="muted">Prepare active aliases and keep them in your phone notes.</p></div>
+      <div>
+        <h2>Offline pool</h2>
+        <p class="muted">Prepare active aliases and keep them in your phone notes.</p>
+      </div>
       <span class="count">{{ reserved|length }}</span>
     </div>
     <div class="button-row">
@@ -51,37 +61,173 @@
     {% if reserved %}
     <div class="pool-list">
       {% for alias in reserved %}
-      <div class="pool-item"><code data-pool-address>{{ alias.address }}</code><button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button></div>
+      <div class="pool-item">
+        <code data-pool-address>{{ alias.address }}</code>
+        <div class="pool-actions">
+          <button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button>
+          <form
+            method="post"
+            action="/aliases/{{ alias.id }}/delete-reserved"
+            data-confirm="Delete this unused offline alias permanently? Only do this if you have never handed it out."
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button compact danger" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
       {% endfor %}
     </div>
-    <div class="button-row top-gap"><button class="button ghost" type="button" data-copy-pool>Copy all</button><a class="button ghost" href="/aliases/pool.txt">Plain text</a></div>
-    {% else %}<p class="empty">No prepared aliases yet.</p>{% endif %}
+    <div class="button-row top-gap">
+      <button class="button ghost" type="button" data-copy-pool>Copy all</button>
+      <a class="button ghost" href="/aliases/pool.txt">Plain text</a>
+    </div>
+    {% else %}
+    <p class="empty">No prepared aliases yet.</p>
+    {% endif %}
   </div>
 </section>
 
 <section class="card top-gap">
-  <div class="section-head"><div><h2>Assigned aliases</h2><p class="muted">Only aliases pointing exclusively to your mailbox are shown.</p></div><input class="search" type="search" placeholder="Search" data-search></div>
+  <div class="section-head alias-toolbar">
+    <div>
+      <h2>Assigned aliases</h2>
+      <p class="muted">
+        {{ filtered_total }} shown out of {{ assigned_total }} aliases pointing exclusively to your mailbox.
+      </p>
+    </div>
+    <form method="get" action="/aliases" class="search-form">
+      <input type="hidden" name="per_page" value="{{ per_page }}">
+      <input
+        class="search"
+        type="search"
+        name="q"
+        value="{{ search_query }}"
+        placeholder="Search address, description or comment"
+        aria-label="Search aliases"
+      >
+      <button class="button compact" type="submit">Search</button>
+      {% if search_query %}
+      <a class="button compact ghost" href="/aliases?per_page={{ per_page }}">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
   <div class="alias-list">
     {% for alias in assigned %}
-    <article class="alias-row" data-search-text="{{ alias.description|lower }} {{ alias.address|lower }}">
-      <div class="alias-main"><strong>{{ alias.description or "No description" }}</strong><code>{{ alias.address }}</code><span class="status {{ 'on' if alias.active else 'off' }}">{{ 'Active' if alias.active else 'Disabled' }}</span></div>
+    <article class="alias-row">
+      <div class="alias-main">
+        <div class="alias-info">
+          <strong>{{ alias.description or "No description" }}</strong>
+          <code>{{ alias.address }}</code>
+          <span class="alias-comment">
+            <span class="muted">Comment:</span> {{ alias.public_comment or "—" }}
+          </span>
+        </div>
+        <span class="status {{ 'on' if alias.active else 'off' }}">
+          {{ 'Active' if alias.active else 'Disabled' }}
+        </span>
+      </div>
       <div class="alias-actions">
         <button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button>
-        <details><summary class="button compact">Edit</summary><div class="edit-panel"><form method="post" action="/aliases/{{ alias.id }}/description" class="stack small"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>Description<input name="description" maxlength="160" required value="{{ alias.description }}"></label><p class="hint">The alias address stays unchanged.</p><button class="button primary compact" type="submit">Save</button></form></div></details>
-        <form method="post" action="/aliases/{{ alias.id }}/toggle"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button compact {{ 'danger' if alias.active else '' }}" type="submit">{{ 'Disable' if alias.active else 'Enable' }}</button></form>
+        <details>
+          <summary class="button compact">Edit</summary>
+          <div class="edit-panel">
+            <form method="post" action="/aliases/{{ alias.id }}/metadata" class="stack small">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <label>Description
+                <input name="description" maxlength="160" value="{{ alias.description }}">
+              </label>
+              <label>Comment
+                <input name="public_comment" maxlength="160" value="{{ alias.public_comment }}">
+              </label>
+              <p class="hint">The alias address stays unchanged.</p>
+              <button class="button primary compact" type="submit">Save</button>
+            </form>
+          </div>
+        </details>
+        <form method="post" action="/aliases/{{ alias.id }}/toggle">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button compact {{ 'danger' if alias.active else '' }}" type="submit">
+            {{ 'Disable' if alias.active else 'Enable' }}
+          </button>
+        </form>
       </div>
     </article>
-    {% else %}<p class="empty">No assigned aliases yet.</p>{% endfor %}
+    {% else %}
+    <p class="empty">
+      {% if search_query %}No aliases match your search.{% else %}No assigned aliases yet.{% endif %}
+    </p>
+    {% endfor %}
+  </div>
+
+  <div class="list-footer">
+    <div class="range-summary">
+      {% if filtered_total %}
+      Showing {{ range_start }}–{{ range_end }} of {{ filtered_total }}
+      {% else %}
+      Showing 0 aliases
+      {% endif %}
+    </div>
+
+    <form method="get" action="/aliases" class="page-size-form">
+      <input type="hidden" name="q" value="{{ search_query }}">
+      <label>Rows per page
+        <select name="per_page" data-page-size>
+          {% for size in page_sizes %}
+          <option value="{{ size }}" {% if size == per_page %}selected{% endif %}>{{ size }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <noscript><button class="button compact" type="submit">Apply</button></noscript>
+    </form>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="Alias pages">
+      {% if page > 1 %}
+      <a
+        class="page-link"
+        href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page - 1 }}"
+      >Previous</a>
+      {% endif %}
+
+      {% for item in pagination_items %}
+        {% if item is none %}
+        <span class="page-ellipsis">…</span>
+        {% elif item == page %}
+        <span class="page-link current" aria-current="page">{{ item }}</span>
+        {% else %}
+        <a
+          class="page-link"
+          href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ item }}"
+        >{{ item }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page < total_pages %}
+      <a
+        class="page-link"
+        href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page + 1 }}"
+      >Next</a>
+      {% endif %}
+    </nav>
+    {% endif %}
   </div>
 </section>
 
 {% if reserved %}
 <section class="card top-gap">
   <h2>Assign a prepared alias</h2>
-  <p class="muted">After using one offline, add its purpose here. Only the mailcow comment changes.</p>
+  <p class="muted">After using one offline, add its purpose here. Only the mailcow description changes.</p>
   <div class="alias-list">
     {% for alias in reserved %}
-    <article class="alias-row"><div class="alias-main"><code>{{ alias.address }}</code></div><form method="post" action="/aliases/{{ alias.id }}/description" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="description" maxlength="160" required placeholder="Used for …"><button class="button primary compact" type="submit">Assign</button></form></article>
+    <article class="alias-row">
+      <div class="alias-main"><code>{{ alias.address }}</code></div>
+      <form method="post" action="/aliases/{{ alias.id }}/description" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="description" maxlength="160" required placeholder="Used for …">
+        <button class="button primary compact" type="submit">Assign</button>
+      </form>
+    </article>
     {% endfor %}
   </div>
 </section>

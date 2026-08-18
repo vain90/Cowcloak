@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs
 
 import httpx
 
@@ -46,4 +47,43 @@ async def test_description_update_never_changes_address_or_target():
     await client.update_description(42, "Amazon private")
     await client.close()
 
-    assert captured["json"] == {"items": ["42"], "attr": {"private_comment": "Amazon private"}}
+    assert captured["json"] == {
+        "items": ["42"],
+        "attr": {"private_comment": "Amazon private"},
+    }
+
+
+async def test_metadata_update_changes_only_comments():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.update_metadata(42, "Amazon private", "Created for shopping")
+    await client.close()
+
+    assert captured["json"] == {
+        "items": ["42"],
+        "attr": {
+            "private_comment": "Amazon private",
+            "public_comment": "Created for shopping",
+        },
+    }
+
+
+async def test_delete_alias_uses_mailcow_alias_delete_endpoint():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["form"] = parse_qs(request.content.decode())
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_deleted"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.delete_alias(42)
+    await client.close()
+
+    assert captured["path"] == "/api/v1/delete/alias"
+    assert captured["form"]["items"] == ['["42"]']

@@ -29,10 +29,14 @@ document.querySelector('[data-copy-pool]')?.addEventListener('click', async (eve
   setTimeout(() => { button.textContent = original; }, 1200);
 });
 
-const search = document.querySelector('[data-search]');
-search?.addEventListener('input', () => {
-  const needle = search.value.trim().toLowerCase();
-  document.querySelectorAll('[data-search-text]').forEach((row) => {
-    row.hidden = !row.dataset.searchText.includes(needle);
+document.querySelectorAll('[data-confirm]').forEach((form) => {
+  form.addEventListener('submit', (event) => {
+    if (!window.confirm(form.dataset.confirm)) {
+      event.preventDefault();
+    }
   });
+});
+
+document.querySelector('[data-page-size]')?.addEventListener('change', (event) => {
+  event.currentTarget.form?.submit();
 });

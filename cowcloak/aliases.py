@@ -24,7 +24,7 @@ class AliasRecord:
     is_catch_all: bool = False
 
     @classmethod
-    def from_mailcow(cls, data: dict) -> "AliasRecord":
+    def from_mailcow(cls, data: dict) -> AliasRecord:
         sender_allowed = data.get("sender_allowed")
         return cls(
             id=int(data["id"]),
