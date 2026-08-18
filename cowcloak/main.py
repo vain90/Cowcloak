@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request, status
+from fastapi import FastAPI, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,7 +11,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from cowcloak import __version__
-from cowcloak.aliases import RESERVED_COMMENT, is_owned_alias, mailbox_domain, named_local_part, readable_local_part, validate_local_part
+from cowcloak.aliases import (
+    RESERVED_COMMENT,
+    is_owned_alias,
+    mailbox_domain,
+    named_local_part,
+    readable_local_part,
+    validate_local_part,
+)
 from cowcloak.auth import OAuthError, authorization_url, exchange_code, validate_oauth_state
 from cowcloak.config import Settings, get_settings
 from cowcloak.mailcow import MailcowClient, MailcowError
@@ -19,6 +26,28 @@ from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
+PAGE_SIZES = (10, 25, 50, 100)
+
+
+def pagination_items(current_page: int, total_pages: int) -> list[int | None]:
+    if total_pages <= 7:
+        return list(range(1, total_pages + 1))
+
+    visible = {1, total_pages}
+    visible.update(
+        page
+        for page in range(current_page - 2, current_page + 3)
+        if 1 <= page <= total_pages
+    )
+
+    items: list[int | None] = []
+    previous = 0
+    for page in sorted(visible):
+        if previous and page - previous > 1:
+            items.append(None)
+        items.append(page)
+        previous = page
+    return items
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -32,7 +61,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Cowcloak", version=__version__, lifespan=lifespan)
     app.state.settings = settings
-    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, session_cookie="cowcloak_session", same_site="lax", https_only=settings.cookie_secure, max_age=60 * 60 * 12)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret,
+        session_cookie="cowcloak_session",
+        same_site="lax",
+        https_only=settings.cookie_secure,
+        max_age=60 * 60 * 12,
+    )
     if settings.trusted_host_list != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_host_list)
     app.mount("/static", StaticFiles(directory=str(PACKAGE_DIR / "static")), name="static")
@@ -44,7 +80,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data:; style-src 'self'; "
+            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
         return response
 
     def client(request: Request) -> MailcowClient:
@@ -57,7 +97,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=403, detail="Alias is not owned by this mailbox")
         return user, alias
 
-    async def create_unique_alias(request: Request, user: str, factory, description: str, attempts: int = 12) -> str:
+    async def create_unique_alias(
+        request: Request,
+        user: str,
+        factory,
+        description: str,
+        attempts: int = 12,
+    ) -> str:
         domain = mailbox_domain(user)
         last_error: Exception | None = None
         for _ in range(attempts):
@@ -67,7 +113,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return address
             except MailcowError as exc:
                 last_error = exc
-        raise MailcowError(f"Could not create a unique alias after {attempts} attempts: {last_error}")
+        raise MailcowError(
+            f"Could not create a unique alias after {attempts} attempts: {last_error}"
+        )
 
     @app.get("/healthz", response_class=PlainTextResponse)
     async def healthz() -> str:
@@ -77,14 +125,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def index(request: Request):
         if request.session.get("user_email"):
             return RedirectResponse("/aliases", status_code=303)
-        return TEMPLATES.TemplateResponse(request, "index.html", {"version": __version__})
+        return TEMPLATES.TemplateResponse(
+            request,
+            "index.html",
+            {"version": __version__},
+        )
 
     @app.get("/login")
     async def login(request: Request):
         return RedirectResponse(authorization_url(request, settings), status_code=302)
 
     @app.get("/oauth/callback")
-    async def oauth_callback(request: Request, code: str | None = None, state: str | None = None):
+    async def oauth_callback(
+        request: Request,
+        code: str | None = None,
+        state: str | None = None,
+    ):
         validate_oauth_state(request, state)
         if not code:
             raise HTTPException(status_code=400, detail="Missing OAuth code")
@@ -111,29 +167,113 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse("/", status_code=303)
 
     @app.get("/aliases", response_class=HTMLResponse)
-    async def aliases_dashboard(request: Request):
+    async def aliases_dashboard(
+        request: Request,
+        q: str = Query(default="", max_length=160),
+        page: int = Query(default=1, ge=1),
+        per_page: int = Query(default=25),
+    ):
         user = require_user(request)
+        if per_page not in PAGE_SIZES:
+            per_page = 25
+
         try:
             all_aliases = await client(request).list_aliases()
         except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
         owned = [alias for alias in all_aliases if is_owned_alias(alias, user)]
-        reserved = sorted((alias for alias in owned if alias.is_reserved), key=lambda item: item.address)
-        assigned = sorted((alias for alias in owned if not alias.is_reserved), key=lambda item: (item.description.lower(), item.address))
-        return TEMPLATES.TemplateResponse(request, "dashboard.html", {"user": user, "domain": mailbox_domain(user), "assigned": assigned, "reserved": reserved, "csrf_token": ensure_csrf_token(request), "wordlist": settings.wordlist, "version": __version__})
+        reserved = sorted(
+            (alias for alias in owned if alias.is_reserved),
+            key=lambda item: item.address,
+        )
+        assigned_all = sorted(
+            (alias for alias in owned if not alias.is_reserved),
+            key=lambda item: (item.description.lower(), item.address),
+        )
+
+        search_query = q.strip()
+        if search_query:
+            needle = search_query.lower()
+            assigned_filtered = [
+                alias
+                for alias in assigned_all
+                if needle
+                in " ".join(
+                    (
+                        alias.address,
+                        alias.description,
+                        alias.private_comment,
+                        alias.public_comment,
+                    )
+                ).lower()
+            ]
+        else:
+            assigned_filtered = assigned_all
+
+        filtered_total = len(assigned_filtered)
+        total_pages = max(1, (filtered_total + per_page - 1) // per_page)
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+        assigned = assigned_filtered[offset : offset + per_page]
+        range_start = offset + 1 if filtered_total else 0
+        range_end = min(offset + per_page, filtered_total)
+
+        return TEMPLATES.TemplateResponse(
+            request,
+            "dashboard.html",
+            {
+                "user": user,
+                "domain": mailbox_domain(user),
+                "assigned": assigned,
+                "assigned_total": len(assigned_all),
+                "filtered_total": filtered_total,
+                "reserved": reserved,
+                "csrf_token": ensure_csrf_token(request),
+                "wordlist": settings.wordlist,
+                "version": __version__,
+                "search_query": search_query,
+                "page": page,
+                "per_page": per_page,
+                "page_sizes": PAGE_SIZES,
+                "total_pages": total_pages,
+                "pagination_items": pagination_items(page, total_pages),
+                "range_start": range_start,
+                "range_end": range_end,
+            },
+        )
 
     @app.post("/aliases")
-    async def create_alias(request: Request, mode: str = Form(...), description: str = Form(...), local_part: str = Form(""), csrf_token: str = Form(...)):
+    async def create_alias(
+        request: Request,
+        mode: str = Form(...),
+        description: str = Form(...),
+        local_part: str = Form(""),
+        csrf_token: str = Form(...),
+    ):
         validate_csrf(request, csrf_token)
         user = require_user(request)
         description = description.strip()
         if not description or len(description) > 160:
-            raise HTTPException(status_code=400, detail="Description must be 1-160 characters")
+            raise HTTPException(
+                status_code=400,
+                detail="Description must be 1-160 characters",
+            )
         try:
             if mode == "readable":
-                await create_unique_alias(request, user, lambda: readable_local_part(settings.wordlist), description)
+                await create_unique_alias(
+                    request,
+                    user,
+                    lambda: readable_local_part(settings.wordlist),
+                    description,
+                )
             elif mode == "named":
-                await create_unique_alias(request, user, lambda: named_local_part(description), description)
+                await create_unique_alias(
+                    request,
+                    user,
+                    lambda: named_local_part(description),
+                    description,
+                )
             elif mode == "custom":
                 address = f"{validate_local_part(local_part)}@{mailbox_domain(user)}"
                 await client(request).create_alias(address, user, description)
@@ -146,14 +286,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse("/aliases", status_code=303)
 
     @app.post("/aliases/pool")
-    async def create_pool(request: Request, count: int = Form(...), csrf_token: str = Form(...)):
+    async def create_pool(
+        request: Request,
+        count: int = Form(...),
+        csrf_token: str = Form(...),
+    ):
         validate_csrf(request, csrf_token)
         user = require_user(request)
         if count not in {1, 5, 10, 20}:
             raise HTTPException(status_code=400, detail="Pool size must be 1, 5, 10 or 20")
         try:
             for _ in range(count):
-                await create_unique_alias(request, user, lambda: readable_local_part(settings.wordlist), RESERVED_COMMENT)
+                await create_unique_alias(
+                    request,
+                    user,
+                    lambda: readable_local_part(settings.wordlist),
+                    RESERVED_COMMENT,
+                )
         except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return RedirectResponse("/aliases#pool", status_code=303)
@@ -162,25 +311,63 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def export_pool(request: Request):
         user = require_user(request)
         aliases = await client(request).list_aliases()
-        reserved = sorted(alias.address for alias in aliases if is_owned_alias(alias, user) and alias.is_reserved and alias.active)
+        reserved = sorted(
+            alias.address
+            for alias in aliases
+            if is_owned_alias(alias, user) and alias.is_reserved and alias.active
+        )
         return PlainTextResponse("\n".join(reserved) + ("\n" if reserved else ""))
 
     @app.post("/aliases/{alias_id}/description")
-    async def update_description(request: Request, alias_id: int, description: str = Form(...), csrf_token: str = Form(...)):
+    async def update_description(
+        request: Request,
+        alias_id: int,
+        description: str = Form(...),
+        csrf_token: str = Form(...),
+    ):
         validate_csrf(request, csrf_token)
         await owned_alias(request, alias_id)
         description = description.strip()
         if not description or len(description) > 160:
-            raise HTTPException(status_code=400, detail="Description must be 1-160 characters")
+            raise HTTPException(
+                status_code=400,
+                detail="Description must be 1-160 characters",
+            )
         try:
-            # Only the mailcow comment changes. Alias addresses are immutable in Cowcloak.
             await client(request).update_description(alias_id, description)
         except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return RedirectResponse("/aliases", status_code=303)
 
+    @app.post("/aliases/{alias_id}/metadata")
+    async def update_metadata(
+        request: Request,
+        alias_id: int,
+        description: str = Form(""),
+        public_comment: str = Form(""),
+        csrf_token: str = Form(...),
+    ):
+        validate_csrf(request, csrf_token)
+        await owned_alias(request, alias_id)
+        description = description.strip()
+        public_comment = public_comment.strip()
+        if len(description) > 160 or len(public_comment) > 160:
+            raise HTTPException(
+                status_code=400,
+                detail="Description and comment must each be at most 160 characters",
+            )
+        try:
+            await client(request).update_metadata(alias_id, description, public_comment)
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse("/aliases", status_code=303)
+
     @app.post("/aliases/{alias_id}/toggle")
-    async def toggle_alias(request: Request, alias_id: int, csrf_token: str = Form(...)):
+    async def toggle_alias(
+        request: Request,
+        alias_id: int,
+        csrf_token: str = Form(...),
+    ):
         validate_csrf(request, csrf_token)
         _, alias = await owned_alias(request, alias_id)
         try:
@@ -188,6 +375,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return RedirectResponse("/aliases", status_code=303)
+
+    @app.post("/aliases/{alias_id}/delete-reserved")
+    async def delete_reserved_alias(
+        request: Request,
+        alias_id: int,
+        csrf_token: str = Form(...),
+    ):
+        validate_csrf(request, csrf_token)
+        _, alias = await owned_alias(request, alias_id)
+        if not alias.is_reserved:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only unused offline aliases can be deleted",
+            )
+        try:
+            await client(request).delete_alias(alias_id)
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse("/aliases#pool", status_code=303)
 
     return app
 
