@@ -103,11 +103,12 @@ def readable_local_part(language: str = "en") -> str:
 def is_owned_alias(alias: AliasRecord, user_email: str) -> bool:
     user_email = user_email.lower()
     domain = mailbox_domain(user_email)
-    if alias.is_catch_all:
+    address = alias.address.strip().lower()
+    if alias.is_catch_all or address.startswith("@"):
         return False
     if alias.domain.lower() != domain:
         return False
-    if not alias.address.lower().endswith(f"@{domain}"):
+    if not address.endswith(f"@{domain}"):
         return False
     # Shared aliases are deliberately excluded. The authenticated mailbox must be the only target.
     return alias.goto.strip().lower() == user_email
