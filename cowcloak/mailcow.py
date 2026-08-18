@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import quote
 
@@ -41,7 +42,11 @@ class MailcowClient:
     @staticmethod
     def _ensure_success(payload: Any) -> None:
         entries = payload if isinstance(payload, list) else [payload]
-        failures = [entry for entry in entries if isinstance(entry, dict) and entry.get("type") != "success"]
+        failures = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("type") != "success"
+        ]
         if failures:
             messages = [str(entry.get("msg", "unknown mailcow error")) for entry in failures]
             raise MailcowError("; ".join(messages))
@@ -100,10 +105,34 @@ class MailcowClient:
         )
         self._ensure_success(payload)
 
+    async def update_metadata(
+        self, alias_id: int, description: str, public_comment: str
+    ) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/alias",
+            json={
+                "items": [str(alias_id)],
+                "attr": {
+                    "private_comment": description,
+                    "public_comment": public_comment,
+                },
+            },
+        )
+        self._ensure_success(payload)
+
     async def set_active(self, alias_id: int, active: bool) -> None:
         payload = await self._request(
             "POST",
             "/api/v1/edit/alias",
             json={"items": [str(alias_id)], "attr": {"active": 1 if active else 0}},
+        )
+        self._ensure_success(payload)
+
+    async def delete_alias(self, alias_id: int) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/delete/alias",
+            data={"items": json.dumps([str(alias_id)])},
         )
         self._ensure_success(payload)
