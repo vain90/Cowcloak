@@ -15,7 +15,11 @@ class MailcowError(RuntimeError):
 
 
 class MailcowClient:
-    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.settings = settings
         self._client = httpx.AsyncClient(
             base_url=settings.mailcow_url,
