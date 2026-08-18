@@ -1,6 +1,12 @@
 import pytest
 
-from cowcloak.aliases import AliasRecord, is_owned_alias, mailbox_domain, slugify, validate_local_part
+from cowcloak.aliases import (
+    AliasRecord,
+    is_owned_alias,
+    mailbox_domain,
+    slugify,
+    validate_local_part,
+)
 
 
 def test_mailbox_domain_is_derived_from_login():
