@@ -3,7 +3,9 @@ import pytest
 from cowcloak.aliases import (
     RESERVED_COMMENT,
     AliasRecord,
+    is_mailbox_catch_all,
     is_owned_alias,
+    is_primary_mailbox_alias,
     load_words,
     mailbox_domain,
     readable_local_part,
@@ -64,6 +66,49 @@ def test_owned_alias_requires_exact_single_target_and_same_domain():
         public_comment="Shared",
     )
     assert not is_owned_alias(shared, "hidden@example.org")
+
+
+def test_primary_mailbox_alias_is_detected_separately():
+    primary = AliasRecord(
+        id=7,
+        address="hidden@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment="",
+        public_comment="",
+        sender_allowed=False,
+    )
+    assert is_primary_mailbox_alias(primary, "hidden@example.org")
+    assert not is_primary_mailbox_alias(primary, "other@example.org")
+
+
+def test_active_catch_all_for_mailbox_is_detected_without_exposing_targets():
+    catch_all = AliasRecord(
+        id=8,
+        address="@example.org",
+        goto="hidden@example.org,other@example.org",
+        domain="example.org",
+        active=True,
+        private_comment="",
+        public_comment="",
+        is_catch_all=True,
+    )
+    assert is_mailbox_catch_all(catch_all, "hidden@example.org")
+    assert is_mailbox_catch_all(catch_all, "other@example.org")
+    assert not is_mailbox_catch_all(catch_all, "nobody@example.org")
+
+    inactive = AliasRecord(
+        id=9,
+        address="@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=False,
+        private_comment="",
+        public_comment="",
+        is_catch_all=True,
+    )
+    assert not is_mailbox_catch_all(inactive, "hidden@example.org")
 
 
 def test_private_comments_are_not_exposed_as_description():
