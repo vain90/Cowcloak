@@ -12,6 +12,7 @@ All notable changes to Cowcloak are documented here.
 - `--check`, `--yes`, `--force` and version/help options for the updater
 - bulk selection for assigned aliases with enable, disable, SOGo visibility and clipboard actions
 - alias replacement workflow that creates a fresh address with the same purpose and SOGo visibility while keeping the previous alias disabled for traceability
+- replacement format selection for name-based, readable-random or custom replacement addresses
 
 ### Changed
 
@@ -20,6 +21,7 @@ All notable changes to Cowcloak are documented here.
 - name-based aliases now use a two-character ASCII letter/digit suffix with ambiguous characters excluded
 - readable-random aliases now use exactly two short words of at most six characters plus a two-digit number
 - both readable word lists contain 200–250 unique short words
+- bulk selection now uses one tri-state select-all checkbox and a compact action dropdown instead of separate selection and action buttons
 - the offline pool stays compact and scrolls internally instead of stretching the create-alias card
 - alias edit popovers close when clicking outside them
 - removed a redundant address-immutability hint from the alias creation form
