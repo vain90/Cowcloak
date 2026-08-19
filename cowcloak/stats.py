@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from cowcloak.stats_mode import StatsMode, is_stats_mode_downgrade
+
 SCHEMA_VERSION = 1
 
 
@@ -173,6 +175,17 @@ class StatsStore:
             raise RuntimeError("Usage database does not contain tracking_started_at")
         return int(row["value"])
 
+    async def sender_mode(self, mailbox: str) -> str | None:
+        return await asyncio.to_thread(self._sender_mode, mailbox)
+
+    def _sender_mode(self, mailbox: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT mode FROM sender_mode_state WHERE mailbox = ?",
+                (mailbox.lower(),),
+            ).fetchone()
+        return str(row["mode"]) if row is not None else None
+
     async def sync_sender_modes(
         self,
         modes: dict[str, str],
@@ -187,8 +200,15 @@ class StatsStore:
     def _sync_sender_modes(self, modes: dict[str, str], now: int) -> dict[str, int]:
         starts: dict[str, int] = {}
         with self._connect() as connection:
+            initial_row = connection.execute(
+                "SELECT value FROM usage_meta WHERE key = ?",
+                ("tracking_started_at",),
+            ).fetchone()
+            initial_start = int(initial_row["value"]) if initial_row is not None else now
+
             for mailbox, mode in modes.items():
                 mailbox = mailbox.lower()
+                target_mode = StatsMode(mode)
                 row = connection.execute(
                     "SELECT mode, tracking_started_at FROM sender_mode_state WHERE mailbox = ?",
                     (mailbox,),
@@ -199,29 +219,32 @@ class StatsStore:
                         INSERT INTO sender_mode_state (mailbox, mode, tracking_started_at)
                         VALUES (?, ?, ?)
                         """,
-                        (mailbox, mode, now),
+                        (mailbox, mode, initial_start),
                     )
-                    starts[mailbox] = now
+                    starts[mailbox] = initial_start
                     continue
 
-                current_mode = str(row["mode"])
+                current_mode = StatsMode(str(row["mode"]))
                 current_start = int(row["tracking_started_at"])
-                if current_mode == mode:
+                if current_mode is target_mode:
                     starts[mailbox] = current_start
                     continue
 
-                # Sender detail is intentionally reset on every mode change. This prevents
-                # full addresses from surviving a downgrade and avoids retroactively
-                # reprocessing old Rspamd history after increasing detail.
-                connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
-                connection.execute(
-                    "DELETE FROM sender_processed_events WHERE mailbox = ?",
-                    (mailbox,),
-                )
-                connection.execute(
-                    "DELETE FROM sender_expectations WHERE mailbox = ?",
-                    (mailbox,),
-                )
+                if is_stats_mode_downgrade(current_mode, target_mode):
+                    # Data that the target privacy mode is not allowed to retain is
+                    # removed before collection continues at the lower detail level.
+                    connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
+                    connection.execute(
+                        "DELETE FROM sender_processed_events WHERE mailbox = ?",
+                        (mailbox,),
+                    )
+                    connection.execute(
+                        "DELETE FROM sender_expectations WHERE mailbox = ?",
+                        (mailbox,),
+                    )
+                    if target_mode is StatsMode.OFF:
+                        connection.execute("DELETE FROM alias_usage WHERE mailbox = ?", (mailbox,))
+
                 connection.execute(
                     """
                     UPDATE sender_mode_state

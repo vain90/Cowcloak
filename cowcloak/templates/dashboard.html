@@ -108,8 +108,41 @@
     {% if reserved %}
     <div class="pool-list">
       {% for alias in reserved %}
-      <div class="pool-item">
-        <code data-pool-address>{{ alias.address }}</code>
+      {% set pool_stats = usage_stats.get(alias.address|lower) if usage_stats_visible else none %}
+      {% set pool_senders = sender_stats.get(alias.address|lower, []) if stats_state and stats_state.sender_detail_enabled else [] %}
+      <div class="pool-item {% if pool_stats and pool_stats.received_count %}pool-item-used{% endif %}">
+        <div class="alias-info">
+          <code data-pool-address>{{ alias.address }}</code>
+          {% if pool_stats and pool_stats.received_count %}
+          <div class="usage-summary">
+            <span class="sender-stats-alert">{{ pool_stats.received_count }} {{ t.usage_received }}</span>
+            {% if pool_stats.last_used_at %}
+            <span>
+              {{ t.usage_last_used }}
+              <time data-local-timestamp="{{ pool_stats.last_used_at }}">{{ pool_stats.last_used_at }}</time>
+            </span>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% if pool_senders %}
+          <details class="sender-stats">
+            <summary>
+              {{ t.sender_stats_title }}
+              <span class="sender-stats-count">{{ pool_senders|length }}</span>
+            </summary>
+            <div class="sender-stats-list">
+              {% for sender in pool_senders %}
+              <div class="sender-stats-row">
+                <div class="sender-stats-identity">
+                  <code>{{ sender.label }}</code>
+                </div>
+                <span class="sender-message-count">{{ sender.received_count }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </details>
+          {% endif %}
+        </div>
         <div class="pool-actions">
           <button
             class="button compact primary"
@@ -487,6 +520,8 @@
 </section>
 
 {% for alias in reserved %}
+{% set pool_stats = usage_stats.get(alias.address|lower) if usage_stats_visible else none %}
+{% set pool_senders = sender_stats.get(alias.address|lower, []) if stats_state and stats_state.sender_detail_enabled else [] %}
 <dialog class="assign-dialog assign-dialog-single" data-assign-dialog="{{ alias.id }}">
   <div class="dialog-head">
     <div>
@@ -504,6 +539,31 @@
   <form method="post" action="/aliases/{{ alias.id }}/description" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <code class="assign-address">{{ alias.address }}</code>
+    {% if pool_stats and pool_stats.received_count %}
+    <div class="pool-assignment-usage">
+      <div class="usage-summary">
+        <span class="sender-stats-alert">{{ pool_stats.received_count }} {{ t.usage_received }}</span>
+        {% if pool_stats.last_used_at %}
+        <span>
+          {{ t.usage_last_used }}
+          <time data-local-timestamp="{{ pool_stats.last_used_at }}">{{ pool_stats.last_used_at }}</time>
+        </span>
+        {% endif %}
+      </div>
+      {% if pool_senders %}
+      <div class="sender-stats-list pool-sender-list">
+        {% for sender in pool_senders %}
+        <div class="sender-stats-row">
+          <div class="sender-stats-identity">
+            <code>{{ sender.label }}</code>
+          </div>
+          <span class="sender-message-count">{{ sender.received_count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
     <label>{{ t.purpose }}
       <input
         name="description"

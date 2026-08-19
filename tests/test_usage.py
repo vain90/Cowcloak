@@ -136,14 +136,14 @@ class FakeMailcow:
         ]
 
 
-async def test_collector_counts_only_accepted_opted_in_owned_aliases(tmp_path):
+async def test_collector_counts_accepted_opted_in_owned_and_reserved_aliases(tmp_path):
     store = StatsStore(str(tmp_path / "usage.sqlite3"))
     await store.initialize()
     started_at = await store.tracking_started_at()
     mailcow = FakeMailcow(started_at + 1)
     collector = UsageCollector(settings(str(tmp_path / "usage.sqlite3")), mailcow, store)
 
-    assert await collector.collect_once() == 1
+    assert await collector.collect_once() == 2
     assert await collector.collect_once() == 0
 
     usage = await store.alias_usage(
@@ -152,8 +152,30 @@ async def test_collector_counts_only_accepted_opted_in_owned_aliases(tmp_path):
     )
     assert usage["shop@example.org"].received_count == 1
     assert usage["shop@example.org"].sent_count == 0
-    assert "offline@example.org" not in usage
+    assert usage["offline@example.org"].received_count == 1
     assert "shared@example.org" not in usage
+
+
+async def test_reserved_offline_alias_collects_sender_detail_in_full_mode(tmp_path):
+    store = StatsStore(str(tmp_path / "usage.sqlite3"))
+    await store.initialize()
+    started_at = await store.tracking_started_at()
+    mailcow = FakeMailcow(started_at + 1)
+
+    async def list_domains():
+        return [
+            {"domain": "example.org", "tags": ["cowcloak-stats-full"]},
+            {"domain": "other.org", "tags": []},
+        ]
+
+    mailcow.list_domains = list_domains
+    collector = UsageCollector(settings(str(tmp_path / "usage.sqlite3")), mailcow, store)
+
+    assert await collector.collect_once() == 4
+    senders = await store.sender_usage("user@example.org", ["offline@example.org"])
+    assert len(senders["offline@example.org"]) == 1
+    assert senders["offline@example.org"][0].sender_address == "sender@example.net"
+    assert senders["offline@example.org"][0].sender_domain == "example.net"
 
 
 async def test_collector_counts_authenticated_alias_sends_once(tmp_path):

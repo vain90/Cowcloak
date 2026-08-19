@@ -18,8 +18,13 @@
   <link rel="stylesheet" href="/static/mobile.css">
   <script src="/static/app.js" defer></script>
   <script src="/static/stats.js" defer></script>
+  <script src="/static/stats-mode.js" defer></script>
 </head>
-<body data-copied-label="{{ t.copied }}">
+<body
+  data-copied-label="{{ t.copied }}"
+  data-stats-effective="{% if stats_confirmation_mode is defined and stats_confirmation_mode %}{{ stats_confirmation_mode }}{% elif stats_state is defined and stats_state %}{{ stats_state.effective.value }}{% endif %}"
+  data-stats-domain="{% if stats_state is defined and stats_state and stats_state.domain_default %}{{ stats_state.domain_default.value }}{% else %}off{% endif %}"
+>
   <nav class="language-switch" aria-label="{{ t.language }}">
     <a
       class="language-link {% if language == 'de' %}current{% endif %}"

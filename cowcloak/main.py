@@ -37,8 +37,12 @@ from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.senders import sender_match_token
 from cowcloak.stats import StatsStore
 from cowcloak.stats_mode import (
+    StatsMode,
     StatsModeSource,
+    is_stats_mode_downgrade,
     replace_mailbox_stats_tags,
+    resolve_stats_mode,
+    selected_effective_mode,
 )
 from cowcloak.usage import UsageCollector, mailbox_stats_state
 
@@ -347,6 +351,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         stats_state = None
         stats_error = False
         stats_mode_selection = "inherit"
+        stats_confirmation_mode: str | None = None
         usage_stats_visible = False
         usage_stats: dict[str, dict[str, int | None]] = {}
         sender_stats: dict[
@@ -366,16 +371,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 elif stats_state.mailbox_override is not None:
                     stats_mode_selection = stats_state.mailbox_override.value
 
-                await stats_store.sync_sender_modes({user: stats_state.effective.value})
+                stored_mode = await stats_store.sender_mode(user)
+                stats_confirmation_mode = stored_mode or stats_state.effective.value
+                if not stats_state.conflict:
+                    await stats_store.sync_sender_modes({user: stats_state.effective.value})
             except (MailcowAccessDenied, MailcowError):
                 stats_error = True
                 stats_state = None
                 usage_stats_visible = False
 
             if usage_stats_visible and stats_state is not None:
-                addresses = [alias.address for alias in assigned]
+                displayed_aliases = [*assigned, *reserved]
+                addresses = [alias.address for alias in displayed_aliases]
                 stored_usage = await stats_store.alias_usage(user, addresses)
-                for alias in assigned:
+                for alias in displayed_aliases:
                     usage = stored_usage.get(alias.address.lower())
                     received_count = usage.received_count if usage is not None else 0
                     sent_count = usage.sent_count if usage is not None else 0
@@ -396,11 +405,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
                 if stats_state.sender_detail_enabled:
                     stored_senders = await stats_store.sender_usage(user, addresses)
-                    assigned_by_address = {
-                        alias.address.lower(): alias for alias in assigned
+                    displayed_by_address = {
+                        alias.address.lower(): alias for alias in displayed_aliases
                     }
                     for alias_address, entries in stored_senders.items():
-                        alias_record = assigned_by_address.get(alias_address)
+                        alias_record = displayed_by_address.get(alias_address)
                         if alias_record is None:
                             continue
                         rows: list[dict[str, str | int | bool | None]] = []
@@ -473,6 +482,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 stats_error=stats_error,
                 stats_state=stats_state,
                 stats_mode_selection=stats_mode_selection,
+                stats_confirmation_mode=stats_confirmation_mode,
                 usage_stats_visible=usage_stats_visible,
                 usage_stats=usage_stats,
                 sender_stats=sender_stats,
@@ -485,6 +495,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         mode: str = Form(...),
         csrf_token: str = Form(...),
         return_to: str = Form("/aliases"),
+        confirm_downgrade: bool = Form(False),
     ):
         validate_csrf(request, csrf_token)
         user = require_user(request)
@@ -496,6 +507,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         try:
             mailbox = await client(request).get_mailbox(user)
+            domain_name = str(
+                mailbox.get("domain") or user.rsplit("@", 1)[-1]
+            ).strip().lower()
+            domain_details = await client(request).get_domain(domain_name)
+            current_state = resolve_stats_mode(
+                mailbox.get("tags"),
+                domain_details.get("tags"),
+                settings.usage_tag,
+            )
+            target_mode = selected_effective_mode(mode, current_state.domain_default)
+            stored_mode = await stats_store.sender_mode(user)
+            confirmation_mode = (
+                StatsMode(stored_mode) if stored_mode is not None else current_state.effective
+            )
+            if (
+                is_stats_mode_downgrade(confirmation_mode, target_mode)
+                and not confirm_downgrade
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Statistics downgrade requires confirmation",
+                )
+
             tags = replace_mailbox_stats_tags(
                 mailbox.get("tags"),
                 settings.usage_tag,

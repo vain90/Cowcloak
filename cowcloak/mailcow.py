@@ -143,13 +143,40 @@ class MailcowClient:
         return payload
 
     async def set_mailbox_tags(self, email: str, tags: list[str]) -> None:
+        mailbox = await self.get_mailbox(email)
+        current_tags = mailbox.get("tags")
+        current = (
+            [str(tag).strip() for tag in current_tags if str(tag).strip()]
+            if isinstance(current_tags, list)
+            else []
+        )
+        desired = [str(tag).strip() for tag in tags if str(tag).strip()]
+        current_folded = {tag.casefold() for tag in current}
+        desired_folded = {tag.casefold() for tag in desired}
+        removed = [tag for tag in current if tag.casefold() not in desired_folded]
+        added = [tag for tag in desired if tag.casefold() not in current_folded]
+
+        if removed:
+            await self.delete_mailbox_tags(email, removed)
+
+        if added:
+            payload = await self._request(
+                "POST",
+                "/api/v1/edit/mailbox",
+                json={
+                    "items": [email],
+                    "attr": {"tags": added},
+                },
+            )
+            self._ensure_success(payload)
+
+    async def delete_mailbox_tags(self, email: str, tags: list[str]) -> None:
+        if not tags:
+            return
         payload = await self._request(
-            "POST",
-            "/api/v1/edit/mailbox",
-            json={
-                "items": [email],
-                "attr": {"tags": tags},
-            },
+            "DELETE",
+            f"/api/v1/delete/mailbox/tag/{quote(email, safe='@')}",
+            json=tags,
         )
         self._ensure_success(payload)
 

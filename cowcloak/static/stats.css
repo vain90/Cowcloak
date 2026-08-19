@@ -116,6 +116,32 @@
   white-space: nowrap;
 }
 
+.pool-item-used {
+  border-color: #fda29b;
+  background: #fff7f6;
+  box-shadow: 0 0 0 2px rgba(180, 35, 24, .05);
+}
+
+.pool-assignment-usage {
+  display: grid;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  background: #fff7f6;
+}
+
+.pool-sender-list {
+  margin-top: 0;
+  padding-left: 0;
+}
+
+.pool-sender-list .sender-stats-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .sender-stats {
   width: min(100%, 680px);
   margin-top: 3px;
