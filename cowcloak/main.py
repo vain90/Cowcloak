@@ -475,6 +475,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def replace_alias(
         request: Request,
         alias_id: int,
+        mode: str = Form("named"),
+        local_part: str = Form(""),
         csrf_token: str = Form(...),
     ):
         validate_csrf(request, csrf_token)
@@ -484,17 +486,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This alias cannot be replaced",
             )
+        if mode not in {"named", "readable", "custom"}:
+            raise HTTPException(status_code=400, detail="Unknown replacement mode")
 
         replacement_name = alias.description.strip() or "alias"
         try:
-            new_address = await create_unique_alias(
-                request,
-                user,
-                lambda: named_local_part(replacement_name),
-                public_comment=alias.public_comment,
-                sogo_visible=alias.sogo_visible,
-            )
-        except (ValueError, MailcowError) as exc:
+            if mode == "named":
+                new_address = await create_unique_alias(
+                    request,
+                    user,
+                    lambda: named_local_part(replacement_name),
+                    public_comment=alias.public_comment,
+                    sogo_visible=alias.sogo_visible,
+                )
+            elif mode == "readable":
+                new_address = await create_unique_alias(
+                    request,
+                    user,
+                    lambda: readable_local_part(ui_language(request)),
+                    public_comment=alias.public_comment,
+                    sogo_visible=alias.sogo_visible,
+                )
+            else:
+                new_address = f"{validate_local_part(local_part)}@{mailbox_domain(user)}"
+                await client(request).create_alias(
+                    new_address,
+                    user,
+                    alias.public_comment,
+                    sogo_visible=alias.sogo_visible,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
         try:
