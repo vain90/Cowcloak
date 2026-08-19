@@ -13,7 +13,53 @@
   </form>
 </header>
 
-<section class="grid two">
+<details class="card">
+  <summary><strong>{{ t.help_summary }}</strong></summary>
+  <div class="stack small top-gap">
+    <p class="hint">{{ t.help_aliases }}</p>
+    <p class="hint">{{ t.help_disable }}</p>
+    <p class="hint">{{ t.help_offline }}</p>
+    <p class="hint">{{ t.help_sogo }}</p>
+  </div>
+</details>
+
+{% if catch_all %}
+<section class="card top-gap">
+  <strong>{{ t.catch_all_active }}</strong>
+  <p class="muted">{{ t.catch_all_hint.format(domain=domain) }}</p>
+</section>
+{% endif %}
+
+{% if primary_alias %}
+<section class="card top-gap">
+  <div class="section-head">
+    <div>
+      <h2>{{ t.primary_address }}</h2>
+      <code>{{ primary_alias.address }}</code>
+      <p class="hint">{{ t.sender_protection_hint }}</p>
+    </div>
+    <div class="button-row">
+      {% set sender_blocked = primary_alias.sender_allowed is sameas false %}
+      <span class="status status-fixed {{ 'on' if sender_blocked else 'off' }}">
+        {{ t.sender_blocked if sender_blocked else t.sender_allowed }}
+      </span>
+      <form
+        method="post"
+        action="/mailbox/sender-protection"
+        {% if not sender_blocked %}data-confirm="{{ t.block_sender_confirm }}"{% endif %}
+      >
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="blocked" value="{{ '0' if sender_blocked else '1' }}">
+        <button class="button compact {{ '' if sender_blocked else 'primary' }}" type="submit">
+          {{ t.allow_sender if sender_blocked else t.block_sender }}
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="grid two top-gap">
   <div class="card">
     <h2>{{ t.create_alias }}</h2>
     <form method="post" action="/aliases" class="stack">
@@ -181,8 +227,6 @@
         href="/aliases?status=disabled&q={{ search_query|urlencode }}&per_page={{ per_page }}"
       >{{ t.filter_disabled }} <span>{{ status_counts["disabled"] }}</span></a>
     </nav>
-
-    <p class="hint metadata-hint">{{ t.private_comment_hint }}</p>
 
     <div class="alias-list">
       {% for alias in assigned %}

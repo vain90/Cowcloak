@@ -119,6 +119,34 @@ def readable_local_part(language: str = "en") -> str:
     return f"{first}-{second}-{number}"
 
 
+def _targets_mailbox(alias: AliasRecord, user_email: str) -> bool:
+    user_email = user_email.strip().lower()
+    targets = {target.strip().lower() for target in alias.goto.split(",") if target.strip()}
+    return user_email in targets
+
+
+def is_primary_mailbox_alias(alias: AliasRecord, user_email: str) -> bool:
+    user_email = user_email.strip().lower()
+    domain = mailbox_domain(user_email)
+    return (
+        not alias.is_catch_all
+        and alias.address.strip().lower() == user_email
+        and alias.domain.strip().lower() == domain
+        and alias.goto.strip().lower() == user_email
+    )
+
+
+def is_mailbox_catch_all(alias: AliasRecord, user_email: str) -> bool:
+    domain = mailbox_domain(user_email)
+    address = alias.address.strip().lower()
+    return (
+        alias.active
+        and alias.domain.strip().lower() == domain
+        and (alias.is_catch_all or address == f"@{domain}")
+        and _targets_mailbox(alias, user_email)
+    )
+
+
 def is_owned_alias(alias: AliasRecord, user_email: str) -> bool:
     user_email = user_email.lower()
     domain = mailbox_domain(user_email)

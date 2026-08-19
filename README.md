@@ -39,6 +39,14 @@ Cowcloak ships curated English and German word lists with 250 English and 244 Ge
 
 The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
+## Catch-all and main-address protection
+
+If an active catch-all forwards unmatched addresses on the mailbox domain to the authenticated mailbox, Cowcloak shows a notice without adding the catch-all to the normal alias list.
+
+Cowcloak also separates the primary mailbox address from normal aliases. When mailcow exposes the matching primary alias record, the user can disable or re-enable its `sender_allowed` flag from Cowcloak. Disabling it blocks normal sending as the main address while the address continues to receive mail and regular aliases remain available.
+
+Mailcow sender ACL rules can override an alias-level sender block. Administrators who need an absolute policy should enforce that separately in mailcow/Postfix policy.
+
 ## Install as a web app
 
 Cowcloak ships a web app manifest, standalone metadata and app icons so the normal web deployment can also be installed as an app-like experience.
@@ -70,6 +78,7 @@ Browser / installed web app
       +-- private Cowcloak reservation marker
       +-- active state
       +-- SOGo visibility
+      +-- sender permission
 ```
 
 The mailcow API key is never sent to the browser.
@@ -162,6 +171,8 @@ Before editing or toggling an existing alias, Cowcloak fetches the alias from ma
 2. its domain equals the authenticated mailbox domain, and
 3. its forwarding target is exactly the authenticated mailbox.
 
+The main-address sender-protection action does not accept an alias ID from the browser. Cowcloak finds the alias whose address and only target are both the authenticated mailbox, then changes only its sender permission.
+
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
 See [SECURITY.md](SECURITY.md) for deployment and vulnerability-reporting guidance.
@@ -183,6 +194,9 @@ The current milestone is the first testable MVP:
 - [x] offline pool with 1 / 5 / 10 / 20 aliases
 - [x] individual offline-alias assignment
 - [x] plain-text pool export
+- [x] catch-all notice for the authenticated mailbox
+- [x] main-address sender protection
+- [x] concise built-in help
 - [x] German and English UI with browser detection and manual switching
 - [x] installable web app metadata and icons
 - [x] Docker image and Compose deployment
