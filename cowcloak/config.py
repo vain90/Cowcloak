@@ -9,7 +9,6 @@ class Settings(BaseSettings):
 
     base_url: str = Field(alias="COWCLOAK_BASE_URL")
     session_secret: str = Field(alias="COWCLOAK_SESSION_SECRET", min_length=32)
-    wordlist: str = Field(default="en", alias="COWCLOAK_WORDLIST")
     cookie_secure: bool = Field(default=True, alias="COWCLOAK_COOKIE_SECURE")
     trusted_hosts: str = Field(default="*", alias="COWCLOAK_TRUSTED_HOSTS")
 
@@ -23,14 +22,6 @@ class Settings(BaseSettings):
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
-
-    @field_validator("wordlist")
-    @classmethod
-    def validate_wordlist(cls, value: str) -> str:
-        value = value.lower().strip()
-        if value not in {"de", "en"}:
-            raise ValueError("COWCLOAK_WORDLIST must be 'de' or 'en'")
-        return value
 
     @property
     def oauth_callback_url(self) -> str:
