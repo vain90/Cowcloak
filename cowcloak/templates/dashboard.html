@@ -26,13 +26,46 @@
           placeholder="{{ t.purpose_placeholder }}"
         >
       </label>
-      <label>{{ t.address_style }}
-        <select name="mode" data-mode-select>
-          <option value="readable">{{ t.readable_random }}</option>
-          <option value="named">{{ t.name_random }}</option>
-          <option value="custom">{{ t.custom_local_part }}</option>
-        </select>
-      </label>
+
+      <fieldset class="mode-picker">
+        <legend>{{ t.address_style }}</legend>
+        <p class="hint mode-picker-hint">{{ t.address_style_hint }}</p>
+
+        <label class="mode-option">
+          <input type="radio" name="mode" value="named" data-mode-option checked>
+          <span class="mode-option-body">
+            <span class="mode-option-head">
+              <strong>{{ t.name_random }}</strong>
+              <span class="recommended-badge">{{ t.recommended }}</span>
+            </span>
+            <code>amazon-k7p4@{{ domain }}</code>
+            <small>{{ t.name_random_hint }}</small>
+          </span>
+        </label>
+
+        <label class="mode-option">
+          <input type="radio" name="mode" value="readable" data-mode-option>
+          <span class="mode-option-body">
+            <span class="mode-option-head">
+              <strong>{{ t.readable_random }}</strong>
+            </span>
+            <code>feder-hafen-27@{{ domain }}</code>
+            <small>{{ t.readable_random_hint }}</small>
+          </span>
+        </label>
+
+        <label class="mode-option">
+          <input type="radio" name="mode" value="custom" data-mode-option>
+          <span class="mode-option-body">
+            <span class="mode-option-head">
+              <strong>{{ t.custom_local_part }}</strong>
+            </span>
+            <code>mein-alias@{{ domain }}</code>
+            <small>{{ t.custom_local_part_hint }}</small>
+          </span>
+        </label>
+      </fieldset>
+
       <label class="hidden" data-custom-local-part>{{ t.custom_address }}
         <div class="address-input">
           <input name="local_part" maxlength="63" placeholder="my-alias" autocomplete="off">
@@ -97,7 +130,7 @@
   </div>
 </section>
 
-<section class="card top-gap">
+<section class="card alias-card top-gap">
   <div class="section-head alias-toolbar">
     <div>
       <h2>{{ t.assigned_aliases }}</h2>
