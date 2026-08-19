@@ -203,7 +203,7 @@ class UsageCollector:
         if not states:
             return 0
 
-        sender_starts = await self.store.sync_sender_modes(
+        mode_starts = await self.store.sync_sender_modes(
             {mailbox: state.effective.value for mailbox, state in states.items()}
         )
         eligible = {mailbox for mailbox, state in states.items() if state.enabled}
@@ -221,7 +221,7 @@ class UsageCollector:
             address = alias.address.strip().lower()
             if target not in eligible or not address:
                 continue
-            if alias.is_reserved or alias.is_catch_all or is_primary_mailbox_alias(alias, target):
+            if alias.is_catch_all or is_primary_mailbox_alias(alias, target):
                 continue
             if is_owned_alias(alias, target):
                 alias_targets[address] = target
@@ -243,6 +243,10 @@ class UsageCollector:
             sender_identity = _sender_identity(item)
             for alias in recipients.intersection(alias_targets):
                 mailbox = alias_targets[alias]
+                mode_start = mode_starts.get(mailbox, event_at + 1)
+                if event_at < mode_start:
+                    continue
+
                 received_events.append(
                     UsageEvent(
                         event_key=_event_key("received", item, alias, event_at),
@@ -253,10 +257,8 @@ class UsageCollector:
                 )
 
                 mode = states[mailbox].effective
-                sender_start = sender_starts.get(mailbox, event_at + 1)
                 if (
                     mode in {StatsMode.DOMAIN, StatsMode.FULL}
-                    and event_at >= sender_start
                     and sender_identity is not None
                 ):
                     sender_address, sender_domain = sender_identity
@@ -276,6 +278,8 @@ class UsageCollector:
 
             authenticated_user = _normalise_address(item.get("user"))
             if authenticated_user not in eligible:
+                continue
+            if event_at < mode_starts.get(authenticated_user, event_at + 1):
                 continue
 
             # Prefer the visible MIME From address. Fall back to the SMTP envelope
