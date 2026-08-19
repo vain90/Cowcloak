@@ -11,14 +11,48 @@ function syncAliasMode() {
 modeOptions.forEach((option) => option.addEventListener('change', syncAliasMode));
 syncAliasMode();
 
-document.querySelectorAll('[data-copy]').forEach((button) => {
-  button.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(button.dataset.copy);
-    const original = button.textContent;
-    button.textContent = copiedLabel;
-    setTimeout(() => { button.textContent = original; }, 1200);
+function bindCopyButtons(root = document) {
+  root.querySelectorAll('[data-copy]').forEach((button) => {
+    if (button.dataset.bound === 'true') return;
+    button.dataset.bound = 'true';
+    button.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      const original = button.textContent;
+      button.textContent = copiedLabel;
+      setTimeout(() => { button.textContent = original; }, 1200);
+    });
   });
-});
+}
+
+function bindConfirmForms(root = document) {
+  root.querySelectorAll('[data-confirm]').forEach((form) => {
+    if (form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(form.dataset.confirm)) {
+        event.preventDefault();
+      }
+    });
+  });
+}
+
+function bindPageSize(root = document) {
+  root.querySelectorAll('[data-page-size]').forEach((select) => {
+    if (select.dataset.bound === 'true') return;
+    select.dataset.bound = 'true';
+    select.addEventListener('change', (event) => {
+      event.currentTarget.form?.submit();
+    });
+  });
+}
+
+function bindDynamicControls(root = document) {
+  bindCopyButtons(root);
+  bindConfirmForms(root);
+  bindPageSize(root);
+}
+
+bindDynamicControls();
 
 document.querySelector('[data-copy-pool]')?.addEventListener('click', async (event) => {
   const addresses = [...document.querySelectorAll('[data-pool-address]')]
@@ -31,14 +65,92 @@ document.querySelector('[data-copy-pool]')?.addEventListener('click', async (eve
   setTimeout(() => { button.textContent = original; }, 1200);
 });
 
-document.querySelectorAll('[data-confirm]').forEach((form) => {
-  form.addEventListener('submit', (event) => {
-    if (!window.confirm(form.dataset.confirm)) {
-      event.preventDefault();
+const searchInput = document.querySelector('[data-live-search]');
+const searchClear = document.querySelector('[data-search-clear]');
+let searchTimer;
+let searchController;
+
+function syncSearchClear() {
+  if (!searchClear || !searchInput) return;
+  searchClear.hidden = searchInput.value.length === 0;
+}
+
+async function refreshAliasResults() {
+  if (!searchInput) return;
+
+  const rawQuery = searchInput.value.trim();
+  const activeQuery = rawQuery.length >= 2 ? rawQuery : '';
+  const url = new URL(window.location.href);
+  url.searchParams.set('status', searchInput.dataset.status || 'all');
+  url.searchParams.set('per_page', searchInput.dataset.perPage || '25');
+  url.searchParams.set('page', '1');
+  if (activeQuery) {
+    url.searchParams.set('q', activeQuery);
+  } else {
+    url.searchParams.delete('q');
+  }
+
+  searchController?.abort();
+  searchController = new AbortController();
+  searchInput.classList.add('searching');
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Cowcloak-Partial': 'alias-results' },
+      signal: searchController.signal,
+    });
+    if (!response.ok) return;
+
+    const html = await response.text();
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const nextRegion = parsed.querySelector('[data-alias-results-region]');
+    const currentRegion = document.querySelector('[data-alias-results-region]');
+    const nextSummary = parsed.querySelector('[data-assigned-summary]');
+    const currentSummary = document.querySelector('[data-assigned-summary]');
+
+    if (nextRegion && currentRegion) {
+      currentRegion.innerHTML = nextRegion.innerHTML;
+      bindDynamicControls(currentRegion);
     }
-  });
+    if (nextSummary && currentSummary) {
+      currentSummary.textContent = nextSummary.textContent.trim();
+    }
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Alias search failed', error);
+    }
+  } finally {
+    searchInput.classList.remove('searching');
+  }
+}
+
+searchInput?.addEventListener('input', () => {
+  syncSearchClear();
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(refreshAliasResults, 250);
 });
 
-document.querySelector('[data-page-size]')?.addEventListener('change', (event) => {
-  event.currentTarget.form?.submit();
+searchClear?.addEventListener('click', () => {
+  if (!searchInput) return;
+  window.clearTimeout(searchTimer);
+  searchInput.value = '';
+  syncSearchClear();
+  searchInput.focus();
+  refreshAliasResults();
+});
+
+syncSearchClear();
+
+const assignDialog = document.querySelector('[data-assign-dialog]');
+document.querySelector('[data-open-assign-dialog]')?.addEventListener('click', () => {
+  assignDialog?.showModal();
+});
+document.querySelector('[data-close-dialog]')?.addEventListener('click', () => {
+  assignDialog?.close();
+});
+assignDialog?.addEventListener('click', (event) => {
+  if (event.target === assignDialog) {
+    assignDialog.close();
+  }
 });
