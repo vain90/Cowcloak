@@ -269,6 +269,7 @@ class UsageCollector:
                             sender_address=(
                                 sender_address if mode is StatsMode.FULL else None
                             ),
+                            mode=mode.value,
                             event_at=event_at,
                         )
                     )
