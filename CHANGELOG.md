@@ -2,6 +2,20 @@
 
 All notable changes to Cowcloak are documented here.
 
+## 0.1.1 - Unreleased
+
+### Added
+
+- self-updating `update.sh` for deployments following the latest stable release
+- automatic health verification after updates with rollback to the previously running image on failure
+- `--check`, `--yes`, `--force` and version/help options for the updater
+
+### Changed
+
+- `latest` is reserved for stable releases while `edge` follows `main`
+- alias edit popovers close when clicking outside them
+- removed a redundant address-immutability hint from the alias creation form
+
 ## 0.1.0 - 2026-08-19
 
 First public release.

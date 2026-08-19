@@ -92,6 +92,14 @@ helpDialog?.addEventListener('click', (event) => {
   }
 });
 
+document.addEventListener('pointerdown', (event) => {
+  document.querySelectorAll('details.alias-edit-action[open]').forEach((details) => {
+    if (!details.contains(event.target)) {
+      details.removeAttribute('open');
+    }
+  });
+});
+
 document.querySelector('[data-copy-pool]')?.addEventListener('click', async (event) => {
   const addresses = [...document.querySelectorAll('[data-pool-address]')]
     .map((element) => element.textContent.trim())
