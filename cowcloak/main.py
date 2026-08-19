@@ -37,6 +37,7 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
 PAGE_SIZES = (10, 25, 50, 100)
 STATUS_FILTERS = ("all", "active", "disabled")
+BULK_ACTIONS = {"enable", "disable", "sogo-on", "sogo-off"}
 
 
 def pagination_items(current_page: int, total_pages: int) -> list[int | None]:
@@ -417,6 +418,58 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if is_owned_alias(alias, user) and alias.is_reserved and alias.active
         )
         return PlainTextResponse("\n".join(reserved) + ("\n" if reserved else ""))
+
+    @app.post("/aliases/bulk", response_class=PlainTextResponse)
+    async def bulk_aliases(
+        request: Request,
+        action: str = Form(...),
+        alias_ids: list[int] = Form(...),
+        csrf_token: str = Form(...),
+    ):
+        validate_csrf(request, csrf_token)
+        user = require_user(request)
+        if action not in BULK_ACTIONS:
+            raise HTTPException(status_code=400, detail="Unknown bulk action")
+
+        selected_ids = list(dict.fromkeys(alias_ids))
+        if not selected_ids or len(selected_ids) > 100:
+            raise HTTPException(status_code=400, detail="Select between 1 and 100 aliases")
+
+        try:
+            aliases = await client(request).list_aliases()
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        aliases_by_id = {alias.id: alias for alias in aliases}
+        selected = []
+        for alias_id in selected_ids:
+            alias = aliases_by_id.get(alias_id)
+            if (
+                alias is None
+                or not is_owned_alias(alias, user)
+                or is_primary_mailbox_alias(alias, user)
+                or alias.is_reserved
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Bulk selection contains an alias that cannot be managed",
+                )
+            selected.append(alias)
+
+        selected_ids = [alias.id for alias in selected]
+        try:
+            if action == "enable":
+                await client(request).set_active_many(selected_ids, True)
+            elif action == "disable":
+                await client(request).set_active_many(selected_ids, False)
+            elif action == "sogo-on":
+                await client(request).set_sogo_visible_many(selected_ids, True)
+            else:
+                await client(request).set_sogo_visible_many(selected_ids, False)
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        return PlainTextResponse("ok\n")
 
     @app.post("/aliases/{alias_id}/description")
     async def assign_reserved_alias(

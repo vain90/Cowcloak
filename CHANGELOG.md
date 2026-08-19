@@ -10,11 +10,15 @@ All notable changes to Cowcloak are documented here.
 - explicit `--beta` updater mode for testing the unreleased `edge` image and refreshing the updater from `main`
 - automatic health verification after updates with rollback to the previously running image on failure
 - `--check`, `--yes`, `--force` and version/help options for the updater
+- bulk selection for assigned aliases with enable, disable, SOGo visibility and clipboard actions
 
 ### Changed
 
 - `latest` is reserved for stable releases while `edge` follows `main`
 - the updater selects `latest` or `edge` through `COWCLOAK_TAG` without requiring Compose edits between stable and beta updates
+- readable-random aliases now use exactly two short words of at most six characters plus a two-digit number
+- both readable word lists contain 200–250 unique short words
+- the offline pool stays compact and scrolls internally instead of stretching the create-alias card
 - alias edit popovers close when clicking outside them
 - removed a redundant address-immutability hint from the alias creation form
 

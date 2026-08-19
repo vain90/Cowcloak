@@ -149,10 +149,27 @@ class MailcowClient:
         self._ensure_success(payload)
 
     async def set_active(self, alias_id: int, active: bool) -> None:
+        await self.set_active_many([alias_id], active)
+
+    async def set_active_many(self, alias_ids: list[int], active: bool) -> None:
         payload = await self._request(
             "POST",
             "/api/v1/edit/alias",
-            json={"items": [str(alias_id)], "attr": {"active": 1 if active else 0}},
+            json={
+                "items": [str(alias_id) for alias_id in alias_ids],
+                "attr": {"active": 1 if active else 0},
+            },
+        )
+        self._ensure_success(payload)
+
+    async def set_sogo_visible_many(self, alias_ids: list[int], visible: bool) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/alias",
+            json={
+                "items": [str(alias_id) for alias_id in alias_ids],
+                "attr": {"sogo_visible": 1 if visible else 0},
+            },
         )
         self._ensure_success(payload)
 

@@ -32,10 +32,10 @@ Offline pool aliases are hidden from the SOGo sender chooser until they are assi
 ## Alias styles
 
 - **Name + random suffix (default):** `amazon-k7p4@example.org`
-- **Readable random:** `harbor-fern-42@example.org` or `moon-meadow-fox@example.org`
+- **Readable random:** `hafen-feder-27@example.org`
 - **Custom:** `my-choice@example.org`
 
-Cowcloak ships curated English and German word lists with 250 English and 244 German words. The readable-random generator usually combines two distinct words with a two-digit number and occasionally uses three distinct short words for more variety.
+Cowcloak ships curated English and German word lists with 250 unique words each. Every readable word is at most six characters long. The readable-random generator combines exactly two distinct words with a two-digit number, keeping generated local parts compact while remaining easy to read and dictate.
 
 The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
@@ -218,11 +218,7 @@ pytest -q
 
 The read/write mailcow API key is highly privileged. Cowcloak therefore enforces ownership server-side on every modifying request. Neither the alias domain nor the forwarding target is accepted from the browser. Both are derived from the mailbox authenticated by mailcow.
 
-Before editing or toggling an existing alias, Cowcloak fetches the alias from mailcow and checks that:
-
-1. it is not a catch-all alias,
-2. its domain equals the authenticated mailbox domain, and
-3. its forwarding target is exactly the authenticated mailbox.
+Before editing, toggling or applying a bulk action to an alias, Cowcloak verifies that the alias belongs exclusively to the authenticated mailbox. Bulk actions reject reserved offline aliases and the primary mailbox alias even if an arbitrary ID is submitted manually.
 
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
@@ -242,6 +238,7 @@ The current milestone is the first testable MVP:
 - [x] private mailcow admin comments kept private
 - [x] immutable alias addresses when purposes change
 - [x] enable / disable aliases
+- [x] bulk selection with enable / disable, SOGo visibility and clipboard actions
 - [x] active / disabled status filters with counts
 - [x] configurable SOGo sender visibility per alias
 - [x] offline pool with 1 / 5 / 10 / 20 aliases

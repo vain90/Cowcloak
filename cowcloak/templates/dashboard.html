@@ -188,9 +188,43 @@
       >{{ t.filter_disabled }} <span>{{ status_counts["disabled"] }}</span></a>
     </nav>
 
+    {% if assigned %}
+    <div
+      class="bulk-toolbar"
+      data-bulk-toolbar
+      data-selected-template="{{ t.selected_count }}"
+      data-bulk-failed="{{ t.bulk_failed }}"
+    >
+      <div class="bulk-selection">
+        <button class="button compact ghost" type="button" data-select-all>{{ t.select_all }}</button>
+        <button class="button compact ghost" type="button" data-select-none>{{ t.select_none }}</button>
+        <span class="bulk-count" data-selected-count>{{ t.selected_count.format(count=0) }}</span>
+      </div>
+      <div class="bulk-actions">
+        <button class="button compact" type="button" data-bulk-action="copy" disabled>{{ t["copy"] }}</button>
+        <button class="button compact" type="button" data-bulk-action="enable" disabled>{{ t.enable }}</button>
+        <button class="button compact danger" type="button" data-bulk-action="disable" disabled>{{ t.disable }}</button>
+        <button class="button compact" type="button" data-bulk-action="sogo-on" disabled>{{ t.bulk_sogo_show }}</button>
+        <button class="button compact" type="button" data-bulk-action="sogo-off" disabled>{{ t.bulk_sogo_hide }}</button>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="alias-list">
       {% for alias in assigned %}
       <article class="alias-row {% if not alias.active %}disabled-row{% endif %}">
+        <label class="alias-select-control">
+          <input
+            type="checkbox"
+            value="{{ alias.id }}"
+            aria-label="{{ t.select_alias.format(address=alias.address) }}"
+            data-alias-select
+            data-address="{{ alias.address }}"
+            data-description="{{ alias.description }}"
+            data-active="{{ '1' if alias.active else '0' }}"
+            data-sogo="{{ '1' if alias.sogo_visible else '0' }}"
+          >
+        </label>
         <div class="alias-main">
           <div class="alias-info">
             <strong>{{ alias.description or t.no_purpose }}</strong>
