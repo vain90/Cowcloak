@@ -37,10 +37,12 @@ class AliasUsage:
 
 @dataclass(frozen=True, slots=True)
 class SenderUsage:
+    sender_key: str
     sender_domain: str
     sender_address: str | None
     received_count: int
     last_received_at: int | None
+    manual_expected: bool | None = None
 
 
 class StatsStore:
@@ -145,6 +147,14 @@ class StatsStore:
                 ON sender_processed_events (mailbox);
             CREATE INDEX sender_processed_events_event_at_idx
                 ON sender_processed_events (event_at);
+
+            CREATE TABLE sender_expectations (
+                mailbox TEXT NOT NULL COLLATE NOCASE,
+                alias TEXT NOT NULL COLLATE NOCASE,
+                sender_key TEXT NOT NULL COLLATE NOCASE,
+                expected INTEGER NOT NULL CHECK (expected IN (0, 1)),
+                PRIMARY KEY (mailbox, alias, sender_key)
+            );
             """
         )
         connection.execute("PRAGMA user_version = 2")
@@ -200,11 +210,15 @@ class StatsStore:
                     continue
 
                 # Sender detail is intentionally reset on every mode change. This prevents
-                # full addresses from surviving a downgrade to domain/basic/off and avoids
-                # retroactively reprocessing old Rspamd history after increasing detail.
+                # full addresses from surviving a downgrade and avoids retroactively
+                # reprocessing old Rspamd history after increasing detail.
                 connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
                 connection.execute(
                     "DELETE FROM sender_processed_events WHERE mailbox = ?",
+                    (mailbox,),
+                )
+                connection.execute(
+                    "DELETE FROM sender_expectations WHERE mailbox = ?",
                     (mailbox,),
                 )
                 connection.execute(
@@ -329,6 +343,53 @@ class StatsStore:
                 recorded += 1
         return recorded
 
+    async def set_sender_expectation(
+        self,
+        mailbox: str,
+        alias: str,
+        sender_key: str,
+        expected: bool | None,
+    ) -> None:
+        await asyncio.to_thread(
+            self._set_sender_expectation,
+            mailbox,
+            alias,
+            sender_key,
+            expected,
+        )
+
+    def _set_sender_expectation(
+        self,
+        mailbox: str,
+        alias: str,
+        sender_key: str,
+        expected: bool | None,
+    ) -> None:
+        with self._connect() as connection:
+            if expected is None:
+                connection.execute(
+                    """
+                    DELETE FROM sender_expectations
+                    WHERE mailbox = ? AND alias = ? AND sender_key = ?
+                    """,
+                    (mailbox.lower(), alias.lower(), sender_key.lower()),
+                )
+                return
+            connection.execute(
+                """
+                INSERT INTO sender_expectations (mailbox, alias, sender_key, expected)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(mailbox, alias, sender_key) DO UPDATE SET
+                    expected = excluded.expected
+                """,
+                (
+                    mailbox.lower(),
+                    alias.lower(),
+                    sender_key.lower(),
+                    1 if expected else 0,
+                ),
+            )
+
     async def alias_usage(self, mailbox: str, aliases: list[str]) -> dict[str, AliasUsage]:
         if not aliases:
             return {}
@@ -364,23 +425,15 @@ class StatsStore:
         self,
         mailbox: str,
         aliases: list[str],
-        *,
-        limit_per_alias: int = 5,
     ) -> dict[str, list[SenderUsage]]:
         if not aliases:
             return {}
-        return await asyncio.to_thread(
-            self._sender_usage,
-            mailbox,
-            aliases,
-            limit_per_alias,
-        )
+        return await asyncio.to_thread(self._sender_usage, mailbox, aliases)
 
     def _sender_usage(
         self,
         mailbox: str,
         aliases: list[str],
-        limit_per_alias: int,
     ) -> dict[str, list[SenderUsage]]:
         placeholders = ",".join("?" for _ in aliases)
         params = [mailbox.lower(), *(alias.lower() for alias in aliases)]
@@ -388,14 +441,20 @@ class StatsStore:
             rows = connection.execute(
                 f"""
                 SELECT
-                    alias,
-                    sender_domain,
-                    sender_address,
-                    received_count,
-                    last_received_at
-                FROM sender_usage
-                WHERE mailbox = ? AND alias IN ({placeholders})
-                ORDER BY alias, received_count DESC, last_received_at DESC, sender_key
+                    s.alias,
+                    s.sender_key,
+                    s.sender_domain,
+                    s.sender_address,
+                    s.received_count,
+                    s.last_received_at,
+                    e.expected AS manual_expected
+                FROM sender_usage AS s
+                LEFT JOIN sender_expectations AS e
+                    ON e.mailbox = s.mailbox
+                    AND e.alias = s.alias
+                    AND e.sender_key = s.sender_key
+                WHERE s.mailbox = ? AND s.alias IN ({placeholders})
+                ORDER BY s.alias, s.last_received_at DESC, s.sender_key
                 """,
                 params,
             ).fetchall()
@@ -403,11 +462,10 @@ class StatsStore:
         result: dict[str, list[SenderUsage]] = {}
         for row in rows:
             alias = str(row["alias"]).lower()
-            bucket = result.setdefault(alias, [])
-            if len(bucket) >= limit_per_alias:
-                continue
-            bucket.append(
+            manual_expected = row["manual_expected"]
+            result.setdefault(alias, []).append(
                 SenderUsage(
+                    sender_key=str(row["sender_key"]).lower(),
                     sender_domain=str(row["sender_domain"]).lower(),
                     sender_address=(
                         str(row["sender_address"]).lower()
@@ -419,6 +477,9 @@ class StatsStore:
                         int(row["last_received_at"])
                         if row["last_received_at"] is not None
                         else None
+                    ),
+                    manual_expected=(
+                        bool(manual_expected) if manual_expected is not None else None
                     ),
                 )
             )
