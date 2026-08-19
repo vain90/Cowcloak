@@ -16,6 +16,7 @@ const replacementText = {
     partialBody: 'Der neue Alias wurde erstellt, aber der bisherige Alias konnte nicht deaktiviert werden. Bitte prüfe beide Aliase.',
     failed: 'Der Alias konnte nicht ersetzt werden.',
     newAlias: 'Neuer Alias',
+    copy: 'Kopieren',
     close: 'Schließen',
   },
   en: {
@@ -31,6 +32,7 @@ const replacementText = {
     partialBody: 'The new alias was created, but the previous alias could not be disabled. Please check both aliases.',
     failed: 'The alias could not be replaced.',
     newAlias: 'New alias',
+    copy: 'Copy',
     close: 'Close',
   },
 }[uiLanguage];
@@ -148,7 +150,7 @@ function showReplacementResult(address, partial = false) {
   copy.className = 'button primary';
   copy.type = 'button';
   copy.dataset.copy = address;
-  copy.textContent = replacementText.newAlias === 'Neuer Alias' ? 'Kopieren' : 'Copy';
+  copy.textContent = replacementText.copy;
 
   const done = document.createElement('button');
   done.className = 'button';
