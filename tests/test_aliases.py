@@ -1,6 +1,7 @@
 import pytest
 
 from cowcloak.aliases import (
+    RESERVED_COMMENT,
     AliasRecord,
     is_owned_alias,
     mailbox_domain,
@@ -30,9 +31,11 @@ def test_owned_alias_requires_exact_single_target_and_same_domain():
         goto="hidden@example.org",
         domain="example.org",
         active=True,
-        private_comment="Amazon",
-        public_comment="",
+        private_comment="Admin-only note",
+        public_comment="Amazon",
+        sogo_visible=True,
     )
+    assert alias.description == "Amazon"
     assert is_owned_alias(alias, "hidden@example.org")
     assert not is_owned_alias(alias, "other@example.org")
 
@@ -42,7 +45,43 @@ def test_owned_alias_requires_exact_single_target_and_same_domain():
         goto="hidden@example.org,other@example.org",
         domain="example.org",
         active=True,
-        private_comment="Shared",
-        public_comment="",
+        private_comment="Shared admin note",
+        public_comment="Shared",
     )
     assert not is_owned_alias(shared, "hidden@example.org")
+
+
+def test_private_comments_are_not_exposed_as_description():
+    alias = AliasRecord(
+        id=3,
+        address="legacy@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment="Sensitive admin note",
+        public_comment="",
+    )
+    assert alias.description == ""
+
+
+def test_current_and_legacy_offline_markers_are_recognized():
+    current = AliasRecord(
+        id=4,
+        address="current@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment=RESERVED_COMMENT,
+        public_comment="",
+    )
+    legacy = AliasRecord(
+        id=5,
+        address="legacy-pool@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment="[reserved] Offline alias",
+        public_comment="",
+    )
+    assert current.is_reserved
+    assert legacy.is_reserved
