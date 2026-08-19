@@ -14,7 +14,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from cowcloak import __version__
 from cowcloak.aliases import (
     RESERVED_COMMENT,
+    is_mailbox_catch_all,
     is_owned_alias,
+    is_primary_mailbox_alias,
     mailbox_domain,
     named_local_part,
     readable_local_part,
@@ -234,6 +236,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request.session.clear()
         return RedirectResponse("/", status_code=303)
 
+    @app.post("/mailbox/sender-protection")
+    async def set_primary_sender_protection(
+        request: Request,
+        blocked: bool = Form(...),
+        csrf_token: str = Form(...),
+    ):
+        validate_csrf(request, csrf_token)
+        user = require_user(request)
+        try:
+            aliases = await client(request).list_aliases()
+            primary_alias = next(
+                (alias for alias in aliases if is_primary_mailbox_alias(alias, user)),
+                None,
+            )
+            if primary_alias is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Primary mailbox alias was not found",
+                )
+            await client(request).set_sender_allowed(primary_alias.id, not blocked)
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse("/aliases", status_code=303)
+
     @app.get("/aliases", response_class=HTMLResponse)
     async def aliases_dashboard(
         request: Request,
@@ -243,6 +269,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status_filter: str = Query(default="all", alias="status"),
     ):
         user = require_user(request)
+        domain = mailbox_domain(user)
         if per_page not in PAGE_SIZES:
             per_page = 25
         if status_filter not in STATUS_FILTERS:
@@ -253,7 +280,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except MailcowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        owned = [alias for alias in all_aliases if is_owned_alias(alias, user)]
+        primary_alias = next(
+            (alias for alias in all_aliases if is_primary_mailbox_alias(alias, user)),
+            None,
+        )
+        catch_all = next(
+            (alias for alias in all_aliases if is_mailbox_catch_all(alias, user)),
+            None,
+        )
+        owned = [
+            alias
+            for alias in all_aliases
+            if is_owned_alias(alias, user)
+            and (primary_alias is None or alias.id != primary_alias.id)
+        ]
         reserved = sorted(
             (alias for alias in owned if alias.is_reserved),
             key=lambda item: item.address,
@@ -298,7 +338,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             template_context(
                 request,
                 user=user,
-                domain=mailbox_domain(user),
+                domain=domain,
+                primary_alias=primary_alias,
+                catch_all=catch_all,
                 assigned=assigned,
                 assigned_total=len(assigned_all),
                 filtered_total=filtered_total,
