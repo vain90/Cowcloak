@@ -35,13 +35,18 @@ from cowcloak.i18n import (
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.stats import StatsStore
-from cowcloak.usage import UsageCollector, mailbox_usage_enabled
+from cowcloak.stats_mode import (
+    StatsModeSource,
+    replace_mailbox_stats_tags,
+)
+from cowcloak.usage import UsageCollector, mailbox_stats_state
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
 PAGE_SIZES = (10, 25, 50, 100)
 STATUS_FILTERS = ("all", "active", "disabled")
 BULK_ACTIONS = {"enable", "disable", "sogo-on", "sogo-off"}
+STATS_MODE_SELECTIONS = {"inherit", "off", "basic", "domain", "full"}
 
 
 def pagination_items(current_page: int, total_pages: int) -> list[int | None]:
@@ -335,24 +340,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         range_start = offset + 1 if filtered_total else 0
         range_end = min(offset + per_page, filtered_total)
 
+        stats_store = request.app.state.stats_store
+        stats_available = settings.usage_stats and stats_store is not None
+        stats_state = None
+        stats_error = False
+        stats_mode_selection = "inherit"
         usage_stats_visible = False
         usage_stats: dict[str, dict[str, int | None]] = {}
-        stats_store = request.app.state.stats_store
-        if settings.usage_stats and stats_store is not None:
+        sender_stats: dict[str, list[dict[str, str | int | None]]] = {}
+
+        if stats_available:
             try:
-                usage_stats_visible = await mailbox_usage_enabled(
-                    settings,
-                    client(request),
-                    user,
+                stats_state = await mailbox_stats_state(settings, client(request), user)
+                usage_stats_visible = stats_state.enabled
+                if (
+                    stats_state.conflict
+                    and stats_state.conflict_source is StatsModeSource.MAILBOX
+                ):
+                    stats_mode_selection = "conflict"
+                elif stats_state.mailbox_override is not None:
+                    stats_mode_selection = stats_state.mailbox_override.value
+
+                await stats_store.sync_sender_modes(
+                    {user: stats_state.effective.value}
                 )
             except (MailcowAccessDenied, MailcowError):
+                stats_error = True
+                stats_state = None
                 usage_stats_visible = False
 
-            if usage_stats_visible:
-                stored_usage = await stats_store.alias_usage(
-                    user,
-                    [alias.address for alias in assigned],
-                )
+            if usage_stats_visible and stats_state is not None:
+                addresses = [alias.address for alias in assigned]
+                stored_usage = await stats_store.alias_usage(user, addresses)
                 for alias in assigned:
                     usage = stored_usage.get(alias.address.lower())
                     received_count = usage.received_count if usage is not None else 0
@@ -371,6 +390,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "sent_count": sent_count,
                         "last_used_at": max(timestamps) if timestamps else None,
                     }
+
+                if stats_state.sender_detail_enabled:
+                    stored_senders = await stats_store.sender_usage(
+                        user,
+                        addresses,
+                        limit_per_alias=5,
+                    )
+                    for alias, entries in stored_senders.items():
+                        sender_stats[alias] = [
+                            {
+                                "label": entry.sender_address or entry.sender_domain,
+                                "domain": entry.sender_domain,
+                                "received_count": entry.received_count,
+                                "last_received_at": entry.last_received_at,
+                            }
+                            for entry in entries
+                        ]
 
         return TEMPLATES.TemplateResponse(
             request,
@@ -395,10 +431,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 pagination_items=pagination_items(page, total_pages),
                 range_start=range_start,
                 range_end=range_end,
+                stats_available=stats_available,
+                stats_error=stats_error,
+                stats_state=stats_state,
+                stats_mode_selection=stats_mode_selection,
                 usage_stats_visible=usage_stats_visible,
                 usage_stats=usage_stats,
+                sender_stats=sender_stats,
             ),
         )
+
+    @app.post("/aliases/stats-mode")
+    async def update_stats_mode(
+        request: Request,
+        mode: str = Form(...),
+        csrf_token: str = Form(...),
+        return_to: str = Form("/aliases"),
+    ):
+        validate_csrf(request, csrf_token)
+        user = require_user(request)
+        stats_store = request.app.state.stats_store
+        if not settings.usage_stats or stats_store is None:
+            raise HTTPException(status_code=409, detail="Usage statistics are disabled")
+        if mode not in STATS_MODE_SELECTIONS:
+            raise HTTPException(status_code=400, detail="Unknown statistics mode")
+
+        try:
+            mailbox = await client(request).get_mailbox(user)
+            tags = replace_mailbox_stats_tags(
+                mailbox.get("tags"),
+                settings.usage_tag,
+                mode,
+            )
+            await client(request).set_mailbox_tags(user, tags)
+            state = await mailbox_stats_state(settings, client(request), user)
+            await stats_store.sync_sender_modes({user: state.effective.value})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except MailcowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        return RedirectResponse(safe_return_to(return_to), status_code=303)
 
     @app.post("/aliases")
     async def create_alias(
