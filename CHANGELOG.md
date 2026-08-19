@@ -10,6 +10,7 @@ All notable changes to Cowcloak are documented here.
 
 ### Changed
 
+- mailboxes without the configured access tag now return to a clear Cowcloak access-denied screen instead of showing a raw JSON error after OAuth
 - improved the assigned-alias layout on small screens
 - reduced the visual weight and size of active/SOGo status badges on mobile
 - changed the mobile alias edit popover into a viewport-safe bottom sheet with its own scrolling area

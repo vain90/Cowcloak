@@ -84,7 +84,7 @@ async def test_get_mailbox_allows_matching_domain_tag():
     ]
 
 
-async def test_get_mailbox_rejects_when_mailbox_and_domain_lack_access_tag():
+async def test_get_mailbox_redirects_when_mailbox_and_domain_lack_access_tag():
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/get/mailbox/"):
             return httpx.Response(
@@ -98,7 +98,8 @@ async def test_get_mailbox_rejects_when_mailbox_and_domain_lack_access_tag():
         await client.get_mailbox("hidden@example.org")
     await client.close()
 
-    assert exc_info.value.status_code == 403
+    assert exc_info.value.status_code == 303
+    assert exc_info.value.headers == {"Location": "/?error=access-denied"}
     assert "cowcloak" in str(exc_info.value.detail)
 
 
