@@ -52,18 +52,26 @@ def _event_timestamp(item: dict[str, Any]) -> int | None:
 
 
 def _received_event_key(item: dict[str, Any], alias: str, event_at: int) -> str:
-    # Only the SHA-256 digest is persisted. Subject/message IDs are used solely to
-    # reduce accidental collisions when Rspamd history contains near-identical rows.
-    fingerprint = {
-        "kind": "received",
-        "alias": alias.lower(),
-        "event_at": event_at,
-        "message_id": str(item.get("message-id") or item.get("message_id") or ""),
-        "queue_id": str(item.get("qid") or item.get("queue_id") or ""),
-        "sender": str(item.get("sender_smtp") or ""),
-        "subject": str(item.get("subject") or ""),
-        "user": str(item.get("user") or ""),
-    }
+    # Only the SHA-256 digest is persisted. When a message ID is available it is
+    # preferred over scan time so repeated Rspamd scans of the same message do not
+    # inflate the counter. Raw message IDs, senders and subjects never enter SQLite.
+    message_id = str(item.get("message-id") or item.get("message_id") or "").strip()
+    if message_id:
+        fingerprint = {
+            "kind": "received",
+            "alias": alias.lower(),
+            "message_id": message_id,
+        }
+    else:
+        fingerprint = {
+            "kind": "received",
+            "alias": alias.lower(),
+            "event_at": event_at,
+            "queue_id": str(item.get("qid") or item.get("queue_id") or ""),
+            "sender": str(item.get("sender_smtp") or ""),
+            "subject": str(item.get("subject") or ""),
+            "user": str(item.get("user") or ""),
+        }
     payload = json.dumps(fingerprint, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
 
@@ -76,16 +84,27 @@ class UsageCollector:
 
     async def eligible_mailboxes(self) -> set[str]:
         usage_tag = self.settings.usage_tag.casefold()
+        access_tag = self.settings.access_tag.casefold()
         domains, mailboxes = await asyncio.gather(
             self.mailcow.list_domains(),
             self.mailcow.list_mailboxes(),
         )
-        tagged_domains = {
+
+        usage_domains = {
             str(domain.get("domain") or "").strip().lower()
             for domain in domains
             if usage_tag in _tags(domain)
         }
-        tagged_domains.discard("")
+        usage_domains.discard("")
+
+        access_domains: set[str] = set()
+        if access_tag:
+            access_domains = {
+                str(domain.get("domain") or "").strip().lower()
+                for domain in domains
+                if access_tag in _tags(domain)
+            }
+            access_domains.discard("")
 
         eligible: set[str] = set()
         for mailbox in mailboxes:
@@ -93,7 +112,10 @@ class UsageCollector:
             if not username or "@" not in username:
                 continue
             domain = str(mailbox.get("domain") or username.rsplit("@", 1)[1]).strip().lower()
-            if usage_tag in _tags(mailbox) or domain in tagged_domains:
+            mailbox_tags = _tags(mailbox)
+            usage_allowed = usage_tag in mailbox_tags or domain in usage_domains
+            access_allowed = not access_tag or access_tag in mailbox_tags or domain in access_domains
+            if usage_allowed and access_allowed:
                 eligible.add(username)
         return eligible
 
@@ -101,7 +123,6 @@ class UsageCollector:
         tracking_started_at = await self.store.tracking_started_at()
         eligible = await self.eligible_mailboxes()
         if not eligible:
-            await self.store.prune_processed_events()
             return 0
 
         aliases, history = await asyncio.gather(
@@ -140,7 +161,6 @@ class UsageCollector:
                 )
 
         recorded = await self.store.record_received(events)
-        await self.store.prune_processed_events()
         if recorded:
             LOGGER.info("Recorded %d new Cowcloak alias delivery event(s)", recorded)
         return recorded
