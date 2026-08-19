@@ -85,7 +85,10 @@ class MailcowClient:
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Mailbox is not enabled for Cowcloak (missing mailcow tag '{self.settings.access_tag}')",
+            detail=(
+                "Mailbox is not enabled for Cowcloak "
+                f"(missing mailcow tag '{self.settings.access_tag}')"
+            ),
         )
 
     async def list_aliases(self) -> list[AliasRecord]:
