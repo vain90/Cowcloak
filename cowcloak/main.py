@@ -35,7 +35,7 @@ from cowcloak.i18n import (
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.stats import StatsStore
-from cowcloak.usage import UsageCollector
+from cowcloak.usage import UsageCollector, mailbox_usage_enabled
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
@@ -335,6 +335,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         range_start = offset + 1 if filtered_total else 0
         range_end = min(offset + per_page, filtered_total)
 
+        usage_stats_visible = False
+        usage_stats: dict[str, dict[str, int | None]] = {}
+        stats_store = request.app.state.stats_store
+        if settings.usage_stats and stats_store is not None:
+            try:
+                usage_stats_visible = await mailbox_usage_enabled(
+                    settings,
+                    client(request),
+                    user,
+                )
+            except (MailcowAccessDenied, MailcowError):
+                usage_stats_visible = False
+
+            if usage_stats_visible:
+                stored_usage = await stats_store.alias_usage(
+                    user,
+                    [alias.address for alias in assigned],
+                )
+                for alias in assigned:
+                    usage = stored_usage.get(alias.address.lower())
+                    received_count = usage.received_count if usage is not None else 0
+                    sent_count = usage.sent_count if usage is not None else 0
+                    timestamps = (
+                        []
+                        if usage is None
+                        else [
+                            value
+                            for value in (usage.last_received_at, usage.last_sent_at)
+                            if value is not None
+                        ]
+                    )
+                    usage_stats[alias.address.lower()] = {
+                        "received_count": received_count,
+                        "sent_count": sent_count,
+                        "last_used_at": max(timestamps) if timestamps else None,
+                    }
+
         return TEMPLATES.TemplateResponse(
             request,
             "dashboard.html",
@@ -358,6 +395,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 pagination_items=pagination_items(page, total_pages),
                 range_start=range_start,
                 range_end=range_end,
+                usage_stats_visible=usage_stats_visible,
+                usage_stats=usage_stats,
             ),
         )
 
