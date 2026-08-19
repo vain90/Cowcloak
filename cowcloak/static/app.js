@@ -1,6 +1,41 @@
 const modeOptions = [...document.querySelectorAll('[data-mode-option]')];
 const customLocalPart = document.querySelector('[data-custom-local-part]');
 const copiedLabel = document.body.dataset.copiedLabel || 'Copied';
+const uiLanguage = document.documentElement.lang?.toLowerCase().startsWith('de') ? 'de' : 'en';
+const replacementText = {
+  de: {
+    action: 'Alias ersetzen',
+    hint: 'Erstellt einen neuen Alias mit gleichem Zweck und deaktiviert diesen Alias.',
+    title: 'Alias ersetzen',
+    body: 'Cowcloak erstellt einen neuen Alias mit demselben Zweck und derselben SOGo-Einstellung. Der bisherige Alias wird deaktiviert, aber nicht gelöscht.',
+    confirm: 'Ersetzen',
+    cancel: 'Abbrechen',
+    successTitle: 'Alias ersetzt',
+    successBody: 'Der neue Alias ist aktiv. Der bisherige Alias wurde deaktiviert und bleibt gespeichert.',
+    partialTitle: 'Alias teilweise ersetzt',
+    partialBody: 'Der neue Alias wurde erstellt, aber der bisherige Alias konnte nicht deaktiviert werden. Bitte prüfe beide Aliase.',
+    failed: 'Der Alias konnte nicht ersetzt werden.',
+    newAlias: 'Neuer Alias',
+    copy: 'Kopieren',
+    close: 'Schließen',
+  },
+  en: {
+    action: 'Replace alias',
+    hint: 'Creates a new alias with the same purpose and disables this alias.',
+    title: 'Replace alias',
+    body: 'Cowcloak creates a new alias with the same purpose and SOGo setting. The current alias is disabled but not deleted.',
+    confirm: 'Replace',
+    cancel: 'Cancel',
+    successTitle: 'Alias replaced',
+    successBody: 'The new alias is active. The previous alias was disabled and remains stored.',
+    partialTitle: 'Alias partially replaced',
+    partialBody: 'The new alias was created, but the previous alias could not be disabled. Please check both aliases.',
+    failed: 'The alias could not be replaced.',
+    newAlias: 'New alias',
+    copy: 'Copy',
+    close: 'Close',
+  },
+}[uiLanguage];
 
 function syncAliasMode() {
   if (!customLocalPart) return;
@@ -67,6 +102,186 @@ function bindAssignDialogs(root = document) {
         dialog.close();
       }
     });
+  });
+}
+
+function createDialogHeading(title, closeLabel) {
+  const head = document.createElement('div');
+  head.className = 'dialog-head';
+
+  const heading = document.createElement('h2');
+  heading.textContent = title;
+
+  const close = document.createElement('button');
+  close.className = 'dialog-close';
+  close.type = 'button';
+  close.textContent = '×';
+  close.setAttribute('aria-label', closeLabel);
+  close.title = closeLabel;
+
+  head.append(heading, close);
+  return { head, close };
+}
+
+function showReplacementResult(address, partial = false) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'assign-dialog assign-dialog-single';
+  const { head, close } = createDialogHeading(
+    partial ? replacementText.partialTitle : replacementText.successTitle,
+    replacementText.close,
+  );
+
+  const body = document.createElement('p');
+  body.className = 'muted';
+  body.textContent = partial ? replacementText.partialBody : replacementText.successBody;
+
+  const label = document.createElement('p');
+  label.className = 'hint';
+  label.textContent = replacementText.newAlias;
+
+  const addressCode = document.createElement('code');
+  addressCode.className = 'assign-address';
+  addressCode.textContent = address;
+
+  const actions = document.createElement('div');
+  actions.className = 'button-row top-gap';
+
+  const copy = document.createElement('button');
+  copy.className = 'button primary';
+  copy.type = 'button';
+  copy.dataset.copy = address;
+  copy.textContent = replacementText.copy;
+
+  const done = document.createElement('button');
+  done.className = 'button';
+  done.type = 'button';
+  done.textContent = replacementText.close;
+
+  actions.append(copy, done);
+  dialog.append(head, body, label, addressCode, actions);
+  document.body.append(dialog);
+  bindCopyButtons(dialog);
+
+  close.addEventListener('click', () => dialog.close());
+  done.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+    window.location.reload();
+  }, { once: true });
+  dialog.showModal();
+}
+
+function showReplacementDialog(aliasCheckbox, editDetails) {
+  const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+  if (!csrfToken) {
+    window.alert(replacementText.failed);
+    return;
+  }
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'assign-dialog assign-dialog-single';
+  const { head, close } = createDialogHeading(replacementText.title, replacementText.close);
+
+  const body = document.createElement('p');
+  body.className = 'muted';
+  body.textContent = replacementText.body;
+
+  const addressCode = document.createElement('code');
+  addressCode.className = 'assign-address';
+  addressCode.textContent = aliasCheckbox.dataset.address;
+
+  const actions = document.createElement('div');
+  actions.className = 'button-row top-gap';
+
+  const confirm = document.createElement('button');
+  confirm.className = 'button primary';
+  confirm.type = 'button';
+  confirm.textContent = replacementText.confirm;
+
+  const cancel = document.createElement('button');
+  cancel.className = 'button';
+  cancel.type = 'button';
+  cancel.textContent = replacementText.cancel;
+
+  actions.append(confirm, cancel);
+  dialog.append(head, body, addressCode, actions);
+  document.body.append(dialog);
+  editDetails?.removeAttribute('open');
+
+  close.addEventListener('click', () => dialog.close());
+  cancel.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => dialog.remove(), { once: true });
+
+  confirm.addEventListener('click', async () => {
+    const form = new FormData();
+    form.append('csrf_token', csrfToken);
+    confirm.disabled = true;
+    cancel.disabled = true;
+
+    try {
+      const response = await fetch(`/aliases/${aliasCheckbox.value}/replace`, {
+        method: 'POST',
+        body: form,
+      });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch (error) {
+        console.debug('Replacement response did not contain JSON', error);
+      }
+
+      if (!response.ok) {
+        const detail = payload.detail;
+        if (detail?.code === 'partial_replacement' && detail.address) {
+          dialog.close();
+          showReplacementResult(detail.address, true);
+          return;
+        }
+        throw new Error(`Alias replacement failed with HTTP ${response.status}`);
+      }
+
+      if (!payload.address) {
+        throw new Error('Alias replacement response did not contain an address');
+      }
+
+      dialog.close();
+      showReplacementResult(payload.address);
+    } catch (error) {
+      console.error('Alias replacement failed', error);
+      window.alert(replacementText.failed);
+      confirm.disabled = false;
+      cancel.disabled = false;
+    }
+  });
+
+  dialog.showModal();
+}
+
+function bindReplacementActions(root = document) {
+  root.querySelectorAll('.alias-row').forEach((row) => {
+    const aliasCheckbox = row.querySelector('[data-alias-select]');
+    const editDetails = row.querySelector('details.alias-edit-action');
+    const panel = editDetails?.querySelector('.edit-panel');
+    if (!aliasCheckbox || !panel || panel.querySelector('[data-replace-alias]')) return;
+
+    const hint = document.createElement('p');
+    hint.className = 'hint top-gap';
+    hint.textContent = replacementText.hint;
+
+    const button = document.createElement('button');
+    button.className = 'button compact';
+    button.type = 'button';
+    button.dataset.replaceAlias = aliasCheckbox.value;
+    button.textContent = replacementText.action;
+    button.addEventListener('click', () => showReplacementDialog(aliasCheckbox, editDetails));
+
+    panel.append(hint, button);
   });
 }
 
@@ -161,6 +376,7 @@ function bindDynamicControls(root = document) {
   bindConfirmForms(root);
   bindPageSize(root);
   bindAssignDialogs(root);
+  bindReplacementActions(root);
   bindBulkActions(root);
 }
 

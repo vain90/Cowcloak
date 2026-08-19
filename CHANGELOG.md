@@ -11,6 +11,7 @@ All notable changes to Cowcloak are documented here.
 - automatic health verification after updates with rollback to the previously running image on failure
 - `--check`, `--yes`, `--force` and version/help options for the updater
 - bulk selection for assigned aliases with enable, disable, SOGo visibility and clipboard actions
+- alias replacement workflow that creates a fresh address with the same purpose and SOGo visibility while keeping the previous alias disabled for traceability
 
 ### Changed
 

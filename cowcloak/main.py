@@ -471,6 +471,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return PlainTextResponse("ok\n")
 
+    @app.post("/aliases/{alias_id}/replace")
+    async def replace_alias(
+        request: Request,
+        alias_id: int,
+        csrf_token: str = Form(...),
+    ):
+        validate_csrf(request, csrf_token)
+        user, alias = await owned_alias(request, alias_id)
+        if alias.is_reserved or is_primary_mailbox_alias(alias, user):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This alias cannot be replaced",
+            )
+
+        replacement_name = alias.description.strip() or "alias"
+        try:
+            new_address = await create_unique_alias(
+                request,
+                user,
+                lambda: named_local_part(replacement_name),
+                public_comment=alias.public_comment,
+                sogo_visible=alias.sogo_visible,
+            )
+        except (ValueError, MailcowError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        try:
+            await client(request).set_active(alias_id, False)
+        except MailcowError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "partial_replacement",
+                    "message": (
+                        "The replacement alias was created, but the old alias could not be disabled"
+                    ),
+                    "address": new_address,
+                },
+            ) from exc
+
+        return {
+            "address": new_address,
+            "old_address": alias.address,
+        }
+
     @app.post("/aliases/{alias_id}/description")
     async def assign_reserved_alias(
         request: Request,
