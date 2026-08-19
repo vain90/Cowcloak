@@ -11,6 +11,7 @@ All notable changes to Cowcloak are documented here.
 ### Changed
 
 - mailboxes without the configured access tag now return to a clear Cowcloak access-denied screen instead of showing a raw JSON error after OAuth
+- active Cowcloak sessions are revalidated against the configured mailcow access tag on protected alias routes, so removing the tag revokes access on the next request
 - improved the assigned-alias layout on small screens
 - reduced the visual weight and size of active/SOGo status badges on mobile
 - changed the mobile alias edit popover into a viewport-safe bottom sheet with its own scrolling area
@@ -38,7 +39,7 @@ All notable changes to Cowcloak are documented here.
 - the alias replacement dialog has clearer spacing between the current address and replacement format selection
 - the offline pool stays compact and scrolls internally instead of stretching the create-alias card
 - alias edit popovers close when clicking outside them
-- removed a redundant address-immutability hint from the alias creation form
+- removed a redundant address-immutability hint from alias creation
 
 ## 0.1.0 - 2026-08-19
 
