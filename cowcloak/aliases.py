@@ -96,10 +96,25 @@ def load_words(language: str) -> tuple[str, ...]:
     return words
 
 
+def _distinct_words(words: tuple[str, ...], count: int) -> list[str]:
+    chosen: list[str] = []
+    while len(chosen) < count:
+        word = secrets.choice(words)
+        if word not in chosen:
+            chosen.append(word)
+    return chosen
+
+
 def readable_local_part(language: str = "en") -> str:
     words = load_words(language)
-    first = secrets.choice(words)
-    second = secrets.choice(words)
+
+    # Occasionally use three words for more visual variety while keeping aliases readable.
+    if secrets.randbelow(3) == 0:
+        candidate = "-".join(_distinct_words(words, 3))
+        if len(candidate) <= 48:
+            return candidate
+
+    first, second = _distinct_words(words, 2)
     number = secrets.randbelow(90) + 10
     return f"{first}-{second}-{number}"
 
