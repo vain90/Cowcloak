@@ -59,6 +59,31 @@ def stats_mode_tags(base_tag: str) -> dict[StatsMode, str]:
     }
 
 
+def stats_mode_rank(mode: StatsMode) -> int:
+    return {
+        StatsMode.OFF: 0,
+        StatsMode.BASIC: 1,
+        StatsMode.DOMAIN: 2,
+        StatsMode.FULL: 3,
+    }[mode]
+
+
+def selected_effective_mode(
+    selection: str,
+    domain_default: StatsMode | None,
+) -> StatsMode:
+    if selection == "inherit":
+        return domain_default or StatsMode.OFF
+    try:
+        return StatsMode(selection)
+    except ValueError as exc:
+        raise ValueError(f"Unknown statistics mode: {selection}") from exc
+
+
+def is_stats_mode_downgrade(current: StatsMode, target: StatsMode) -> bool:
+    return stats_mode_rank(target) < stats_mode_rank(current)
+
+
 def _explicit_mode(tags: Any, base_tag: str) -> tuple[StatsMode | None, bool]:
     configured = normalise_tags(tags)
     matches = [mode for mode, tag in stats_mode_tags(base_tag).items() if tag in configured]
@@ -133,10 +158,6 @@ def replace_mailbox_stats_tags(
     if selection == "inherit":
         return preserved
 
-    try:
-        mode = StatsMode(selection)
-    except ValueError as exc:
-        raise ValueError(f"Unknown statistics mode: {selection}") from exc
-
+    mode = selected_effective_mode(selection, None)
     preserved.append(stats_mode_tags(base_tag)[mode])
     return preserved
