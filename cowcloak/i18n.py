@@ -14,22 +14,44 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "your_aliases": "Your aliases",
         "signed_in_as": "Signed in as {user}",
         "sign_out": "Sign out",
-        "help_summary": "How Cowcloak works",
-        "help_aliases": "Use a separate alias for each service.",
-        "help_disable": "If an address gets unwanted mail, disable only that alias.",
-        "help_offline": "Prepare offline aliases for times when Cowcloak is unavailable.",
-        "help_sogo": "Enable SOGo only for aliases you want to send from.",
-        "catch_all_active": "Catch-all active",
-        "catch_all_hint": "Unknown addresses on {domain} also arrive in your mailbox.",
-        "primary_address": "Main address",
-        "sender_allowed": "Sending allowed",
-        "sender_blocked": "Sending blocked",
-        "sender_protection_hint": (
-            "Blocks normal sending from your main address. Aliases keep working."
+        "help_open": "Help",
+        "help_title": "How Cowcloak works",
+        "help_intro": (
+            "Cowcloak helps keep your real mailbox address private by using a separate "
+            "alias for each service."
         ),
-        "block_sender": "Block sending",
-        "allow_sender": "Allow sending",
-        "block_sender_confirm": "Block sending from your main address?",
+        "help_aliases_title": "One service, one alias",
+        "help_aliases_body": (
+            "Create a separate address for shops, apps, newsletters and other services. "
+            "Every alias still delivers to your normal mailbox."
+        ),
+        "help_leaks_title": "Leaks stay isolated",
+        "help_leaks_body": (
+            "If an alias starts receiving spam or was shared, you can see which service "
+            "used it and disable only that address."
+        ),
+        "help_offline_title": "Offline pool",
+        "help_offline_body": (
+            "Prepare a few aliases in advance so you can use a fresh address even when "
+            "Cowcloak is unavailable. Assign its purpose later."
+        ),
+        "help_sogo_title": "Sending with aliases",
+        "help_sogo_body": (
+            "Enable SOGo only for aliases you want to select as a sender. Other aliases "
+            "can stay receive-only in the SOGo interface."
+        ),
+        "help_storage_title": "mailcow stays the source of truth",
+        "help_storage_body": (
+            "Cowcloak does not keep a second alias database. Alias addresses, purposes, "
+            "status and SOGo visibility stay in mailcow."
+        ),
+        "catch_all_active": "Catch-all active",
+        "catch_all_hint": (
+            "Even addresses you never created on {domain} reach your mailbox. This weakens "
+            "one-alias-per-service because unknown or guessed addresses cannot be identified "
+            "or disabled individually in Cowcloak. For clean separation, disable catch-all "
+            "and use explicit aliases."
+        ),
         "create_alias": "Create alias",
         "purpose": "Purpose",
         "purpose_placeholder": "Amazon, hotel, newsletter …",
@@ -103,22 +125,44 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "your_aliases": "Deine Aliase",
         "signed_in_as": "Angemeldet als {user}",
         "sign_out": "Abmelden",
-        "help_summary": "So funktioniert Cowcloak",
-        "help_aliases": "Nutze für jeden Dienst eine eigene Alias-Adresse.",
-        "help_disable": "Kommt unerwünschte Mail, deaktivierst du nur diesen Alias.",
-        "help_offline": "Bereite Offline-Aliase für Zeiten ohne Cowcloak-Zugriff vor.",
-        "help_sogo": "Aktiviere SOGo nur für Aliase, von denen du senden möchtest.",
-        "catch_all_active": "Catch-all aktiv",
-        "catch_all_hint": "Auch unbekannte Adressen auf {domain} landen in deinem Postfach.",
-        "primary_address": "Hauptadresse",
-        "sender_allowed": "Senden erlaubt",
-        "sender_blocked": "Senden gesperrt",
-        "sender_protection_hint": (
-            "Sperrt normales Senden mit deiner Hauptadresse. Aliase bleiben nutzbar."
+        "help_open": "Hilfe",
+        "help_title": "So funktioniert Cowcloak",
+        "help_intro": (
+            "Cowcloak hilft dir, deine echte Postfachadresse privat zu halten. Dafür nutzt "
+            "du für jeden Dienst eine eigene Alias-Adresse."
         ),
-        "block_sender": "Senden sperren",
-        "allow_sender": "Senden erlauben",
-        "block_sender_confirm": "Senden mit deiner Hauptadresse sperren?",
+        "help_aliases_title": "Ein Dienst, ein Alias",
+        "help_aliases_body": (
+            "Erstelle für Shops, Apps, Newsletter und andere Dienste jeweils eine eigene "
+            "Adresse. Alle Aliase landen weiterhin in deinem normalen Postfach."
+        ),
+        "help_leaks_title": "Leaks bleiben getrennt",
+        "help_leaks_body": (
+            "Bekommt ein Alias Spam oder wurde weitergegeben, erkennst du den betroffenen "
+            "Dienst und deaktivierst nur diese eine Adresse."
+        ),
+        "help_offline_title": "Offline-Vorrat",
+        "help_offline_body": (
+            "Bereite einige Aliase vor, damit du auch ohne Cowcloak-Zugriff eine frische "
+            "Adresse verwenden kannst. Den Zweck trägst du später ein."
+        ),
+        "help_sogo_title": "Mit Aliasen senden",
+        "help_sogo_body": (
+            "Aktiviere SOGo nur für Aliase, die du als Absender auswählen möchtest. Andere "
+            "Aliase können in SOGo ausgeblendet bleiben."
+        ),
+        "help_storage_title": "mailcow bleibt die Datenquelle",
+        "help_storage_body": (
+            "Cowcloak führt keine zweite Alias-Datenbank. Adresse, Zweck, Status und "
+            "SOGo-Sichtbarkeit bleiben direkt in mailcow gespeichert."
+        ),
+        "catch_all_active": "Catch-all aktiv",
+        "catch_all_hint": (
+            "Auch nicht angelegte Adressen auf {domain} landen in deinem Postfach. Dadurch "
+            "wird das Prinzip eines eigenen Alias pro Dienst geschwächt, weil unbekannte oder "
+            "erratene Adressen nicht einzeln in Cowcloak erkannt und deaktiviert werden können. "
+            "Für eine saubere Trennung sollte Catch-all deaktiviert sein."
+        ),
         "create_alias": "Alias erstellen",
         "purpose": "Zweck",
         "purpose_placeholder": "Amazon, Hotel, Newsletter …",

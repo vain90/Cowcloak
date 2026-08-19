@@ -13,6 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/help.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body data-copied-label="{{ t.copied }}">
@@ -28,7 +29,54 @@
       href="/language/en?next={{ return_to|urlencode }}"
       {% if language == 'en' %}aria-current="true"{% endif %}
     >EN</a>
+    <span class="top-control-divider" aria-hidden="true"></span>
+    <button
+      class="help-trigger"
+      type="button"
+      aria-label="{{ t.help_open }}"
+      title="{{ t.help_open }}"
+      data-open-help-dialog
+    >?</button>
   </nav>
+
+  <dialog class="help-dialog" data-help-dialog>
+    <div class="dialog-head">
+      <div>
+        <h2>{{ t.help_title }}</h2>
+        <p class="muted">{{ t.help_intro }}</p>
+      </div>
+      <button
+        class="dialog-close"
+        type="button"
+        aria-label="{{ t.close }}"
+        title="{{ t.close }}"
+        data-close-help-dialog
+      >×</button>
+    </div>
+    <div class="help-content">
+      <section>
+        <h3>{{ t.help_aliases_title }}</h3>
+        <p>{{ t.help_aliases_body }}</p>
+      </section>
+      <section>
+        <h3>{{ t.help_leaks_title }}</h3>
+        <p>{{ t.help_leaks_body }}</p>
+      </section>
+      <section>
+        <h3>{{ t.help_offline_title }}</h3>
+        <p>{{ t.help_offline_body }}</p>
+      </section>
+      <section>
+        <h3>{{ t.help_sogo_title }}</h3>
+        <p>{{ t.help_sogo_body }}</p>
+      </section>
+      <section>
+        <h3>{{ t.help_storage_title }}</h3>
+        <p>{{ t.help_storage_body }}</p>
+      </section>
+    </div>
+  </dialog>
+
   <main class="shell">{% block content %}{% endblock %}</main>
   <footer class="footer">Cowcloak {{ version }}</footer>
 </body>
