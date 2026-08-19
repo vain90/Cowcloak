@@ -4,7 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-RUN useradd --create-home --uid 10001 cowcloak
+RUN useradd --create-home --uid 10001 cowcloak \
+    && install -d -o cowcloak -g cowcloak /data
 
 COPY pyproject.toml README.md LICENSE ./
 COPY cowcloak ./cowcloak
