@@ -105,6 +105,25 @@ async def test_assign_reserved_alias_clears_only_reservation_marker_fields():
     }
 
 
+async def test_sender_permission_uses_alias_edit_endpoint():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.set_sender_allowed(42, False)
+    await client.close()
+
+    assert captured["path"] == "/api/v1/edit/alias"
+    assert captured["json"] == {
+        "items": ["42"],
+        "attr": {"sender_allowed": 0},
+    }
+
+
 async def test_delete_alias_uses_mailcow_alias_delete_endpoint():
     captured = {}
 
