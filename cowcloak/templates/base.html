@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ language }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,7 +8,20 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
 </head>
-<body>
+<body data-copied-label="{{ t.copied }}">
+  <nav class="language-switch" aria-label="{{ t.language }}">
+    <a
+      class="language-link {% if language == 'de' %}current{% endif %}"
+      href="/language/de?next={{ return_to|urlencode }}"
+      {% if language == 'de' %}aria-current="true"{% endif %}
+    >DE</a>
+    <span aria-hidden="true">·</span>
+    <a
+      class="language-link {% if language == 'en' %}current{% endif %}"
+      href="/language/en?next={{ return_to|urlencode }}"
+      {% if language == 'en' %}aria-current="true"{% endif %}
+    >EN</a>
+  </nav>
   <main class="shell">{% block content %}{% endblock %}</main>
   <footer class="footer">Cowcloak {{ version }}</footer>
 </body>
