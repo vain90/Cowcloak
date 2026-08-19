@@ -236,7 +236,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "assigned_aliases": "Zugeordnete Aliase",
         "assigned_summary": "{filtered} von {total} Aliasen",
         "usage_settings_title": "Nutzungsstatistik",
-        "usage_settings_unavailable": "Die Statistik-Einstellungen sind vorübergehend nicht verfügbar.",
+        "usage_settings_unavailable": (
+            "Die Statistik-Einstellungen sind vorübergehend nicht verfügbar."
+        ),
         "usage_mode_inherit": "Domain-Vorgabe verwenden",
         "usage_mode_off": "Aus",
         "usage_mode_basic": "Standard",
@@ -245,13 +247,16 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "usage_mode_off_hint": "Cowcloak erfasst für dieses Postfach keine neuen Statistikdaten.",
         "usage_mode_basic_hint": "Zählt akzeptierte empfangene und gesendete Nachrichten.",
         "usage_mode_domain_hint": (
-            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten die Absender-Domain."
+            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten "
+            "die Absender-Domain."
         ),
         "usage_mode_full_hint": (
-            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten die vollständige Absenderadresse."
+            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten "
+            "die vollständige Absenderadresse."
         ),
         "usage_mode_conflict": (
-            "Auf derselben Ebene sind mehrere Statistik-Tags gesetzt. Die Statistik ist aus Sicherheitsgründen deaktiviert."
+            "Auf derselben Ebene sind mehrere Statistik-Tags gesetzt. "
+            "Die Statistik ist aus Sicherheitsgründen deaktiviert."
         ),
         "usage_source_mailbox": "Postfach-Einstellung",
         "usage_source_domain": "Domain-Vorgabe",
