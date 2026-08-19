@@ -316,21 +316,57 @@
 
             {% if stats_state and stats_state.sender_detail_enabled %}
             {% set senders = sender_stats.get(alias.address|lower, []) %}
+            {% set unexpected_count = senders|selectattr('expected', 'equalto', false)|list|length %}
             <details class="sender-stats">
               <summary>
                 {{ t.sender_stats_title }}
                 {% if senders %}<span class="sender-stats-count">{{ senders|length }}</span>{% endif %}
+                {% if unexpected_count %}
+                <span class="sender-stats-alert">{{ unexpected_count }} {{ t.sender_stats_unexpected_short }}</span>
+                {% endif %}
               </summary>
               {% if senders %}
               <div class="sender-stats-list">
                 {% for sender in senders %}
-                <div class="sender-stats-row">
-                  <code>{{ sender.label }}</code>
-                  <span>{{ sender.received_count }}</span>
+                <div class="sender-stats-row {{ 'expected' if sender.expected else 'unexpected' }}">
+                  <div class="sender-stats-identity">
+                    <code>{{ sender.label }}</code>
+                    <span class="sender-review-state">
+                      {% if sender.review_source == 'manual' %}
+                        {{ t.sender_state_confirmed }}
+                      {% elif sender.review_source == 'automatic' %}
+                        {{ t.sender_state_automatic }}{% if sender.match_token %} · {{ sender.match_token }}{% endif %}
+                      {% elif sender.review_source == 'manual-unexpected' %}
+                        {{ t.sender_state_manual_unexpected }}
+                      {% else %}
+                        {{ t.sender_state_unexpected }}
+                      {% endif %}
+                    </span>
+                  </div>
+                  <span class="sender-message-count">{{ sender.received_count }}</span>
+                  <form
+                    method="post"
+                    action="/aliases/{{ alias.id }}/sender-expectation"
+                    class="sender-review-form"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                    <input type="hidden" name="sender_key" value="{{ sender.sender_key }}">
+                    {% if sender.review_source == 'manual' or sender.review_source == 'manual-unexpected' %}
+                    <input type="hidden" name="decision" value="clear">
+                    <button class="button compact ghost" type="submit">{{ t.sender_action_clear }}</button>
+                    {% elif sender.expected %}
+                    <input type="hidden" name="decision" value="unexpected">
+                    <button class="button compact ghost" type="submit">{{ t.sender_action_unexpected }}</button>
+                    {% else %}
+                    <input type="hidden" name="decision" value="expected">
+                    <button class="button compact" type="submit">{{ t.sender_action_expected }}</button>
+                    {% endif %}
+                  </form>
                 </div>
                 {% endfor %}
               </div>
-              <p class="sender-stats-footnote">{{ t.sender_stats_top_five }}</p>
+              <p class="sender-stats-footnote">{{ t.sender_stats_all }}</p>
               {% else %}
               <p class="sender-stats-empty">{{ t.sender_stats_empty }}</p>
               {% endif %}
