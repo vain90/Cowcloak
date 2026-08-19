@@ -33,7 +33,7 @@ First public release.
 - mailcow OAuth2 login without a separate Cowcloak user database
 - mailbox-isolated alias management with server-side ownership checks
 - name + random suffix, readable random and custom alias creation
-- offline pool with individual assignment and deletion of unused entries
+- offline alias pool with individual assignment and deletion of unused entries
 - active/disabled filtering, live search and pagination
 - optional SOGo sender visibility per alias
 - catch-all detection with a user-facing warning
