@@ -106,9 +106,24 @@ class StatsStore:
     async def record_received(self, events: list[UsageEvent]) -> int:
         if not events:
             return 0
-        return await asyncio.to_thread(self._record_received, events)
+        return await asyncio.to_thread(self._record_events, events, "received")
 
-    def _record_received(self, events: list[UsageEvent]) -> int:
+    async def record_sent(self, events: list[UsageEvent]) -> int:
+        if not events:
+            return 0
+        return await asyncio.to_thread(self._record_events, events, "sent")
+
+    def _record_events(self, events: list[UsageEvent], kind: str) -> int:
+        if kind not in {"received", "sent"}:
+            raise ValueError(f"Unsupported usage event kind: {kind}")
+
+        count_column = "received_count" if kind == "received" else "sent_count"
+        timestamp_column = "last_received_at" if kind == "received" else "last_sent_at"
+        received_count = 1 if kind == "received" else 0
+        sent_count = 1 if kind == "sent" else 0
+        last_received = "?" if kind == "received" else "NULL"
+        last_sent = "?" if kind == "sent" else "NULL"
+
         recorded = 0
         with self._connect() as connection:
             for event in events:
@@ -118,8 +133,10 @@ class StatsStore:
                 )
                 if inserted.rowcount != 1:
                     continue
+
+                timestamp_params = [event.event_at]
                 connection.execute(
-                    """
+                    f"""
                     INSERT INTO alias_usage (
                         mailbox,
                         alias,
@@ -128,15 +145,15 @@ class StatsStore:
                         last_received_at,
                         last_sent_at
                     )
-                    VALUES (?, ?, 1, 0, ?, NULL)
+                    VALUES (?, ?, {received_count}, {sent_count}, {last_received}, {last_sent})
                     ON CONFLICT(mailbox, alias) DO UPDATE SET
-                        received_count = alias_usage.received_count + 1,
-                        last_received_at = MAX(
-                            alias_usage.last_received_at,
-                            excluded.last_received_at
+                        {count_column} = alias_usage.{count_column} + 1,
+                        {timestamp_column} = MAX(
+                            alias_usage.{timestamp_column},
+                            excluded.{timestamp_column}
                         )
                     """,
-                    (event.mailbox, event.alias, event.event_at),
+                    [event.mailbox, event.alias, *timestamp_params],
                 )
                 recorded += 1
         return recorded
