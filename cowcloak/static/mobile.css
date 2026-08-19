@@ -39,8 +39,8 @@
     bottom: max(10px, env(safe-area-inset-bottom));
     width: auto;
     max-width: none;
-    max-height: calc(100vh - 100px);
-    max-height: calc(100dvh - max(96px, calc(env(safe-area-inset-top) + 72px)));
+    max-height: calc(100vh - 96px);
+    max-height: calc(100dvh - 96px);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
