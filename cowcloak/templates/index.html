@@ -2,9 +2,9 @@
 {% block title %}Cowcloak{% endblock %}
 {% block content %}
 <section class="hero card">
-  <p class="eyebrow">MAIL PRIVACY, SELF-HOSTED</p>
+  <p class="eyebrow">{{ t.landing_eyebrow }}</p>
   <h1>Cowcloak</h1>
-  <p class="lead">Create and manage privacy aliases on your own mailcow server without a second user database.</p>
-  <a class="button primary" href="/login">Sign in with mailcow</a>
+  <p class="lead">{{ t.landing_lead }}</p>
+  <a class="button primary" href="/login">{{ t.sign_in }}</a>
 </section>
 {% endblock %}
