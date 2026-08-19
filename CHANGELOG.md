@@ -2,7 +2,7 @@
 
 All notable changes to Cowcloak are documented here.
 
-## 0.1.1 - Unreleased
+## 0.1.1 - 2026-08-19
 
 ### Added
 
@@ -21,7 +21,8 @@ All notable changes to Cowcloak are documented here.
 - name-based aliases now use a two-character ASCII letter/digit suffix with ambiguous characters excluded
 - readable-random aliases now use exactly two short words of at most six characters plus a two-digit number
 - both readable word lists contain 200–250 unique short words
-- bulk selection now uses one tri-state select-all checkbox and a compact action dropdown instead of separate selection and action buttons
+- bulk selection now uses one tri-state select-all checkbox and a compact action dropdown below the alias list instead of separate selection and action buttons
+- the alias replacement dialog has clearer spacing between the current address and replacement format selection
 - the offline pool stays compact and scrolls internally instead of stretching the create-alias card
 - alias edit popovers close when clicking outside them
 - removed a redundant address-immutability hint from the alias creation form
@@ -41,7 +42,7 @@ First public release.
 - catch-all detection with a user-facing warning
 - built-in German and English help dialog
 - German and English UI with matching readable-word lists
-- installable web-app metadata for iPhone, iPad and macOS
+- installable web app metadata for iPhone, iPad and macOS
 - Docker Compose deployment and GHCR image publishing
 - contributor, issue and pull-request templates plus CI
 
