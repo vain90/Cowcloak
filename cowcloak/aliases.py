@@ -76,7 +76,7 @@ def slugify(value: str, max_length: int = 28) -> str:
     return slug or "alias"
 
 
-def random_suffix(length: int = 4) -> str:
+def random_suffix(length: int = 2) -> str:
     return "".join(secrets.choice(_SUFFIX_ALPHABET) for _ in range(length))
 
 

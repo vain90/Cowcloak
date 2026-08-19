@@ -16,6 +16,7 @@ All notable changes to Cowcloak are documented here.
 
 - `latest` is reserved for stable releases while `edge` follows `main`
 - the updater selects `latest` or `edge` through `COWCLOAK_TAG` without requiring Compose edits between stable and beta updates
+- name-based aliases now use a two-character ASCII letter/digit suffix with ambiguous characters excluded
 - readable-random aliases now use exactly two short words of at most six characters plus a two-digit number
 - both readable word lists contain 200–250 unique short words
 - the offline pool stays compact and scrolls internally instead of stretching the create-alias card
