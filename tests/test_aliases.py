@@ -4,7 +4,9 @@ from cowcloak.aliases import (
     RESERVED_COMMENT,
     AliasRecord,
     is_owned_alias,
+    load_words,
     mailbox_domain,
+    readable_local_part,
     slugify,
     validate_local_part,
 )
@@ -22,6 +24,19 @@ def test_local_part_is_conservative():
     assert validate_local_part("amazon-k7p4") == "amazon-k7p4"
     with pytest.raises(ValueError):
         validate_local_part("Not Allowed!")
+
+
+def test_wordlists_have_broad_variety():
+    assert len(load_words("de")) >= 200
+    assert len(load_words("en")) >= 200
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_readable_aliases_are_valid_local_parts(language: str):
+    for _ in range(100):
+        local_part = readable_local_part(language)
+        assert len(local_part) <= 63
+        assert validate_local_part(local_part) == local_part
 
 
 def test_owned_alias_requires_exact_single_target_and_same_domain():
