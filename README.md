@@ -14,8 +14,10 @@ Cowcloak deliberately keeps its authorization model small:
 - Every alias created by a mailbox points only to that mailbox.
 - Multiple mailboxes on the same mailcow domain remain isolated from each other.
 - Cowcloak only manages an existing alias when its target is exactly the authenticated mailbox.
-- Alias addresses are immutable in Cowcloak. Renaming a description never renames the address.
-- Descriptions are stored as the alias private comment in mailcow.
+- Alias addresses are immutable in Cowcloak. Renaming a purpose never renames the address.
+- User-visible alias purposes are stored in mailcow's public comment.
+- Private mailcow admin comments are not exposed or edited by Cowcloak.
+- SOGo visibility can be enabled per alias when the alias should appear as a selectable sender.
 
 For example, `alice@example.org` may create `shop-k7p4@example.org`, but not an alias on another domain and not an alias that forwards to `bob@example.org`.
 
@@ -23,7 +25,9 @@ For example, `alice@example.org` may create `shop-k7p4@example.org`, but not an 
 
 Cowcloak can pre-create 1, 5, 10 or 20 active, readable aliases. Copy the list into your phone notes and hand out an address even when Cowcloak is unreachable or you have no internet connection.
 
-Prepared aliases are marked in mailcow with the private comment `[reserved] Offline alias`. After using one, assign a description in Cowcloak. Only the comment changes; the email address stays exactly the same.
+Prepared aliases are marked internally with the private comment `[cowcloak:reserved]`. Older Cowcloak aliases using `[reserved] Offline alias` are still recognized. The marker is the only private comment Cowcloak manages. When a prepared alias is assigned, Cowcloak removes that marker and stores the user-visible purpose in the public comment. The email address stays exactly the same.
+
+Offline pool aliases are hidden from the SOGo sender chooser until they are assigned and SOGo visibility is explicitly enabled.
 
 ## Alias styles
 
@@ -31,7 +35,7 @@ Prepared aliases are marked in mailcow with the private comment `[reserved] Offl
 - **Name + random:** `amazon-k7p4@example.org`
 - **Custom:** `my-choice@example.org`
 
-Readable random aliases use a curated English or German word list configured with `COWCLOAK_WORDLIST`.
+Cowcloak ships curated English and German word lists. The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
 ## Architecture
 
@@ -50,8 +54,10 @@ Browser / PWA
       |
       +-- alias address
       +-- target mailbox
-      +-- private comment / description
+      +-- public comment / purpose
+      +-- private Cowcloak reservation marker
       +-- active state
+      +-- SOGo visibility
 ```
 
 The mailcow API key is never sent to the browser.
@@ -144,6 +150,8 @@ Before editing or toggling an existing alias, Cowcloak fetches the alias from ma
 2. its domain equals the authenticated mailbox domain, and
 3. its forwarding target is exactly the authenticated mailbox.
 
+Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
+
 See [SECURITY.md](SECURITY.md) for deployment guidance.
 
 ## Status
@@ -154,17 +162,20 @@ The current milestone is the first testable MVP:
 - [x] mailbox-derived alias domain
 - [x] mailbox-isolated alias listing
 - [x] readable, named and custom aliases
-- [x] mailcow private comments as descriptions
-- [x] immutable alias addresses when descriptions change
+- [x] user-visible purposes stored as mailcow public comments
+- [x] private mailcow admin comments kept private
+- [x] immutable alias addresses when purposes change
 - [x] enable / disable aliases
+- [x] active / disabled status filters with counts
+- [x] configurable SOGo sender visibility per alias
 - [x] offline pool with 1 / 5 / 10 / 20 aliases
 - [x] plain-text pool export
+- [x] German and English UI with browser detection and manual switching
 - [x] Docker image and Compose deployment
 - [x] CI and multi-architecture GHCR builds
 - [ ] integration test against a real mailcow test instance
 - [ ] polished error pages and notifications
 - [ ] alias replacement workflow
-- [ ] localization
 
 ## Project name
 

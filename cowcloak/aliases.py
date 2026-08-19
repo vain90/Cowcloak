@@ -6,7 +6,8 @@ import unicodedata
 from dataclasses import dataclass
 from importlib.resources import files
 
-RESERVED_COMMENT = "[reserved] Offline alias"
+RESERVED_COMMENT = "[cowcloak:reserved]"
+LEGACY_RESERVED_COMMENTS = frozenset({RESERVED_COMMENT, "[reserved] Offline alias"})
 _SUFFIX_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _LOCAL_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 
@@ -20,6 +21,7 @@ class AliasRecord:
     active: bool
     private_comment: str
     public_comment: str
+    sogo_visible: bool = False
     sender_allowed: bool | None = None
     is_catch_all: bool = False
 
@@ -34,17 +36,19 @@ class AliasRecord:
             active=str(data.get("active", "0")) == "1",
             private_comment=str(data.get("private_comment") or ""),
             public_comment=str(data.get("public_comment") or ""),
+            sogo_visible=str(data.get("sogo_visible", "0")) == "1",
             sender_allowed=(str(sender_allowed) == "1") if sender_allowed is not None else None,
             is_catch_all=str(data.get("is_catch_all", "0")) == "1",
         )
 
     @property
     def is_reserved(self) -> bool:
-        return self.private_comment == RESERVED_COMMENT
+        return self.private_comment in LEGACY_RESERVED_COMMENTS
 
     @property
     def description(self) -> str:
-        return "" if self.is_reserved else self.private_comment
+        # mailcow public comments are user-visible; private comments stay admin-only.
+        return self.public_comment
 
 
 def mailbox_domain(email: str) -> str:

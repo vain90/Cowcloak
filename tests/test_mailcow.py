@@ -18,7 +18,7 @@ def settings() -> Settings:
     )
 
 
-async def test_create_alias_sets_target_comment_and_sender_permission():
+async def test_create_alias_sets_public_purpose_sender_permission_and_sogo_visibility():
     captured = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -27,33 +27,44 @@ async def test_create_alias_sets_target_comment_and_sender_permission():
         return httpx.Response(200, json=[{"type": "success", "msg": ["alias_added"]}])
 
     client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
-    await client.create_alias("amazon-k7p4@example.org", "hidden@example.org", "Amazon")
+    await client.create_alias(
+        "amazon-k7p4@example.org",
+        "hidden@example.org",
+        "Amazon",
+        sogo_visible=True,
+    )
     await client.close()
 
     assert captured["path"] == "/api/v1/add/alias"
     assert captured["json"]["goto"] == "hidden@example.org"
-    assert captured["json"]["private_comment"] == "Amazon"
+    assert captured["json"]["public_comment"] == "Amazon"
+    assert captured["json"]["private_comment"] == ""
     assert captured["json"]["sender_allowed"] == 1
+    assert captured["json"]["sogo_visible"] == 1
 
 
-async def test_description_update_never_changes_address_or_target():
+async def test_reserved_alias_uses_private_marker_and_stays_hidden_from_sogo():
     captured = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
         captured["json"] = json.loads(request.content)
-        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_added"]}])
 
     client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
-    await client.update_description(42, "Amazon private")
+    await client.create_alias(
+        "pool-42@example.org",
+        "hidden@example.org",
+        private_comment="[cowcloak:reserved]",
+        sogo_visible=False,
+    )
     await client.close()
 
-    assert captured["json"] == {
-        "items": ["42"],
-        "attr": {"private_comment": "Amazon private"},
-    }
+    assert captured["json"]["public_comment"] == ""
+    assert captured["json"]["private_comment"] == "[cowcloak:reserved]"
+    assert captured["json"]["sogo_visible"] == 0
 
 
-async def test_metadata_update_changes_only_comments():
+async def test_alias_preferences_never_touch_private_comment_address_or_target():
     captured = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -61,14 +72,35 @@ async def test_metadata_update_changes_only_comments():
         return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
 
     client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
-    await client.update_metadata(42, "Amazon private", "Created for shopping")
+    await client.update_alias_preferences(42, "Amazon shopping", True)
     await client.close()
 
     assert captured["json"] == {
         "items": ["42"],
         "attr": {
-            "private_comment": "Amazon private",
-            "public_comment": "Created for shopping",
+            "public_comment": "Amazon shopping",
+            "sogo_visible": 1,
+        },
+    }
+
+
+async def test_assign_reserved_alias_clears_only_reservation_marker_fields():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.assign_reserved_alias(42, "Hotel", False)
+    await client.close()
+
+    assert captured["json"] == {
+        "items": ["42"],
+        "attr": {
+            "private_comment": "",
+            "public_comment": "Hotel",
+            "sogo_visible": 0,
         },
     }
 
