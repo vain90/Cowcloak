@@ -172,6 +172,10 @@
     </div>
   </div>
 
+  {% if usage_stats_visible %}
+  <p class="usage-note">{{ t.usage_stats_note }}</p>
+  {% endif %}
+
   <div data-alias-results-region>
     <nav class="status-filters" aria-label="{{ t.filter_aria }}">
       <a
@@ -229,6 +233,21 @@
           <div class="alias-info">
             <strong>{{ alias.description or t.no_purpose }}</strong>
             <code>{{ alias.address }}</code>
+            {% if usage_stats_visible %}
+            {% set stats = usage_stats.get(alias.address|lower) %}
+            <div class="usage-summary">
+              <span><span class="usage-count">{{ stats.received_count }}</span> {{ t.usage_received }}</span>
+              <span class="usage-separator" aria-hidden="true">·</span>
+              <span><span class="usage-count">{{ stats.sent_count }}</span> {{ t.usage_sent }}</span>
+              {% if stats.last_used_at %}
+              <span class="usage-separator" aria-hidden="true">·</span>
+              <span>
+                {{ t.usage_last_used }}
+                <time data-local-timestamp="{{ stats.last_used_at }}">{{ stats.last_used_at }}</time>
+              </span>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
           <div class="status-row">
             <span class="status status-fixed {{ 'on' if alias.active else 'off' }}">

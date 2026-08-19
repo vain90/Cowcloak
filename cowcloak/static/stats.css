@@ -1,0 +1,45 @@
+.usage-note {
+  margin: 11px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.usage-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 5px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.usage-count {
+  color: #475467;
+  font-weight: 750;
+}
+
+.usage-separator {
+  color: #98a2b3;
+}
+
+.usage-summary time {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .usage-note {
+    margin-top: 9px;
+    font-size: 11.5px;
+  }
+
+  .usage-summary {
+    font-size: 11px;
+  }
+}

@@ -81,6 +81,24 @@ def _event_key(kind: str, item: dict[str, Any], alias: str, event_at: int) -> st
     return hashlib.sha256(payload).hexdigest()
 
 
+async def mailbox_usage_enabled(
+    settings: Settings,
+    mailcow: MailcowClient,
+    email: str,
+) -> bool:
+    if not settings.usage_stats:
+        return False
+
+    usage_tag = settings.usage_tag.casefold()
+    mailbox = await mailcow.get_mailbox(email)
+    if usage_tag in _tags(mailbox):
+        return True
+
+    domain = str(mailbox.get("domain") or email.rsplit("@", 1)[-1]).strip().lower()
+    domain_details = await mailcow.get_domain(domain)
+    return usage_tag in _tags(domain_details)
+
+
 class UsageCollector:
     def __init__(self, settings: Settings, mailcow: MailcowClient, store: StatsStore) -> None:
         self.settings = settings

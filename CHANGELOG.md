@@ -11,6 +11,7 @@ All notable changes to Cowcloak are documented here.
 - versioned SQLite storage for alias counters and deduplication, created only when statistics are enabled
 - background collection of accepted incoming alias deliveries from mailcow Rspamd history
 - background collection of accepted authenticated outgoing alias sends from mailcow Rspamd history
+- inline received/sent usage counters and last-used timestamps in the alias dashboard for opted-in mailboxes
 - persistent Docker data volume for deployments that enable statistics
 
 ### Changed
