@@ -43,7 +43,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "handed it out."
         ),
         "copy_all": "Copy all",
-        "plain_text": "Plain text",
+        "plain_text": "Open as text",
         "no_prepared_aliases": "No prepared aliases yet.",
         "assigned_aliases": "Assigned aliases",
         "assigned_summary": (
@@ -132,7 +132,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "noch nie weitergegeben hast."
         ),
         "copy_all": "Alle kopieren",
-        "plain_text": "Klartext",
+        "plain_text": "Als Text öffnen",
         "no_prepared_aliases": "Noch keine vorbereiteten Aliase vorhanden.",
         "assigned_aliases": "Zugeordnete Aliase",
         "assigned_summary": (
