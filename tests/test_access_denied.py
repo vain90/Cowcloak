@@ -1,3 +1,12 @@
+import os
+
+os.environ.setdefault("COWCLOAK_BASE_URL", "https://aliases.example.org")
+os.environ.setdefault("COWCLOAK_SESSION_SECRET", "x" * 64)
+os.environ.setdefault("MAILCOW_URL", "https://mail.example.org")
+os.environ.setdefault("MAILCOW_API_KEY", "secret")
+os.environ.setdefault("MAILCOW_OAUTH_CLIENT_ID", "client")
+os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
+
 from fastapi.testclient import TestClient
 
 import cowcloak.main as main_module
