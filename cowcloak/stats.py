@@ -132,7 +132,10 @@ class StatsStore:
                     VALUES (?, ?, 1, 0, ?, NULL)
                     ON CONFLICT(mailbox, alias) DO UPDATE SET
                         received_count = alias_usage.received_count + 1,
-                        last_received_at = MAX(alias_usage.last_received_at, excluded.last_received_at)
+                        last_received_at = MAX(
+                            alias_usage.last_received_at,
+                            excluded.last_received_at
+                        )
                     """,
                     (event.mailbox, event.alias, event.event_at),
                 )
@@ -163,7 +166,9 @@ class StatsStore:
                 last_received_at=(
                     int(row["last_received_at"]) if row["last_received_at"] is not None else None
                 ),
-                last_sent_at=(int(row["last_sent_at"]) if row["last_sent_at"] is not None else None),
+                last_sent_at=(
+                    int(row["last_sent_at"]) if row["last_sent_at"] is not None else None
+                ),
             )
             for row in rows
         }
