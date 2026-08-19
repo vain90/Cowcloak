@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from cowcloak import __version__
+from cowcloak.access import AccessRevalidationMiddleware
 from cowcloak.aliases import (
     RESERVED_COMMENT,
     is_mailbox_catch_all,
@@ -83,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Cowcloak", version=__version__, lifespan=lifespan)
     app.state.settings = settings
+    app.add_middleware(AccessRevalidationMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,
