@@ -1,0 +1,122 @@
+.top-control-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--line-strong);
+}
+
+.help-trigger {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: #475467;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.help-trigger:hover {
+  border-color: #98a2b3;
+  background: #fcfcfd;
+  color: var(--text);
+}
+
+.help-trigger:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.help-dialog {
+  width: min(620px, calc(100% - 28px));
+  max-height: min(82vh, 760px);
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 24px 70px rgba(16, 24, 40, .2);
+}
+
+.help-dialog::backdrop {
+  background: rgba(16, 24, 40, .3);
+  backdrop-filter: blur(2px);
+}
+
+.help-dialog .dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.help-dialog .dialog-head .muted {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.help-dialog .dialog-close {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.help-dialog .dialog-close:hover {
+  background: #e4e7ec;
+  color: var(--text);
+}
+
+.help-content {
+  display: grid;
+  gap: 16px;
+}
+
+.help-content section {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.help-content section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.help-content h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  letter-spacing: -.01em;
+}
+
+.help-content p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.warning-card {
+  border-color: #fecdca;
+  background: #fff7f6;
+  box-shadow: none;
+}
+
+.warning-card strong {
+  color: var(--danger);
+}
+
+.warning-card p {
+  margin: 6px 0 0;
+  color: #7a271a;
+  line-height: 1.55;
+}
