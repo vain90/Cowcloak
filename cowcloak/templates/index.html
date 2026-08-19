@@ -2,9 +2,40 @@
 {% block title %}Cowcloak{% endblock %}
 {% block content %}
 <section class="hero card">
-  <p class="eyebrow">{{ t.landing_eyebrow }}</p>
-  <h1>Cowcloak</h1>
-  <p class="lead">{{ t.landing_lead }}</p>
-  <a class="button primary" href="/login">{{ t.sign_in }}</a>
+  {% if request.query_params.get("error") == "access-denied" %}
+    {% if language == "de" %}
+      <p class="eyebrow">ZUGRIFF NICHT FREIGESCHALTET</p>
+      <h1>Kein Zugriff auf Cowcloak</h1>
+      <p class="lead">Dieses mailcow-Postfach ist nicht für Cowcloak freigeschaltet.</p>
+      <p class="muted">
+        Wenn du in mailcow bereits angemeldet bist, wird dieses Konto automatisch für die
+        Anmeldung verwendet. Melde dich dort ab und versuche es anschließend mit einem
+        freigeschalteten Postfach erneut. Wenn du Zugriff benötigst, wende dich an deinen
+        mailcow-Administrator.
+      </p>
+      <div class="button-row top-gap">
+        <a class="button primary" href="/login">Erneut versuchen</a>
+        <a class="button" href="/">Zur Startseite</a>
+      </div>
+    {% else %}
+      <p class="eyebrow">ACCESS NOT ENABLED</p>
+      <h1>No access to Cowcloak</h1>
+      <p class="lead">This mailcow mailbox is not enabled for Cowcloak.</p>
+      <p class="muted">
+        If you are already signed in to mailcow, that account is used automatically for the
+        login. Sign out there and try again with an enabled mailbox. If you need access,
+        contact your mailcow administrator.
+      </p>
+      <div class="button-row top-gap">
+        <a class="button primary" href="/login">Try again</a>
+        <a class="button" href="/">Back to start</a>
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="eyebrow">{{ t.landing_eyebrow }}</p>
+    <h1>Cowcloak</h1>
+    <p class="lead">{{ t.landing_lead }}</p>
+    <a class="button primary" href="/login">{{ t.sign_in }}</a>
+  {% endif %}
 </section>
 {% endblock %}
