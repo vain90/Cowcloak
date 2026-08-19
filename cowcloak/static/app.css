@@ -100,18 +100,22 @@ input:focus, select:focus { outline: 3px solid var(--accent-soft); border-color:
 .search-clear[hidden] { display: none; }
 @keyframes search-pulse { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
-.status-filters { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 15px; }
+[data-alias-results-region] { display: flex; flex-direction: column; }
+.status-filters { order: 1; display: flex; gap: 7px; flex-wrap: wrap; margin-top: 15px; }
 .filter-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; background: #fff; color: var(--muted); text-decoration: none; font-size: 12.5px; font-weight: 650; }
 .filter-pill span { min-width: 22px; padding: 1px 5px; border-radius: 999px; background: #f2f4f7; text-align: center; font-size: 10.5px; }
 .filter-pill.current { color: var(--accent-strong); border-color: #b7ddca; background: var(--accent-soft); }
 .filter-pill.current span { background: #dcefe5; }
 .metadata-hint { margin-top: 10px; max-width: 90ch; }
 
-.bulk-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 10px 0 2px; border-top: 1px solid var(--line); }
+.bulk-toolbar { display: contents; }
 .bulk-selection, .bulk-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.bulk-selection { order: 2; margin-top: 12px; padding: 10px 0 2px; border-top: 1px solid var(--line); }
+.bulk-actions { order: 4; justify-content: flex-start; margin-top: 12px; }
+.bulk-actions select { width: auto !important; min-width: 0 !important; padding: 6px 9px; font-size: 12.5px; }
 .bulk-count { color: var(--muted); font-size: 12.5px; font-weight: 650; white-space: nowrap; }
 
-.alias-list { display: grid; gap: 0; margin-top: 12px; border-top: 1px solid var(--line); }
+.alias-list { order: 3; display: grid; gap: 0; margin-top: 12px; border-top: 1px solid var(--line); }
 .alias-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 366px; align-items: center; gap: 12px; padding: 13px 2px; border-bottom: 1px solid var(--line); transition: opacity .15s ease, background .15s ease; }
 .alias-row:hover { background: #fcfcfd; }
 .alias-row.disabled-row { opacity: .58; }
@@ -131,7 +135,7 @@ input:focus, select:focus { outline: 3px solid var(--accent-soft); border-color:
 .status.on, .status.sogo-on { color: var(--accent-strong); background: var(--accent-soft); }
 .status.off, .status.sogo-off { color: #667085; background: #f2f4f7; }
 
-.list-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; }
+.list-footer { order: 5; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; }
 .range-summary { color: var(--muted); font-size: 12.5px; }
 .page-size-form label { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .page-size-form select { width: auto; min-width: 72px; padding: 6px 9px; }
@@ -156,6 +160,7 @@ summary::-webkit-details-marker { display: none; }
 .dialog-close { width: 32px; height: 32px; flex: 0 0 auto; border: 0; border-radius: 999px; background: #f2f4f7; color: #475467; font-size: 22px; line-height: 1; cursor: pointer; }
 .dialog-close:hover { background: #e4e7ec; color: var(--text); }
 .assign-address { display: block; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); overflow-wrap: anywhere; }
+.assign-dialog .mode-picker.top-gap { margin-top: 18px; }
 
 @media (max-width: 900px) {
   .alias-row { grid-template-columns: 24px minmax(0, 1fr); gap: 10px 12px; }
@@ -167,7 +172,6 @@ summary::-webkit-details-marker { display: none; }
   .language-switch { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); }
   .grid.two { grid-template-columns: 1fr; }
   .topbar, .section-head { align-items: stretch; flex-direction: column; }
-  .bulk-toolbar { align-items: stretch; flex-direction: column; }
   .bulk-selection, .bulk-actions { width: 100%; }
   .alias-main { grid-template-columns: 1fr; gap: 8px; }
   .status-row { width: auto; justify-content: start; }
