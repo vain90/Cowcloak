@@ -7,7 +7,16 @@ const replacementText = {
     action: 'Alias ersetzen',
     hint: 'Erstellt einen neuen Alias mit gleichem Zweck und deaktiviert diesen Alias.',
     title: 'Alias ersetzen',
-    body: 'Cowcloak erstellt einen neuen Alias mit demselben Zweck und derselben SOGo-Einstellung. Der bisherige Alias wird deaktiviert, aber nicht gelöscht.',
+    body: 'Wähle, in welchem Format der neue Alias erstellt werden soll. Zweck und SOGo-Einstellung werden übernommen. Der bisherige Alias wird deaktiviert, aber nicht gelöscht.',
+    style: 'Format des neuen Alias',
+    named: 'Name + Zufall',
+    namedHint: 'Zweck als Name plus zwei leicht lesbare Zufallszeichen.',
+    readable: 'Lesbarer Zufall',
+    readableHint: 'Zwei kurze Wörter plus zweistellige Zahl.',
+    custom: 'Eigene Adresse',
+    customHint: 'Lokalen Teil der neuen Adresse selbst festlegen.',
+    customAddress: 'Eigene Adresse',
+    customPlaceholder: 'mein-alias',
     confirm: 'Ersetzen',
     cancel: 'Abbrechen',
     successTitle: 'Alias ersetzt',
@@ -18,12 +27,23 @@ const replacementText = {
     newAlias: 'Neuer Alias',
     copy: 'Kopieren',
     close: 'Schließen',
+    bulkAction: 'Aktion auswählen',
+    apply: 'Ausführen',
   },
   en: {
     action: 'Replace alias',
     hint: 'Creates a new alias with the same purpose and disables this alias.',
     title: 'Replace alias',
-    body: 'Cowcloak creates a new alias with the same purpose and SOGo setting. The current alias is disabled but not deleted.',
+    body: 'Choose the format for the new alias. Purpose and SOGo visibility are preserved. The current alias is disabled but not deleted.',
+    style: 'New alias format',
+    named: 'Name + random',
+    namedHint: 'Purpose as the name plus two easy-to-read random characters.',
+    readable: 'Readable random',
+    readableHint: 'Two short words plus a two-digit number.',
+    custom: 'Custom address',
+    customHint: 'Choose the local part of the new address yourself.',
+    customAddress: 'Custom address',
+    customPlaceholder: 'my-alias',
     confirm: 'Replace',
     cancel: 'Cancel',
     successTitle: 'Alias replaced',
@@ -34,6 +54,8 @@ const replacementText = {
     newAlias: 'New alias',
     copy: 'Copy',
     close: 'Close',
+    bulkAction: 'Choose action',
+    apply: 'Apply',
   },
 }[uiLanguage];
 
@@ -123,6 +145,36 @@ function createDialogHeading(title, closeLabel) {
   return { head, close };
 }
 
+function replacementModeOption(name, value, title, example, hint, checked = false) {
+  const label = document.createElement('label');
+  label.className = 'mode-option';
+
+  const radio = document.createElement('input');
+  radio.type = 'radio';
+  radio.name = name;
+  radio.value = value;
+  radio.checked = checked;
+
+  const body = document.createElement('span');
+  body.className = 'mode-option-body';
+
+  const head = document.createElement('span');
+  head.className = 'mode-option-head';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  head.append(strong);
+
+  const code = document.createElement('code');
+  code.textContent = example;
+
+  const small = document.createElement('small');
+  small.textContent = hint;
+
+  body.append(head, code, small);
+  label.append(radio, body);
+  return { label, radio };
+}
+
 function showReplacementResult(address, partial = false) {
   const dialog = document.createElement('dialog');
   dialog.className = 'assign-dialog assign-dialog-single';
@@ -181,17 +233,82 @@ function showReplacementDialog(aliasCheckbox, editDetails) {
     return;
   }
 
+  const oldAddress = aliasCheckbox.dataset.address;
+  const domain = oldAddress.split('@').slice(1).join('@');
+  const description = aliasCheckbox.dataset.description || 'alias';
+
   const dialog = document.createElement('dialog');
-  dialog.className = 'assign-dialog assign-dialog-single';
+  dialog.className = 'assign-dialog';
   const { head, close } = createDialogHeading(replacementText.title, replacementText.close);
 
   const body = document.createElement('p');
   body.className = 'muted';
   body.textContent = replacementText.body;
 
-  const addressCode = document.createElement('code');
-  addressCode.className = 'assign-address';
-  addressCode.textContent = aliasCheckbox.dataset.address;
+  const oldAddressCode = document.createElement('code');
+  oldAddressCode.className = 'assign-address';
+  oldAddressCode.textContent = oldAddress;
+
+  const fieldset = document.createElement('fieldset');
+  fieldset.className = 'mode-picker top-gap';
+  const legend = document.createElement('legend');
+  legend.textContent = replacementText.style;
+  fieldset.append(legend);
+
+  const slugPreview = description
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'alias';
+  const named = replacementModeOption(
+    'replacement-mode',
+    'named',
+    replacementText.named,
+    `${slugPreview}-k7@${domain}`,
+    replacementText.namedHint,
+    true,
+  );
+  const readable = replacementModeOption(
+    'replacement-mode',
+    'readable',
+    replacementText.readable,
+    `feder-hafen-27@${domain}`,
+    replacementText.readableHint,
+  );
+  const custom = replacementModeOption(
+    'replacement-mode',
+    'custom',
+    replacementText.custom,
+    `${replacementText.customPlaceholder}@${domain}`,
+    replacementText.customHint,
+  );
+  fieldset.append(named.label, readable.label, custom.label);
+
+  const customLabel = document.createElement('label');
+  customLabel.className = 'hidden top-gap';
+  customLabel.textContent = replacementText.customAddress;
+
+  const addressInput = document.createElement('div');
+  addressInput.className = 'address-input';
+  const localPart = document.createElement('input');
+  localPart.maxLength = 63;
+  localPart.placeholder = replacementText.customPlaceholder;
+  localPart.autocomplete = 'off';
+  const domainSuffix = document.createElement('span');
+  domainSuffix.textContent = `@${domain}`;
+  addressInput.append(localPart, domainSuffix);
+  customLabel.append(addressInput);
+
+  const syncReplacementMode = () => {
+    customLabel.classList.toggle('hidden', !custom.radio.checked);
+    if (custom.radio.checked) {
+      localPart.focus();
+    }
+  };
+  [named.radio, readable.radio, custom.radio].forEach((radio) => {
+    radio.addEventListener('change', syncReplacementMode);
+  });
 
   const actions = document.createElement('div');
   actions.className = 'button-row top-gap';
@@ -207,7 +324,7 @@ function showReplacementDialog(aliasCheckbox, editDetails) {
   cancel.textContent = replacementText.cancel;
 
   actions.append(confirm, cancel);
-  dialog.append(head, body, addressCode, actions);
+  dialog.append(head, body, oldAddressCode, fieldset, customLabel, actions);
   document.body.append(dialog);
   editDetails?.removeAttribute('open');
 
@@ -219,8 +336,17 @@ function showReplacementDialog(aliasCheckbox, editDetails) {
   dialog.addEventListener('close', () => dialog.remove(), { once: true });
 
   confirm.addEventListener('click', async () => {
+    const mode = [named.radio, readable.radio, custom.radio].find((radio) => radio.checked)?.value;
+    if (!mode) return;
+    if (mode === 'custom' && !localPart.value.trim()) {
+      localPart.focus();
+      return;
+    }
+
     const form = new FormData();
     form.append('csrf_token', csrfToken);
+    form.append('mode', mode);
+    form.append('local_part', localPart.value.trim());
     confirm.disabled = true;
     cancel.disabled = true;
 
@@ -291,80 +417,121 @@ function bindBulkActions(root = document) {
     toolbar.dataset.bound = 'true';
 
     const region = toolbar.closest('[data-alias-results-region]') || root;
+    const selection = toolbar.querySelector('.bulk-selection');
+    const actions = toolbar.querySelector('.bulk-actions');
     const count = toolbar.querySelector('[data-selected-count]');
-    const selectAll = toolbar.querySelector('[data-select-all]');
-    const selectNone = toolbar.querySelector('[data-select-none]');
-    const actionButtons = [...toolbar.querySelectorAll('[data-bulk-action]')];
+    const oldSelectAll = toolbar.querySelector('[data-select-all]');
+    const oldActionButtons = [...toolbar.querySelectorAll('[data-bulk-action]')];
     const selectedTemplate = toolbar.dataset.selectedTemplate || '{count} selected';
     const failureMessage = toolbar.dataset.bulkFailed || 'The bulk action could not be completed.';
+
+    if (!selection || !actions) return;
+
+    const masterLabel = document.createElement('label');
+    masterLabel.className = 'check-row compact-check';
+    const master = document.createElement('input');
+    master.type = 'checkbox';
+    master.dataset.selectMaster = 'true';
+    const masterText = document.createElement('span');
+    masterText.textContent = oldSelectAll?.textContent?.trim() || 'Select all';
+    masterLabel.append(master, masterText);
+
+    selection.innerHTML = '';
+    selection.append(masterLabel);
+    if (count) selection.append(count);
+
+    const actionSelect = document.createElement('select');
+    actionSelect.dataset.bulkActionSelect = 'true';
+    actionSelect.style.width = 'auto';
+    actionSelect.style.minWidth = '180px';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = replacementText.bulkAction;
+    actionSelect.append(placeholder);
+
+    oldActionButtons.forEach((button) => {
+      const option = document.createElement('option');
+      option.value = button.dataset.bulkAction;
+      option.textContent = button.textContent.trim();
+      actionSelect.append(option);
+    });
+
+    const apply = document.createElement('button');
+    apply.className = 'button compact';
+    apply.type = 'button';
+    apply.textContent = replacementText.apply;
+    apply.disabled = true;
+
+    actions.innerHTML = '';
+    actions.append(actionSelect, apply);
 
     const checkboxes = () => [...region.querySelectorAll('[data-alias-select]')];
     const selected = () => checkboxes().filter((checkbox) => checkbox.checked);
 
     const sync = () => {
+      const all = checkboxes();
       const selectedCount = selected().length;
       if (count) {
         count.textContent = selectedTemplate.replace('{count}', String(selectedCount));
       }
-      actionButtons.forEach((button) => {
-        button.disabled = selectedCount === 0;
-      });
+      master.checked = all.length > 0 && selectedCount === all.length;
+      master.indeterminate = selectedCount > 0 && selectedCount < all.length;
+      actionSelect.disabled = selectedCount === 0;
+      apply.disabled = selectedCount === 0 || !actionSelect.value;
     };
 
     checkboxes().forEach((checkbox) => checkbox.addEventListener('change', sync));
 
-    selectAll?.addEventListener('click', () => {
-      checkboxes().forEach((checkbox) => { checkbox.checked = true; });
+    master.addEventListener('change', () => {
+      checkboxes().forEach((checkbox) => { checkbox.checked = master.checked; });
       sync();
     });
 
-    selectNone?.addEventListener('click', () => {
-      checkboxes().forEach((checkbox) => { checkbox.checked = false; });
-      sync();
-    });
+    actionSelect.addEventListener('change', sync);
 
-    actionButtons.forEach((button) => {
-      button.addEventListener('click', async () => {
-        const selectedAliases = selected();
-        if (!selectedAliases.length) return;
+    apply.addEventListener('click', async () => {
+      const selectedAliases = selected();
+      const action = actionSelect.value;
+      if (!selectedAliases.length || !action) return;
 
-        if (button.dataset.bulkAction === 'copy') {
-          await navigator.clipboard.writeText(
-            selectedAliases.map((checkbox) => checkbox.dataset.address).join('\n'),
-          );
-          const original = button.textContent;
-          button.textContent = copiedLabel;
-          setTimeout(() => { button.textContent = original; }, 1200);
-          return;
+      if (action === 'copy') {
+        await navigator.clipboard.writeText(
+          selectedAliases.map((checkbox) => checkbox.dataset.address).join('\n'),
+        );
+        const original = apply.textContent;
+        apply.textContent = copiedLabel;
+        setTimeout(() => { apply.textContent = original; }, 1200);
+        return;
+      }
+
+      const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+      if (!csrfToken) {
+        window.alert(failureMessage);
+        return;
+      }
+
+      const form = new FormData();
+      form.append('csrf_token', csrfToken);
+      form.append('action', action);
+      selectedAliases.forEach((checkbox) => form.append('alias_ids', checkbox.value));
+
+      actionSelect.disabled = true;
+      apply.disabled = true;
+      try {
+        const response = await fetch('/aliases/bulk', {
+          method: 'POST',
+          body: form,
+        });
+        if (!response.ok) {
+          throw new Error(`Bulk action failed with HTTP ${response.status}`);
         }
-
-        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
-        if (!csrfToken) {
-          window.alert(failureMessage);
-          return;
-        }
-
-        const form = new FormData();
-        form.append('csrf_token', csrfToken);
-        form.append('action', button.dataset.bulkAction);
-        selectedAliases.forEach((checkbox) => form.append('alias_ids', checkbox.value));
-
-        actionButtons.forEach((actionButton) => { actionButton.disabled = true; });
-        try {
-          const response = await fetch('/aliases/bulk', {
-            method: 'POST',
-            body: form,
-          });
-          if (!response.ok) {
-            throw new Error(`Bulk action failed with HTTP ${response.status}`);
-          }
-          window.location.reload();
-        } catch (error) {
-          console.error('Bulk alias action failed', error);
-          window.alert(failureMessage);
-          sync();
-        }
-      });
+        window.location.reload();
+      } catch (error) {
+        console.error('Bulk alias action failed', error);
+        window.alert(failureMessage);
+        sync();
+      }
     });
 
     sync();
