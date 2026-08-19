@@ -21,9 +21,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "purpose": "Purpose",
         "purpose_placeholder": "Amazon, hotel, newsletter …",
         "address_style": "Address style",
+        "address_style_hint": "Choose how the new address should look.",
+        "recommended": "Recommended",
         "readable_random": "Readable random",
+        "readable_random_hint": (
+            "Neutral and easy to dictate. Uses two words plus a number or three short words."
+        ),
         "name_random": "Name + random suffix",
+        "name_random_hint": (
+            "Starts with the purpose, so you can recognize the service directly from the address."
+        ),
         "custom_local_part": "Custom local part",
+        "custom_local_part_hint": "Choose the complete part before the @ sign yourself.",
         "custom_address": "Custom address",
         "immutable_hint": (
             "The address is created on {domain} and never changes when you rename its purpose."
@@ -107,9 +116,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "purpose": "Verwendungszweck",
         "purpose_placeholder": "Amazon, Hotel, Newsletter …",
         "address_style": "Adressformat",
+        "address_style_hint": "Wähle, wie die neue Adresse aussehen soll.",
+        "recommended": "Empfohlen",
         "readable_random": "Lesbar zufällig",
+        "readable_random_hint": (
+            "Neutral und gut diktierbar. Nutzt zwei Wörter plus Zahl oder drei kurze Wörter."
+        ),
         "name_random": "Name + Zufallssuffix",
+        "name_random_hint": (
+            "Beginnt mit dem Verwendungszweck, damit du den Dienst direkt an der Adresse erkennst."
+        ),
         "custom_local_part": "Eigener lokaler Teil",
+        "custom_local_part_hint": "Bestimme den vollständigen Teil vor dem @-Zeichen selbst.",
         "custom_address": "Eigene Adresse",
         "immutable_hint": (
             "Die Adresse wird auf {domain} erstellt und ändert sich nicht, wenn du den "
