@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,11 +18,29 @@ class UsageEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class SenderEvent:
+    event_key: str
+    mailbox: str
+    alias: str
+    sender_domain: str
+    sender_address: str | None
+    event_at: int
+
+
+@dataclass(frozen=True, slots=True)
 class AliasUsage:
     received_count: int = 0
     sent_count: int = 0
     last_received_at: int | None = None
     last_sent_at: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SenderUsage:
+    sender_domain: str
+    sender_address: str | None
+    received_count: int
+    last_received_at: int | None
 
 
 class StatsStore:
@@ -51,6 +69,9 @@ class StatsStore:
             if version == 0:
                 self._create_schema_v1(connection)
                 version = 1
+            if version == 1:
+                self._migrate_v1_to_v2(connection)
+                version = 2
             if version != SCHEMA_VERSION:
                 raise RuntimeError(
                     f"No migration path for usage database schema {version} to {SCHEMA_VERSION}"
@@ -88,7 +109,45 @@ class StatsStore:
             "INSERT INTO usage_meta (key, value) VALUES (?, ?)",
             ("tracking_started_at", str(int(time.time()))),
         )
-        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        connection.execute("PRAGMA user_version = 1")
+
+    @staticmethod
+    def _migrate_v1_to_v2(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE sender_mode_state (
+                mailbox TEXT PRIMARY KEY COLLATE NOCASE,
+                mode TEXT NOT NULL,
+                tracking_started_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE sender_usage (
+                mailbox TEXT NOT NULL COLLATE NOCASE,
+                alias TEXT NOT NULL COLLATE NOCASE,
+                sender_key TEXT NOT NULL COLLATE NOCASE,
+                sender_domain TEXT NOT NULL COLLATE NOCASE,
+                sender_address TEXT COLLATE NOCASE,
+                received_count INTEGER NOT NULL DEFAULT 0,
+                last_received_at INTEGER,
+                PRIMARY KEY (mailbox, alias, sender_key)
+            );
+
+            CREATE INDEX sender_usage_mailbox_alias_idx
+                ON sender_usage (mailbox, alias);
+
+            CREATE TABLE sender_processed_events (
+                event_key TEXT PRIMARY KEY,
+                event_at INTEGER NOT NULL,
+                mailbox TEXT NOT NULL COLLATE NOCASE
+            );
+
+            CREATE INDEX sender_processed_events_mailbox_idx
+                ON sender_processed_events (mailbox);
+            CREATE INDEX sender_processed_events_event_at_idx
+                ON sender_processed_events (event_at);
+            """
+        )
+        connection.execute("PRAGMA user_version = 2")
 
     async def tracking_started_at(self) -> int:
         return await asyncio.to_thread(self._tracking_started_at)
@@ -102,6 +161,62 @@ class StatsStore:
         if row is None:
             raise RuntimeError("Usage database does not contain tracking_started_at")
         return int(row["value"])
+
+    async def sync_sender_modes(
+        self,
+        modes: dict[str, str],
+        *,
+        now: int | None = None,
+    ) -> dict[str, int]:
+        if not modes:
+            return {}
+        timestamp = int(time.time()) if now is None else int(now)
+        return await asyncio.to_thread(self._sync_sender_modes, modes, timestamp)
+
+    def _sync_sender_modes(self, modes: dict[str, str], now: int) -> dict[str, int]:
+        starts: dict[str, int] = {}
+        with self._connect() as connection:
+            for mailbox, mode in modes.items():
+                mailbox = mailbox.lower()
+                row = connection.execute(
+                    "SELECT mode, tracking_started_at FROM sender_mode_state WHERE mailbox = ?",
+                    (mailbox,),
+                ).fetchone()
+                if row is None:
+                    connection.execute(
+                        """
+                        INSERT INTO sender_mode_state (mailbox, mode, tracking_started_at)
+                        VALUES (?, ?, ?)
+                        """,
+                        (mailbox, mode, now),
+                    )
+                    starts[mailbox] = now
+                    continue
+
+                current_mode = str(row["mode"])
+                current_start = int(row["tracking_started_at"])
+                if current_mode == mode:
+                    starts[mailbox] = current_start
+                    continue
+
+                # Sender detail is intentionally reset on every mode change. This prevents
+                # full addresses from surviving a downgrade to domain/basic/off and avoids
+                # retroactively reprocessing old Rspamd history after increasing detail.
+                connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
+                connection.execute(
+                    "DELETE FROM sender_processed_events WHERE mailbox = ?",
+                    (mailbox,),
+                )
+                connection.execute(
+                    """
+                    UPDATE sender_mode_state
+                    SET mode = ?, tracking_started_at = ?
+                    WHERE mailbox = ?
+                    """,
+                    (mode, now, mailbox),
+                )
+                starts[mailbox] = now
+        return starts
 
     async def record_received(self, events: list[UsageEvent]) -> int:
         if not events:
@@ -160,6 +275,60 @@ class StatsStore:
                 recorded += 1
         return recorded
 
+    async def record_senders(self, events: list[SenderEvent]) -> int:
+        if not events:
+            return 0
+        return await asyncio.to_thread(self._record_senders, events)
+
+    def _record_senders(self, events: list[SenderEvent]) -> int:
+        recorded = 0
+        with self._connect() as connection:
+            for event in events:
+                inserted = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO sender_processed_events (
+                        event_key,
+                        event_at,
+                        mailbox
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (event.event_key, event.event_at, event.mailbox),
+                )
+                if inserted.rowcount != 1:
+                    continue
+
+                sender_key = event.sender_address or event.sender_domain
+                connection.execute(
+                    """
+                    INSERT INTO sender_usage (
+                        mailbox,
+                        alias,
+                        sender_key,
+                        sender_domain,
+                        sender_address,
+                        received_count,
+                        last_received_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, 1, ?)
+                    ON CONFLICT(mailbox, alias, sender_key) DO UPDATE SET
+                        received_count = sender_usage.received_count + 1,
+                        last_received_at = MAX(
+                            COALESCE(sender_usage.last_received_at, excluded.last_received_at),
+                            excluded.last_received_at
+                        )
+                    """,
+                    (
+                        event.mailbox,
+                        event.alias,
+                        sender_key,
+                        event.sender_domain,
+                        event.sender_address,
+                        event.event_at,
+                    ),
+                )
+                recorded += 1
+        return recorded
+
     async def alias_usage(self, mailbox: str, aliases: list[str]) -> dict[str, AliasUsage]:
         if not aliases:
             return {}
@@ -190,3 +359,67 @@ class StatsStore:
             )
             for row in rows
         }
+
+    async def sender_usage(
+        self,
+        mailbox: str,
+        aliases: list[str],
+        *,
+        limit_per_alias: int = 5,
+    ) -> dict[str, list[SenderUsage]]:
+        if not aliases:
+            return {}
+        return await asyncio.to_thread(
+            self._sender_usage,
+            mailbox,
+            aliases,
+            limit_per_alias,
+        )
+
+    def _sender_usage(
+        self,
+        mailbox: str,
+        aliases: list[str],
+        limit_per_alias: int,
+    ) -> dict[str, list[SenderUsage]]:
+        placeholders = ",".join("?" for _ in aliases)
+        params = [mailbox.lower(), *(alias.lower() for alias in aliases)]
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    alias,
+                    sender_domain,
+                    sender_address,
+                    received_count,
+                    last_received_at
+                FROM sender_usage
+                WHERE mailbox = ? AND alias IN ({placeholders})
+                ORDER BY alias, received_count DESC, last_received_at DESC, sender_key
+                """,
+                params,
+            ).fetchall()
+
+        result: dict[str, list[SenderUsage]] = {}
+        for row in rows:
+            alias = str(row["alias"]).lower()
+            bucket = result.setdefault(alias, [])
+            if len(bucket) >= limit_per_alias:
+                continue
+            bucket.append(
+                SenderUsage(
+                    sender_domain=str(row["sender_domain"]).lower(),
+                    sender_address=(
+                        str(row["sender_address"]).lower()
+                        if row["sender_address"] is not None
+                        else None
+                    ),
+                    received_count=int(row["received_count"]),
+                    last_received_at=(
+                        int(row["last_received_at"])
+                        if row["last_received_at"] is not None
+                        else None
+                    ),
+                )
+            )
+        return result
