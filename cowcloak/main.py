@@ -37,6 +37,7 @@ from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.senders import sender_match_token
 from cowcloak.stats import StatsStore
 from cowcloak.stats_mode import (
+    StatsMode,
     StatsModeSource,
     is_stats_mode_downgrade,
     replace_mailbox_stats_tags,
@@ -350,6 +351,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         stats_state = None
         stats_error = False
         stats_mode_selection = "inherit"
+        stats_confirmation_mode: str | None = None
         usage_stats_visible = False
         usage_stats: dict[str, dict[str, int | None]] = {}
         sender_stats: dict[
@@ -369,7 +371,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 elif stats_state.mailbox_override is not None:
                     stats_mode_selection = stats_state.mailbox_override.value
 
-                await stats_store.sync_sender_modes({user: stats_state.effective.value})
+                stored_mode = await stats_store.sender_mode(user)
+                stats_confirmation_mode = stored_mode or stats_state.effective.value
+                if not stats_state.conflict:
+                    await stats_store.sync_sender_modes({user: stats_state.effective.value})
             except (MailcowAccessDenied, MailcowError):
                 stats_error = True
                 stats_state = None
@@ -477,6 +482,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 stats_error=stats_error,
                 stats_state=stats_state,
                 stats_mode_selection=stats_mode_selection,
+                stats_confirmation_mode=stats_confirmation_mode,
                 usage_stats_visible=usage_stats_visible,
                 usage_stats=usage_stats,
                 sender_stats=sender_stats,
@@ -511,8 +517,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 settings.usage_tag,
             )
             target_mode = selected_effective_mode(mode, current_state.domain_default)
+            stored_mode = await stats_store.sender_mode(user)
+            confirmation_mode = (
+                StatsMode(stored_mode) if stored_mode is not None else current_state.effective
+            )
             if (
-                is_stats_mode_downgrade(current_state.effective, target_mode)
+                is_stats_mode_downgrade(confirmation_mode, target_mode)
                 and not confirm_downgrade
             ):
                 raise HTTPException(
