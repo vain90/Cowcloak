@@ -143,14 +143,55 @@ The container tags intentionally separate releases from development builds:
 - SemVer tags such as `0.1.0`, `0.1` and `0` are created for stable releases.
 - `edge` follows the current `main` branch and may contain unreleased changes.
 
-To update a deployment following `latest`:
+Pin `COWCLOAK_TAG` in `.env` if you prefer a fixed release instead of `latest`.
+
+## Updating
+
+Starting with Cowcloak 0.1.1, deployments that follow `latest` can use the bundled updater:
+
+```bash
+./update.sh
+```
+
+The updater:
+
+- checks GitHub's latest stable Cowcloak release,
+- refreshes itself from that immutable release when the updater changed,
+- pulls `ghcr.io/vain90/cowcloak:latest`,
+- recreates the Cowcloak container,
+- waits for the container health check,
+- and rolls back to the previously running image when the new container does not become healthy.
+
+Useful options:
+
+```bash
+./update.sh --check
+./update.sh --yes
+./update.sh --force
+./update.sh --version
+```
+
+`--check` exits with `0` when an update is available and `3` when the installed stable version is current.
+
+The updater automatically uses `compose.local.yml` when it exists, otherwise `compose.yml`. Set `COWCLOAK_COMPOSE_FILE` when a deployment uses a different file name. The resolved Cowcloak image must be `ghcr.io/vain90/cowcloak:latest`; pinned deployments remain intentionally manual.
+
+To add `update.sh` to an existing installation after 0.1.1 has been released:
+
+```bash
+LATEST_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+  https://github.com/vain90/Cowcloak/releases/latest)
+LATEST_TAG=${LATEST_URL##*/}
+curl -fsSLo update.sh \
+  "https://raw.githubusercontent.com/vain90/Cowcloak/${LATEST_TAG}/update.sh"
+chmod +x update.sh
+```
+
+Manual updates remain possible:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
-
-Pin `COWCLOAK_TAG` in `.env` if you prefer a fixed release instead of `latest`.
 
 ## Development
 
@@ -202,6 +243,7 @@ The current milestone is the first testable MVP:
 - [x] German and English UI with browser detection and manual switching
 - [x] installable web app metadata and icons
 - [x] Docker image and Compose deployment
+- [x] stable release updater with self-update and health rollback
 - [x] CI and multi-architecture GHCR builds
 - [x] contribution and issue templates
 - [ ] integration test against a real mailcow test instance
