@@ -80,12 +80,43 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "no_prepared_aliases": "No prepared aliases.",
         "assigned_aliases": "Assigned aliases",
         "assigned_summary": "{filtered} of {total} aliases",
-        "usage_stats_note": (
-            "Usage statistics are active. Counts include accepted messages tracked by Cowcloak."
+        "usage_settings_title": "Usage statistics",
+        "usage_settings_unavailable": "Statistics settings are temporarily unavailable.",
+        "usage_mode_inherit": "Use domain default",
+        "usage_mode_off": "Off",
+        "usage_mode_basic": "Standard",
+        "usage_mode_domain": "Domains",
+        "usage_mode_full": "Full",
+        "usage_mode_off_hint": "Cowcloak does not collect new statistics for this mailbox.",
+        "usage_mode_basic_hint": "Counts accepted received and sent messages.",
+        "usage_mode_domain_hint": (
+            "Counts received and sent messages and stores sender domains for received mail."
         ),
+        "usage_mode_full_hint": (
+            "Counts received and sent messages and stores full sender addresses for received mail."
+        ),
+        "usage_mode_conflict": (
+            "Multiple statistics tags exist on the same level. Statistics are disabled for safety."
+        ),
+        "usage_source_mailbox": "Mailbox setting",
+        "usage_source_domain": "Domain default",
+        "usage_source_none": "No default",
+        "usage_choose_mode": "Choose statistics mode",
+        "usage_fix_conflict": "Choose a mode to resolve the conflict",
         "usage_received": "received",
         "usage_sent": "sent",
         "usage_last_used": "last used",
+        "sender_stats_title": "Senders",
+        "sender_stats_unexpected_short": "unexpected",
+        "sender_stats_all": "All sender identities recorded since this sender mode was enabled.",
+        "sender_stats_empty": "No sender data has been recorded in this mode yet.",
+        "sender_state_confirmed": "Confirmed",
+        "sender_state_automatic": "Automatically recognized",
+        "sender_state_manual_unexpected": "Marked unexpected",
+        "sender_state_unexpected": "Unexpected",
+        "sender_action_expected": "Mark as expected",
+        "sender_action_unexpected": "Mark as unexpected",
+        "sender_action_clear": "Remove marking",
         "search_placeholder": "Search address or purpose",
         "search_aria": "Search aliases",
         "clear_search": "Clear search",
@@ -204,13 +235,48 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "no_prepared_aliases": "Keine vorbereiteten Aliase.",
         "assigned_aliases": "Zugeordnete Aliase",
         "assigned_summary": "{filtered} von {total} Aliasen",
-        "usage_stats_note": (
-            "Nutzungsstatistik aktiv. Gezählt werden akzeptierte Nachrichten, "
-            "die Cowcloak seit Aktivierung des Trackings erfasst."
+        "usage_settings_title": "Nutzungsstatistik",
+        "usage_settings_unavailable": (
+            "Die Statistik-Einstellungen sind vorübergehend nicht verfügbar."
         ),
+        "usage_mode_inherit": "Domain-Vorgabe verwenden",
+        "usage_mode_off": "Aus",
+        "usage_mode_basic": "Standard",
+        "usage_mode_domain": "Domains",
+        "usage_mode_full": "Vollständig",
+        "usage_mode_off_hint": "Cowcloak erfasst für dieses Postfach keine neuen Statistikdaten.",
+        "usage_mode_basic_hint": "Zählt akzeptierte empfangene und gesendete Nachrichten.",
+        "usage_mode_domain_hint": (
+            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten "
+            "die Absender-Domain."
+        ),
+        "usage_mode_full_hint": (
+            "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten "
+            "die vollständige Absenderadresse."
+        ),
+        "usage_mode_conflict": (
+            "Auf derselben Ebene sind mehrere Statistik-Tags gesetzt. "
+            "Die Statistik ist aus Sicherheitsgründen deaktiviert."
+        ),
+        "usage_source_mailbox": "Postfach-Einstellung",
+        "usage_source_domain": "Domain-Vorgabe",
+        "usage_source_none": "Keine Vorgabe",
+        "usage_choose_mode": "Statistikmodus wählen",
+        "usage_fix_conflict": "Modus wählen, um den Konflikt zu beheben",
         "usage_received": "empfangen",
         "usage_sent": "gesendet",
         "usage_last_used": "zuletzt",
+        "sender_stats_title": "Absender",
+        "sender_stats_unexpected_short": "unerwartet",
+        "sender_stats_all": "Alle seit Aktivierung dieses Absendermodus erfassten Absender.",
+        "sender_stats_empty": "In diesem Modus wurden noch keine Absenderdaten erfasst.",
+        "sender_state_confirmed": "Bestätigt",
+        "sender_state_automatic": "Automatisch erkannt",
+        "sender_state_manual_unexpected": "Als unerwartet markiert",
+        "sender_state_unexpected": "Unerwartet",
+        "sender_action_expected": "Als erwartet markieren",
+        "sender_action_unexpected": "Als unerwartet markieren",
+        "sender_action_clear": "Markierung entfernen",
         "search_placeholder": "Adresse oder Zweck suchen",
         "search_aria": "Aliase durchsuchen",
         "clear_search": "Suche leeren",

@@ -7,16 +7,22 @@ All notable changes to Cowcloak are documented here.
 ### Added
 
 - optional usage-statistics subsystem gated by `COWCLOAK_USAGE_STATS`
-- `cowcloak-stats` style mailcow tag opt-in for individual mailboxes or complete domains
+- four-level mailcow statistics policy using `cowcloak-stats-off`, `cowcloak-stats`, `cowcloak-stats-domain` and `cowcloak-stats-full`
+- mailbox statistics-mode overrides with domain inheritance and user self-service in the Cowcloak dashboard
 - versioned SQLite storage for alias counters and deduplication, created only when statistics are enabled
 - background collection of accepted incoming alias deliveries from mailcow Rspamd history
 - background collection of accepted authenticated outgoing alias sends from mailcow Rspamd history
 - inline received/sent usage counters and last-used timestamps in the alias dashboard for opted-in mailboxes
+- optional sender-domain or full sender-address aggregation for incoming alias mail
+- sender review UI that shows every recorded sender and lets mailbox users mark entries expected or unexpected
+- conservative automatic expected-sender recognition based on meaningful alias-purpose/local-part words matching sender-domain labels
 - persistent Docker data volume for deployments that enable statistics
 
 ### Changed
 
 - Cowcloak remains stateless by default; local persistent state is used only when optional statistics are enabled
+- mailbox statistics tags override domain defaults; conflicting mode tags on the same level disable statistics for safety
+- changing statistics mode resets sender-detail aggregates and sender-review decisions so more detailed data cannot survive a privacy downgrade
 
 ## 0.1.2 - 2026-08-19
 

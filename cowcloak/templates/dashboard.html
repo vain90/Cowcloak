@@ -172,8 +172,73 @@
     </div>
   </div>
 
-  {% if usage_stats_visible %}
-  <p class="usage-note">{{ t.usage_stats_note }}</p>
+  {% if stats_available %}
+  <section class="usage-settings" aria-label="{{ t.usage_settings_title }}">
+    {% if stats_error or not stats_state %}
+    <div>
+      <strong>{{ t.usage_settings_title }}</strong>
+      <p class="usage-settings-hint">{{ t.usage_settings_unavailable }}</p>
+    </div>
+    {% else %}
+    <div class="usage-settings-copy">
+      <div class="usage-settings-title-row">
+        <strong>{{ t.usage_settings_title }}</strong>
+        <span class="usage-mode-badge mode-{{ stats_state.effective.value }}">
+          {% if stats_state.effective.value == 'off' %}{{ t.usage_mode_off }}
+          {% elif stats_state.effective.value == 'basic' %}{{ t.usage_mode_basic }}
+          {% elif stats_state.effective.value == 'domain' %}{{ t.usage_mode_domain }}
+          {% else %}{{ t.usage_mode_full }}{% endif %}
+        </span>
+      </div>
+      <p class="usage-settings-hint">
+        {% if stats_state.conflict %}
+          {{ t.usage_mode_conflict }}
+        {% elif stats_state.effective.value == 'off' %}
+          {{ t.usage_mode_off_hint }}
+        {% elif stats_state.effective.value == 'basic' %}
+          {{ t.usage_mode_basic_hint }}
+        {% elif stats_state.effective.value == 'domain' %}
+          {{ t.usage_mode_domain_hint }}
+        {% else %}
+          {{ t.usage_mode_full_hint }}
+        {% endif %}
+        <span class="usage-mode-source">
+          {% if stats_state.source.value == 'mailbox' %}{{ t.usage_source_mailbox }}
+          {% elif stats_state.source.value == 'domain' %}{{ t.usage_source_domain }}
+          {% else %}{{ t.usage_source_none }}{% endif %}
+        </span>
+      </p>
+    </div>
+    <form method="post" action="/aliases/stats-mode" class="usage-mode-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <label>
+        <span class="sr-only">{{ t.usage_choose_mode }}</span>
+        <select name="mode" aria-label="{{ t.usage_choose_mode }}">
+          {% if stats_mode_selection == 'conflict' %}
+          <option value="" selected disabled>{{ t.usage_fix_conflict }}</option>
+          {% endif %}
+          <option value="inherit" {% if stats_mode_selection == 'inherit' %}selected{% endif %}>
+            {{ t.usage_mode_inherit }}
+          </option>
+          <option value="off" {% if stats_mode_selection == 'off' %}selected{% endif %}>
+            {{ t.usage_mode_off }}
+          </option>
+          <option value="basic" {% if stats_mode_selection == 'basic' %}selected{% endif %}>
+            {{ t.usage_mode_basic }}
+          </option>
+          <option value="domain" {% if stats_mode_selection == 'domain' %}selected{% endif %}>
+            {{ t.usage_mode_domain }}
+          </option>
+          <option value="full" {% if stats_mode_selection == 'full' %}selected{% endif %}>
+            {{ t.usage_mode_full }}
+          </option>
+        </select>
+      </label>
+      <button class="button compact" type="submit">{{ t.save }}</button>
+    </form>
+    {% endif %}
+  </section>
   {% endif %}
 
   <div data-alias-results-region>
@@ -247,6 +312,65 @@
               </span>
               {% endif %}
             </div>
+            {% endif %}
+
+            {% if stats_state and stats_state.sender_detail_enabled %}
+            {% set senders = sender_stats.get(alias.address|lower, []) %}
+            {% set unexpected_count = senders|selectattr('expected', 'equalto', false)|list|length %}
+            <details class="sender-stats">
+              <summary>
+                {{ t.sender_stats_title }}
+                {% if senders %}<span class="sender-stats-count">{{ senders|length }}</span>{% endif %}
+                {% if unexpected_count %}
+                <span class="sender-stats-alert">{{ unexpected_count }} {{ t.sender_stats_unexpected_short }}</span>
+                {% endif %}
+              </summary>
+              {% if senders %}
+              <div class="sender-stats-list">
+                {% for sender in senders %}
+                <div class="sender-stats-row {{ 'expected' if sender.expected else 'unexpected' }}">
+                  <div class="sender-stats-identity">
+                    <code>{{ sender.label }}</code>
+                    <span class="sender-review-state">
+                      {% if sender.review_source == 'manual' %}
+                        {{ t.sender_state_confirmed }}
+                      {% elif sender.review_source == 'automatic' %}
+                        {{ t.sender_state_automatic }}{% if sender.match_token %} · {{ sender.match_token }}{% endif %}
+                      {% elif sender.review_source == 'manual-unexpected' %}
+                        {{ t.sender_state_manual_unexpected }}
+                      {% else %}
+                        {{ t.sender_state_unexpected }}
+                      {% endif %}
+                    </span>
+                  </div>
+                  <span class="sender-message-count">{{ sender.received_count }}</span>
+                  <form
+                    method="post"
+                    action="/aliases/{{ alias.id }}/sender-expectation"
+                    class="sender-review-form"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                    <input type="hidden" name="sender_key" value="{{ sender.sender_key }}">
+                    {% if sender.review_source == 'manual' or sender.review_source == 'manual-unexpected' %}
+                    <input type="hidden" name="decision" value="clear">
+                    <button class="button compact ghost" type="submit">{{ t.sender_action_clear }}</button>
+                    {% elif sender.expected %}
+                    <input type="hidden" name="decision" value="unexpected">
+                    <button class="button compact ghost" type="submit">{{ t.sender_action_unexpected }}</button>
+                    {% else %}
+                    <input type="hidden" name="decision" value="expected">
+                    <button class="button compact" type="submit">{{ t.sender_action_expected }}</button>
+                    {% endif %}
+                  </form>
+                </div>
+                {% endfor %}
+              </div>
+              <p class="sender-stats-footnote">{{ t.sender_stats_all }}</p>
+              {% else %}
+              <p class="sender-stats-empty">{{ t.sender_stats_empty }}</p>
+              {% endif %}
+            </details>
             {% endif %}
           </div>
           <div class="status-row">

@@ -55,7 +55,7 @@ A catch-all weakens the one-alias-per-service model because addresses that were 
 
 ## Optional usage statistics
 
-Usage statistics are disabled by default. With the default `COWCLOAK_USAGE_STATS=false`, Cowcloak does not create or open a statistics database, does not start the statistics collector and does not request Rspamd history for statistics.
+Usage statistics are disabled globally by default. With the default `COWCLOAK_USAGE_STATS=false`, Cowcloak does not create or open a statistics database, does not start the statistics collector and does not request Rspamd history for statistics.
 
 To enable the subsystem:
 
@@ -64,11 +64,26 @@ COWCLOAK_USAGE_STATS=true
 COWCLOAK_USAGE_TAG=cowcloak-stats
 ```
 
-The configured mailcow tag can be assigned to an individual mailbox or to a complete domain. Only aliases belonging exclusively to opted-in mailboxes are eligible for persisted statistics. Removing the tag stops new statistics collection for that mailbox on the next collector refresh.
+`COWCLOAK_USAGE_TAG` is the base tag for a four-level statistics policy:
 
-The first 0.1.3 implementation counts accepted incoming deliveries to assigned Cowcloak aliases. Primary mailbox addresses, shared aliases, catch-all aliases, unused offline aliases and rejected/soft-rejected messages are excluded. Outgoing-message counting is intentionally not enabled until the relevant Rspamd history fields have been verified against real mailcow events.
+- `cowcloak-stats-off`: no new statistics for the mailbox.
+- `cowcloak-stats`: received/sent counters only.
+- `cowcloak-stats-domain`: counters plus sender-domain aggregation for incoming mail.
+- `cowcloak-stats-full`: counters plus full sender-address aggregation for incoming mail.
 
-When enabled, counters and deduplication hashes are stored in a versioned SQLite database at `/data/cowcloak-stats.sqlite3` by default. Raw subjects and message IDs are not persisted. The collector necessarily reads the global Rspamd history response from mailcow before filtering it in memory, but only opted-in Cowcloak alias data is written to the local database.
+A statistics tag on the mailbox overrides the domain setting. When the mailbox has no statistics tag, the domain setting is inherited. Multiple statistics-mode tags on the same level are treated as a configuration conflict and statistics are disabled for that mailbox until the conflict is resolved.
+
+Mailbox users can select their own statistics mode in Cowcloak. Cowcloak changes only the authenticated mailbox's statistics-tag family and preserves all unrelated mailcow tags. In particular, the normal Cowcloak access tag remains administrator-controlled and is never granted by the statistics selector.
+
+Accepted incoming deliveries and accepted authenticated sends using a Cowcloak alias are counted. Primary mailbox addresses, shared aliases, catch-all aliases, unused offline aliases and rejected/soft-rejected messages are excluded.
+
+Sender detail is opt-in and starts only when the effective mode is `domain` or `full`. Changing the effective statistics mode clears the existing sender-detail aggregates and manual sender-review decisions for that mailbox before starting the new mode. This prevents full sender addresses from surviving a privacy downgrade and prevents a more detailed mode from retroactively importing older Rspamd history.
+
+For `domain` and `full`, Cowcloak shows every sender identity it has recorded for an alias rather than hiding low-frequency senders. Users can mark a sender as expected or explicitly unexpected. Cowcloak also performs a deliberately conservative automatic check: meaningful words from the alias local part and purpose may mark a sender as expected when the same word appears as a sender-domain label. For example, an alias named `amazon-k7` with purpose `Amazon` can automatically recognize `amazon.de` or `mail.amazon.de`. Generic words such as `shop`, `mail`, `info` and `newsletter` are ignored for automatic approval.
+
+When enabled, counters, sender aggregates, manual sender-review decisions and deduplication hashes are stored in a versioned SQLite database at `/data/cowcloak-stats.sqlite3` by default. Raw subjects and message IDs are not persisted. In `domain` mode no full sender address is stored. In `full` mode the sender address and its domain are stored as aggregate keys.
+
+The collector necessarily reads the global Rspamd history response from mailcow before filtering it in memory, but only currently eligible Cowcloak alias data is written to the local database. If a deployment requires sender metadata for non-opted-in mailboxes to never reach the Cowcloak process at all, use a server-side filtered exporter instead of the built-in Rspamd-history collector.
 
 The repository Compose file mounts a persistent `cowcloak-data` volume at `/data`. The volume may exist while statistics are disabled; in that case no statistics database is created. Future schema changes are handled by Cowcloak's internal database schema version rather than by manual SQL steps.
 
@@ -84,7 +99,7 @@ The installed app still connects to the same Cowcloak server and mailcow instanc
 
 ## Architecture
 
-Cowcloak is stateless by default. Persistent alias data stays in mailcow. Optional usage statistics add only a local server-side SQLite store for aggregate counters and deduplication state.
+Cowcloak is stateless by default. Persistent alias data stays in mailcow. Optional usage statistics add only a local server-side SQLite store for aggregate counters, sender aggregates, review state and deduplication state.
 
 ```text
 Browser / installed web app
@@ -103,6 +118,7 @@ Browser / installed web app
       +-- private Cowcloak reservation marker
       +-- active state
       +-- SOGo visibility
+      +-- mailbox/domain tags
       +-- Rspamd history (stats only, filtered in memory)
 
 Optional when usage statistics are enabled:
@@ -112,6 +128,8 @@ Optional when usage statistics are enabled:
       v
    SQLite /data/cowcloak-stats.sqlite3
       +-- aggregate alias counters
+      +-- optional sender domain/address aggregates
+      +-- manual expected/unexpected sender decisions
       +-- hashed event deduplication keys
 ```
 
@@ -139,7 +157,7 @@ Cowcloak uses mailcow's OAuth2 endpoints:
 
 ### 2. Create a read/write API key
 
-Cowcloak needs a mailcow read/write API key to create and update aliases. Restrict the API key to the Cowcloak host's source IP in mailcow whenever your network design allows it.
+Cowcloak needs a mailcow read/write API key to create and update aliases and, when statistics self-service is enabled globally, to update the authenticated mailbox's statistics tags. Restrict the API key to the Cowcloak host's source IP in mailcow whenever your network design allows it.
 
 ### 3. Configure Cowcloak
 
@@ -156,7 +174,7 @@ COWCLOAK_TRUSTED_HOSTS=aliases.example.com
 MAILCOW_URL=https://mail.example.com
 MAILCOW_API_KEY=<read-write-api-key>
 MAILCOW_OAUTH_CLIENT_ID=<client-id>
-MAILCOW_OAUTH_CLIENT_SECRET=<client-secret>
+MAILCOW_OAUTH_CLIENT_SECRET=<oauth-secret>
 ```
 
 Generate a session secret with:
@@ -259,7 +277,9 @@ Before editing, toggling, replacing or applying a bulk action to an alias, Cowcl
 
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
-When optional usage statistics are enabled, the separate usage tag limits which mailbox/domain events may be persisted. The collector reads recent Rspamd history using the same server-side mailcow API connection, filters it against currently opted-in mailbox aliases and stores only aggregate counters plus hashed deduplication keys.
+When optional usage statistics are enabled, the effective statistics mode is resolved from the authenticated mailbox and its domain. The mailbox can change only its own statistics-tag family through Cowcloak; all unrelated tags are preserved. Sender review actions are accepted only for sender rows already stored for an alias owned by the authenticated mailbox.
+
+The collector reads recent Rspamd history using the same server-side mailcow API connection, filters it against currently eligible mailbox aliases and stores only data allowed by the effective statistics mode. Mode changes reset sender-detail state, and sender writes are checked against the current persisted mode so a collector iteration that started before a privacy downgrade cannot reinsert more detailed sender data afterward.
 
 Main-mailbox sender blocking remains an administrator-side mail-server setting and is not controlled by Cowcloak.
 
@@ -293,8 +313,11 @@ The current milestone is the first testable MVP:
 - [x] contribution and issue templates
 - [x] alias replacement workflow
 - [x] optional usage-statistics backend foundation
-- [ ] outgoing alias usage classification from verified mailcow events
-- [ ] usage-statistics UI
+- [x] incoming and outgoing alias usage classification from verified mailcow events
+- [x] inline usage-statistics UI
+- [x] mailbox/domain statistics modes with mailbox self-service overrides
+- [x] optional sender-domain and full-address aggregation
+- [x] manual and automatic expected-sender review
 - [ ] integration test against a real mailcow test instance
 - [ ] iOS and macOS standalone OAuth device test
 - [ ] polished error pages and notifications

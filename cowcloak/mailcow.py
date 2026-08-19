@@ -142,6 +142,17 @@ class MailcowClient:
         await self._enforce_access_tag(email, payload)
         return payload
 
+    async def set_mailbox_tags(self, email: str, tags: list[str]) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/mailbox",
+            json={
+                "items": [email],
+                "attr": {"tags": tags},
+            },
+        )
+        self._ensure_success(payload)
+
     async def create_alias(
         self,
         address: str,
