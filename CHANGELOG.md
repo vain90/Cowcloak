@@ -2,6 +2,20 @@
 
 All notable changes to Cowcloak are documented here.
 
+## 0.1.3 - Unreleased
+
+### Added
+
+- optional usage-statistics subsystem gated by `COWCLOAK_USAGE_STATS`
+- `cowcloak-stats` style mailcow tag opt-in for individual mailboxes or complete domains
+- versioned SQLite storage for alias counters and deduplication, created only when statistics are enabled
+- background collection of accepted incoming alias deliveries from mailcow Rspamd history
+- persistent Docker data volume for deployments that enable statistics
+
+### Changed
+
+- Cowcloak remains stateless by default; local persistent state is used only when optional statistics are enabled
+
 ## 0.1.2 - 2026-08-19
 
 ### Added
