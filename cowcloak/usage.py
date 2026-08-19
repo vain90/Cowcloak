@@ -194,7 +194,7 @@ class UsageCollector:
         return {
             mailbox
             for mailbox, state in (await self.mailbox_states()).items()
-            if state.enabled
+            if state.enabled and not state.conflict
         }
 
     async def collect_once(self) -> int:
@@ -204,9 +204,17 @@ class UsageCollector:
             return 0
 
         mode_starts = await self.store.sync_sender_modes(
-            {mailbox: state.effective.value for mailbox, state in states.items()}
+            {
+                mailbox: state.effective.value
+                for mailbox, state in states.items()
+                if not state.conflict
+            }
         )
-        eligible = {mailbox for mailbox, state in states.items() if state.enabled}
+        eligible = {
+            mailbox
+            for mailbox, state in states.items()
+            if state.enabled and not state.conflict
+        }
         if not eligible:
             return 0
 
