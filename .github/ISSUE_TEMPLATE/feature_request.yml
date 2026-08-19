@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an improvement or new Cowcloak capability
+title: "[Feature]: "
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the workflow or result you would like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Mention workarounds or other approaches you considered.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Alias creation and management
+        - Offline alias pool
+        - SOGo integration
+        - Authentication / OAuth
+        - UI / PWA
+        - Docker / deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security or privacy impact
+      description: Note any effect on mailbox isolation, API access, authentication, forwarding targets, comments, or stored data.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I did not include secrets, private domains, mailbox addresses, or other sensitive data.
+          required: true
