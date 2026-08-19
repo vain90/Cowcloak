@@ -4,6 +4,10 @@ All notable changes to Cowcloak are documented here.
 
 ## 0.1.2 - Unreleased
 
+### Added
+
+- optional mailcow tag based access control for individual mailboxes or complete domains
+
 ### Changed
 
 - improved the assigned-alias layout on small screens
