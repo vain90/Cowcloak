@@ -153,6 +153,16 @@ class MailcowClient:
         )
         self._ensure_success(payload)
 
+    async def delete_mailbox_tags(self, email: str, tags: list[str]) -> None:
+        if not tags:
+            return
+        payload = await self._request(
+            "DELETE",
+            f"/api/v1/delete/mailbox/tag/{quote(email, safe='@')}",
+            json=tags,
+        )
+        self._ensure_success(payload)
+
     async def create_alias(
         self,
         address: str,
