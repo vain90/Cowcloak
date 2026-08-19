@@ -23,4 +23,5 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest -q
+      - run: node --check cowcloak/static/app.js
       - run: bash -n update.sh
