@@ -70,11 +70,98 @@ function bindAssignDialogs(root = document) {
   });
 }
 
+function bindBulkActions(root = document) {
+  root.querySelectorAll('[data-bulk-toolbar]').forEach((toolbar) => {
+    if (toolbar.dataset.bound === 'true') return;
+    toolbar.dataset.bound = 'true';
+
+    const region = toolbar.closest('[data-alias-results-region]') || root;
+    const count = toolbar.querySelector('[data-selected-count]');
+    const selectAll = toolbar.querySelector('[data-select-all]');
+    const selectNone = toolbar.querySelector('[data-select-none]');
+    const actionButtons = [...toolbar.querySelectorAll('[data-bulk-action]')];
+    const selectedTemplate = toolbar.dataset.selectedTemplate || '{count} selected';
+    const failureMessage = toolbar.dataset.bulkFailed || 'The bulk action could not be completed.';
+
+    const checkboxes = () => [...region.querySelectorAll('[data-alias-select]')];
+    const selected = () => checkboxes().filter((checkbox) => checkbox.checked);
+
+    const sync = () => {
+      const selectedCount = selected().length;
+      if (count) {
+        count.textContent = selectedTemplate.replace('{count}', String(selectedCount));
+      }
+      actionButtons.forEach((button) => {
+        button.disabled = selectedCount === 0;
+      });
+    };
+
+    checkboxes().forEach((checkbox) => checkbox.addEventListener('change', sync));
+
+    selectAll?.addEventListener('click', () => {
+      checkboxes().forEach((checkbox) => { checkbox.checked = true; });
+      sync();
+    });
+
+    selectNone?.addEventListener('click', () => {
+      checkboxes().forEach((checkbox) => { checkbox.checked = false; });
+      sync();
+    });
+
+    actionButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        const selectedAliases = selected();
+        if (!selectedAliases.length) return;
+
+        if (button.dataset.bulkAction === 'copy') {
+          await navigator.clipboard.writeText(
+            selectedAliases.map((checkbox) => checkbox.dataset.address).join('\n'),
+          );
+          const original = button.textContent;
+          button.textContent = copiedLabel;
+          setTimeout(() => { button.textContent = original; }, 1200);
+          return;
+        }
+
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+        if (!csrfToken) {
+          window.alert(failureMessage);
+          return;
+        }
+
+        const form = new FormData();
+        form.append('csrf_token', csrfToken);
+        form.append('action', button.dataset.bulkAction);
+        selectedAliases.forEach((checkbox) => form.append('alias_ids', checkbox.value));
+
+        actionButtons.forEach((actionButton) => { actionButton.disabled = true; });
+        try {
+          const response = await fetch('/aliases/bulk', {
+            method: 'POST',
+            body: form,
+          });
+          if (!response.ok) {
+            throw new Error(`Bulk action failed with HTTP ${response.status}`);
+          }
+          window.location.reload();
+        } catch (error) {
+          console.error('Bulk alias action failed', error);
+          window.alert(failureMessage);
+          sync();
+        }
+      });
+    });
+
+    sync();
+  });
+}
+
 function bindDynamicControls(root = document) {
   bindCopyButtons(root);
   bindConfirmForms(root);
   bindPageSize(root);
   bindAssignDialogs(root);
+  bindBulkActions(root);
 }
 
 bindDynamicControls();
