@@ -24,7 +24,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "primary_address": "Main address",
         "sender_allowed": "Sending allowed",
         "sender_blocked": "Sending blocked",
-        "sender_protection_hint": "Blocks normal sending from your main address. Aliases keep working.",
+        "sender_protection_hint": (
+            "Blocks normal sending from your main address. Aliases keep working."
+        ),
         "block_sender": "Block sending",
         "allow_sender": "Allow sending",
         "block_sender_confirm": "Block sending from your main address?",
@@ -111,7 +113,9 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "primary_address": "Hauptadresse",
         "sender_allowed": "Senden erlaubt",
         "sender_blocked": "Senden gesperrt",
-        "sender_protection_hint": "Sperrt normales Senden mit deiner Hauptadresse. Aliase bleiben nutzbar.",
+        "sender_protection_hint": (
+            "Sperrt normales Senden mit deiner Hauptadresse. Aliase bleiben nutzbar."
+        ),
         "block_sender": "Senden sperren",
         "allow_sender": "Senden erlauben",
         "block_sender_confirm": "Senden mit deiner Hauptadresse sperren?",
