@@ -134,7 +134,6 @@ class StatsStore:
                 if inserted.rowcount != 1:
                     continue
 
-                timestamp_params = [event.event_at]
                 connection.execute(
                     f"""
                     INSERT INTO alias_usage (
@@ -149,11 +148,14 @@ class StatsStore:
                     ON CONFLICT(mailbox, alias) DO UPDATE SET
                         {count_column} = alias_usage.{count_column} + 1,
                         {timestamp_column} = MAX(
-                            alias_usage.{timestamp_column},
+                            COALESCE(
+                                alias_usage.{timestamp_column},
+                                excluded.{timestamp_column}
+                            ),
                             excluded.{timestamp_column}
                         )
                     """,
-                    [event.mailbox, event.alias, *timestamp_params],
+                    [event.mailbox, event.alias, event.event_at],
                 )
                 recorded += 1
         return recorded
