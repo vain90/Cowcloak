@@ -30,7 +30,7 @@ from cowcloak.i18n import (
     detect_language,
     translations,
 )
-from cowcloak.mailcow import MailcowClient, MailcowError
+from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -224,6 +224,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             mailbox_username = str(mailbox.get("username") or email).lower()
             if mailbox_username != email:
                 raise OAuthError("mailcow profile and API mailbox do not match")
+        except MailcowAccessDenied:
+            request.session.clear()
+            return RedirectResponse("/?error=access-denied", status_code=303)
         except (OAuthError, MailcowError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         request.session.clear()

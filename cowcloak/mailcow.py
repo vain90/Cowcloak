@@ -15,6 +15,18 @@ class MailcowError(RuntimeError):
     pass
 
 
+class MailcowAccessDenied(HTTPException):
+    def __init__(self, access_tag: str) -> None:
+        super().__init__(
+            status_code=status.HTTP_303_SEE_OTHER,
+            detail=(
+                "Mailbox is not enabled for Cowcloak "
+                f"(missing mailcow tag '{access_tag}')"
+            ),
+            headers={"Location": "/?error=access-denied"},
+        )
+
+
 class MailcowClient:
     def __init__(
         self,
@@ -83,14 +95,7 @@ class MailcowClient:
         if configured_tag in self._tags(domain_details):
             return
 
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            detail=(
-                "Mailbox is not enabled for Cowcloak "
-                f"(missing mailcow tag '{self.settings.access_tag}')"
-            ),
-            headers={"Location": "/?error=access-denied"},
-        )
+        raise MailcowAccessDenied(self.settings.access_tag)
 
     async def list_aliases(self) -> list[AliasRecord]:
         payload = await self._request("GET", "/api/v1/get/alias/all")
