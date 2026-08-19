@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,13 +72,11 @@ class StatsStore:
             if version == 0:
                 self._create_schema_v1(connection)
                 version = 1
-            if version == 1:
-                self._migrate_v1_to_v2(connection)
-                version = 2
             if version != SCHEMA_VERSION:
                 raise RuntimeError(
                     f"No migration path for usage database schema {version} to {SCHEMA_VERSION}"
                 )
+            self._ensure_sender_schema(connection)
 
     @staticmethod
     def _create_schema_v1(connection: sqlite3.Connection) -> None:
@@ -115,16 +113,19 @@ class StatsStore:
         connection.execute("PRAGMA user_version = 1")
 
     @staticmethod
-    def _migrate_v1_to_v2(connection: sqlite3.Connection) -> None:
+    def _ensure_sender_schema(connection: sqlite3.Connection) -> None:
+        # Sender statistics are an additive extension to schema v1. Keeping the
+        # user_version unchanged lets the previous 0.1.3 beta ignore these tables
+        # if an image update has to roll back after initialization.
         connection.executescript(
             """
-            CREATE TABLE sender_mode_state (
+            CREATE TABLE IF NOT EXISTS sender_mode_state (
                 mailbox TEXT PRIMARY KEY COLLATE NOCASE,
                 mode TEXT NOT NULL,
                 tracking_started_at INTEGER NOT NULL
             );
 
-            CREATE TABLE sender_usage (
+            CREATE TABLE IF NOT EXISTS sender_usage (
                 mailbox TEXT NOT NULL COLLATE NOCASE,
                 alias TEXT NOT NULL COLLATE NOCASE,
                 sender_key TEXT NOT NULL COLLATE NOCASE,
@@ -135,21 +136,21 @@ class StatsStore:
                 PRIMARY KEY (mailbox, alias, sender_key)
             );
 
-            CREATE INDEX sender_usage_mailbox_alias_idx
+            CREATE INDEX IF NOT EXISTS sender_usage_mailbox_alias_idx
                 ON sender_usage (mailbox, alias);
 
-            CREATE TABLE sender_processed_events (
+            CREATE TABLE IF NOT EXISTS sender_processed_events (
                 event_key TEXT PRIMARY KEY,
                 event_at INTEGER NOT NULL,
                 mailbox TEXT NOT NULL COLLATE NOCASE
             );
 
-            CREATE INDEX sender_processed_events_mailbox_idx
+            CREATE INDEX IF NOT EXISTS sender_processed_events_mailbox_idx
                 ON sender_processed_events (mailbox);
-            CREATE INDEX sender_processed_events_event_at_idx
+            CREATE INDEX IF NOT EXISTS sender_processed_events_event_at_idx
                 ON sender_processed_events (event_at);
 
-            CREATE TABLE sender_expectations (
+            CREATE TABLE IF NOT EXISTS sender_expectations (
                 mailbox TEXT NOT NULL COLLATE NOCASE,
                 alias TEXT NOT NULL COLLATE NOCASE,
                 sender_key TEXT NOT NULL COLLATE NOCASE,
@@ -158,7 +159,6 @@ class StatsStore:
             );
             """
         )
-        connection.execute("PRAGMA user_version = 2")
 
     async def tracking_started_at(self) -> int:
         return await asyncio.to_thread(self._tracking_started_at)
