@@ -79,6 +79,19 @@ function bindDynamicControls(root = document) {
 
 bindDynamicControls();
 
+const helpDialog = document.querySelector('[data-help-dialog]');
+document.querySelector('[data-open-help-dialog]')?.addEventListener('click', () => {
+  helpDialog?.showModal();
+});
+helpDialog?.querySelector('[data-close-help-dialog]')?.addEventListener('click', () => {
+  helpDialog.close();
+});
+helpDialog?.addEventListener('click', (event) => {
+  if (event.target === helpDialog) {
+    helpDialog.close();
+  }
+});
+
 document.querySelector('[data-copy-pool]')?.addEventListener('click', async (event) => {
   const addresses = [...document.querySelectorAll('[data-pool-address]')]
     .map((element) => element.textContent.trim())
