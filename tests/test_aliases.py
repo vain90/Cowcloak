@@ -8,6 +8,7 @@ from cowcloak.aliases import (
     is_primary_mailbox_alias,
     load_words,
     mailbox_domain,
+    named_local_part,
     readable_local_part,
     slugify,
     validate_local_part,
@@ -22,8 +23,19 @@ def test_slugify_is_stable_and_ascii():
     assert slugify("Müller & Amazon Privat") == "muller-amazon-privat"
 
 
+def test_named_alias_uses_two_easy_to_dictate_suffix_characters():
+    allowed = set("abcdefghjkmnpqrstuvwxyz23456789")
+    for _ in range(100):
+        local_part = named_local_part("Müller & Amazon")
+        slug, suffix = local_part.rsplit("-", 1)
+        assert slug == "muller-amazon"
+        assert len(suffix) == 2
+        assert set(suffix) <= allowed
+        assert validate_local_part(local_part) == local_part
+
+
 def test_local_part_is_conservative():
-    assert validate_local_part("amazon-k7p4") == "amazon-k7p4"
+    assert validate_local_part("amazon-k7") == "amazon-k7"
     with pytest.raises(ValueError):
         validate_local_part("Not Allowed!")
 
@@ -52,7 +64,7 @@ def test_readable_aliases_are_compact_valid_local_parts(language: str):
 def test_owned_alias_requires_exact_single_target_and_same_domain():
     alias = AliasRecord(
         id=1,
-        address="amazon-k7p4@example.org",
+        address="amazon-k7@example.org",
         goto="hidden@example.org",
         domain="example.org",
         active=True,
