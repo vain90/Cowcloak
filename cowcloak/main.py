@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -33,6 +34,8 @@ from cowcloak.i18n import (
 )
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
+from cowcloak.stats import StatsStore
+from cowcloak.usage import UsageCollector
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
@@ -78,9 +81,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.mailcow = MailcowClient(settings)
-        yield
-        await app.state.mailcow.close()
+        mailcow = MailcowClient(settings)
+        app.state.mailcow = mailcow
+        app.state.stats_store = None
+        collector_task: asyncio.Task[None] | None = None
+        try:
+            if settings.usage_stats:
+                store = StatsStore(settings.usage_db_path)
+                await store.initialize()
+                app.state.stats_store = store
+                collector = UsageCollector(settings, mailcow, store)
+                collector_task = asyncio.create_task(
+                    collector.run_forever(),
+                    name="cowcloak-usage-collector",
+                )
+            yield
+        finally:
+            if collector_task is not None:
+                collector_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await collector_task
+            await mailcow.close()
 
     app = FastAPI(title="Cowcloak", version=__version__, lifespan=lifespan)
     app.state.settings = settings

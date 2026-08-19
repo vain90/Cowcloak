@@ -53,6 +53,25 @@ If an active catch-all forwards unmatched addresses on the mailbox domain to the
 
 A catch-all weakens the one-alias-per-service model because addresses that were never explicitly created can still receive mail. For clean separation and individually revocable aliases, use explicit aliases instead of catch-all delivery.
 
+## Optional usage statistics
+
+Usage statistics are disabled by default. With the default `COWCLOAK_USAGE_STATS=false`, Cowcloak does not create or open a statistics database, does not start the statistics collector and does not request Rspamd history for statistics.
+
+To enable the subsystem:
+
+```dotenv
+COWCLOAK_USAGE_STATS=true
+COWCLOAK_USAGE_TAG=cowcloak-stats
+```
+
+The configured mailcow tag can be assigned to an individual mailbox or to a complete domain. Only aliases belonging exclusively to opted-in mailboxes are eligible for persisted statistics. Removing the tag stops new statistics collection for that mailbox on the next collector refresh.
+
+The first 0.1.3 implementation counts accepted incoming deliveries to assigned Cowcloak aliases. Primary mailbox addresses, shared aliases, catch-all aliases, unused offline aliases and rejected/soft-rejected messages are excluded. Outgoing-message counting is intentionally not enabled until the relevant Rspamd history fields have been verified against real mailcow events.
+
+When enabled, counters and deduplication hashes are stored in a versioned SQLite database at `/data/cowcloak-stats.sqlite3` by default. Raw subjects and message IDs are not persisted. The collector necessarily reads the global Rspamd history response from mailcow before filtering it in memory, but only opted-in Cowcloak alias data is written to the local database.
+
+The repository Compose file mounts a persistent `cowcloak-data` volume at `/data`. The volume may exist while statistics are disabled; in that case no statistics database is created. Future schema changes are handled by Cowcloak's internal database schema version rather than by manual SQL steps.
+
 ## Install as a web app
 
 Cowcloak ships a web app manifest, standalone metadata and app icons so the normal web deployment can also be installed as an app-like experience.
@@ -61,11 +80,11 @@ Cowcloak ships a web app manifest, standalone metadata and app icons so the norm
 - On macOS, open Cowcloak in Safari and use **Add to Dock**.
 - Other browsers can use their normal install-web-app flow when supported.
 
-The installed app still connects to the same Cowcloak server and mailcow instance. No alias data is copied into a separate local database. Because OAuth and cookie behavior can differ in standalone web apps, test the complete mailcow login and callback flow on the target Apple devices before treating a deployment as production-ready.
+The installed app still connects to the same Cowcloak server and mailcow instance. Alias data remains in mailcow; optional usage statistics, when enabled on the server, remain in Cowcloak's server-side SQLite database. Because OAuth and cookie behavior can differ in standalone web apps, test the complete mailcow login and callback flow on the target Apple devices before treating a deployment as production-ready.
 
 ## Architecture
 
-Cowcloak is intentionally stateless. Persistent alias data stays in mailcow.
+Cowcloak is stateless by default. Persistent alias data stays in mailcow. Optional usage statistics add only a local server-side SQLite store for aggregate counters and deduplication state.
 
 ```text
 Browser / installed web app
@@ -84,6 +103,16 @@ Browser / installed web app
       +-- private Cowcloak reservation marker
       +-- active state
       +-- SOGo visibility
+      +-- Rspamd history (stats only, filtered in memory)
+
+Optional when usage statistics are enabled:
+
+   Cowcloak
+      |
+      v
+   SQLite /data/cowcloak-stats.sqlite3
+      +-- aggregate alias counters
+      +-- hashed event deduplication keys
 ```
 
 The mailcow API key is never sent to the browser.
@@ -230,6 +259,8 @@ Before editing, toggling, replacing or applying a bulk action to an alias, Cowcl
 
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
+When optional usage statistics are enabled, the separate usage tag limits which mailbox/domain events may be persisted. The collector reads recent Rspamd history using the same server-side mailcow API connection, filters it against currently opted-in mailbox aliases and stores only aggregate counters plus hashed deduplication keys.
+
 Main-mailbox sender blocking remains an administrator-side mail-server setting and is not controlled by Cowcloak.
 
 See [SECURITY.md](SECURITY.md) for deployment and vulnerability-reporting guidance.
@@ -261,6 +292,9 @@ The current milestone is the first testable MVP:
 - [x] CI and multi-architecture GHCR builds
 - [x] contribution and issue templates
 - [x] alias replacement workflow
+- [x] optional usage-statistics backend foundation
+- [ ] outgoing alias usage classification from verified mailcow events
+- [ ] usage-statistics UI
 - [ ] integration test against a real mailcow test instance
 - [ ] iOS and macOS standalone OAuth device test
 - [ ] polished error pages and notifications

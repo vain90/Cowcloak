@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +13,25 @@ class Settings(BaseSettings):
     trusted_hosts: str = Field(default="*", alias="COWCLOAK_TRUSTED_HOSTS")
     access_tag: str = Field(default="", alias="COWCLOAK_ACCESS_TAG")
 
+    usage_stats: bool = Field(default=False, alias="COWCLOAK_USAGE_STATS")
+    usage_tag: str = Field(default="cowcloak-stats", alias="COWCLOAK_USAGE_TAG")
+    usage_db_path: str = Field(
+        default="/data/cowcloak-stats.sqlite3",
+        alias="COWCLOAK_USAGE_DB_PATH",
+    )
+    usage_poll_seconds: int = Field(
+        default=60,
+        ge=15,
+        le=3600,
+        alias="COWCLOAK_USAGE_POLL_SECONDS",
+    )
+    usage_history_count: int = Field(
+        default=1000,
+        ge=100,
+        le=10000,
+        alias="COWCLOAK_USAGE_HISTORY_COUNT",
+    )
+
     mailcow_url: str = Field(alias="MAILCOW_URL")
     mailcow_api_key: str = Field(alias="MAILCOW_API_KEY", min_length=1)
     mailcow_oauth_client_id: str = Field(alias="MAILCOW_OAUTH_CLIENT_ID", min_length=1)
@@ -24,10 +43,18 @@ class Settings(BaseSettings):
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
-    @field_validator("access_tag")
+    @field_validator("access_tag", "usage_tag", "usage_db_path")
     @classmethod
-    def strip_access_tag(cls, value: str) -> str:
+    def strip_optional_value(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def validate_usage_settings(self) -> "Settings":
+        if self.usage_stats and not self.usage_tag:
+            raise ValueError("COWCLOAK_USAGE_TAG must be set when usage statistics are enabled")
+        if self.usage_stats and not self.usage_db_path:
+            raise ValueError("COWCLOAK_USAGE_DB_PATH must be set when usage statistics are enabled")
+        return self
 
     @property
     def oauth_callback_url(self) -> str:
