@@ -31,11 +31,13 @@ Offline pool aliases are hidden from the SOGo sender chooser until they are assi
 
 ## Alias styles
 
-- **Readable random:** `harbor-fern-42@example.org`
-- **Name + random:** `amazon-k7p4@example.org`
+- **Name + random suffix (default):** `amazon-k7p4@example.org`
+- **Readable random:** `harbor-fern-42@example.org` or `moon-meadow-fox@example.org`
 - **Custom:** `my-choice@example.org`
 
-Cowcloak ships curated English and German word lists. The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
+Cowcloak ships curated English and German word lists with 250 English and 244 German words. The readable-random generator usually combines two distinct words with a two-digit number and occasionally uses three distinct short words for more variety.
+
+The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
 ## Architecture
 
