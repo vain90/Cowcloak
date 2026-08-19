@@ -1,0 +1,50 @@
+@media (max-width: 760px) {
+  .status-row {
+    width: auto;
+    grid-template-columns: repeat(2, max-content);
+    gap: 5px;
+    justify-content: start;
+  }
+
+  .status {
+    min-height: 19px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .status-fixed {
+    width: auto;
+    min-width: 0;
+  }
+
+  .status.on,
+  .status.sogo-on {
+    color: #2f6f55;
+    background: #f3faf6;
+  }
+
+  .status.off,
+  .status.sogo-off {
+    color: #7b8494;
+    background: #f7f8fa;
+  }
+
+  .edit-panel {
+    position: fixed;
+    z-index: 40;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - max(96px, calc(env(safe-area-inset-top) + 72px)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 14px;
+    box-shadow: 0 20px 56px rgba(16, 24, 40, .2);
+  }
+}
