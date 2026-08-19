@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-PROCESSED_EVENT_RETENTION_SECONDS = 7 * 24 * 60 * 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,15 +171,3 @@ class StatsStore:
             )
             for row in rows
         }
-
-    async def prune_processed_events(self, now: int | None = None) -> int:
-        cutoff = (now if now is not None else int(time.time())) - PROCESSED_EVENT_RETENTION_SECONDS
-        return await asyncio.to_thread(self._prune_processed_events, cutoff)
-
-    def _prune_processed_events(self, cutoff: int) -> int:
-        with self._connect() as connection:
-            deleted = connection.execute(
-                "DELETE FROM processed_events WHERE event_at < ?",
-                (cutoff,),
-            )
-        return max(deleted.rowcount, 0)
