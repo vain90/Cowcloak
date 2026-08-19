@@ -29,4 +29,13 @@ def require_user(request: Request) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
-    return str(email).lower()
+
+    mailbox = str(email).lower()
+    settings = request.app.state.settings
+    if not settings.is_mailbox_allowed(mailbox):
+        request.session.clear()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Mailbox is not allowed to use Cowcloak",
+        )
+    return mailbox
