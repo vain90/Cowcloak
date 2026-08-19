@@ -231,15 +231,110 @@ class StatsStore:
                     continue
 
                 if is_stats_mode_downgrade(current_mode, target_mode):
-                    # Data that the target privacy mode is not allowed to retain is
-                    # removed before collection continues at the lower detail level.
-                    connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
+                    if current_mode is StatsMode.FULL and target_mode is StatsMode.DOMAIN:
+                        domain_rows = connection.execute(
+                            """
+                            SELECT
+                                alias,
+                                sender_domain,
+                                SUM(received_count) AS received_count,
+                                MAX(last_received_at) AS last_received_at
+                            FROM sender_usage
+                            WHERE mailbox = ?
+                            GROUP BY alias, sender_domain
+                            """,
+                            (mailbox,),
+                        ).fetchall()
+                        expectation_rows = connection.execute(
+                            """
+                            SELECT
+                                s.alias,
+                                s.sender_domain,
+                                MIN(e.expected) AS min_expected,
+                                MAX(e.expected) AS max_expected,
+                                COUNT(e.expected) AS reviewed_count
+                            FROM sender_usage AS s
+                            LEFT JOIN sender_expectations AS e
+                                ON e.mailbox = s.mailbox
+                                AND e.alias = s.alias
+                                AND e.sender_key = s.sender_key
+                            WHERE s.mailbox = ?
+                            GROUP BY s.alias, s.sender_domain
+                            """,
+                            (mailbox,),
+                        ).fetchall()
+
+                        connection.execute(
+                            "DELETE FROM sender_usage WHERE mailbox = ?",
+                            (mailbox,),
+                        )
+                        connection.execute(
+                            "DELETE FROM sender_expectations WHERE mailbox = ?",
+                            (mailbox,),
+                        )
+
+                        connection.executemany(
+                            """
+                            INSERT INTO sender_usage (
+                                mailbox,
+                                alias,
+                                sender_key,
+                                sender_domain,
+                                sender_address,
+                                received_count,
+                                last_received_at
+                            ) VALUES (?, ?, ?, ?, NULL, ?, ?)
+                            """,
+                            [
+                                (
+                                    mailbox,
+                                    str(item["alias"]).lower(),
+                                    str(item["sender_domain"]).lower(),
+                                    str(item["sender_domain"]).lower(),
+                                    int(item["received_count"]),
+                                    (
+                                        int(item["last_received_at"])
+                                        if item["last_received_at"] is not None
+                                        else None
+                                    ),
+                                )
+                                for item in domain_rows
+                            ],
+                        )
+
+                        for item in expectation_rows:
+                            if int(item["reviewed_count"]) == 0:
+                                continue
+                            if item["min_expected"] != item["max_expected"]:
+                                continue
+                            connection.execute(
+                                """
+                                INSERT INTO sender_expectations (
+                                    mailbox,
+                                    alias,
+                                    sender_key,
+                                    expected
+                                ) VALUES (?, ?, ?, ?)
+                                """,
+                                (
+                                    mailbox,
+                                    str(item["alias"]).lower(),
+                                    str(item["sender_domain"]).lower(),
+                                    int(item["min_expected"]),
+                                ),
+                            )
+                    else:
+                        connection.execute(
+                            "DELETE FROM sender_usage WHERE mailbox = ?",
+                            (mailbox,),
+                        )
+                        connection.execute(
+                            "DELETE FROM sender_expectations WHERE mailbox = ?",
+                            (mailbox,),
+                        )
+
                     connection.execute(
                         "DELETE FROM sender_processed_events WHERE mailbox = ?",
-                        (mailbox,),
-                    )
-                    connection.execute(
-                        "DELETE FROM sender_expectations WHERE mailbox = ?",
                         (mailbox,),
                     )
                     if target_mode is StatsMode.OFF:
