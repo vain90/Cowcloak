@@ -81,7 +81,15 @@ class MailcowClient:
             raise MailcowError("Authenticated mailcow mailbox does not exist")
         return payload
 
-    async def create_alias(self, address: str, target: str, private_comment: str) -> None:
+    async def create_alias(
+        self,
+        address: str,
+        target: str,
+        public_comment: str = "",
+        *,
+        private_comment: str = "",
+        sogo_visible: bool = False,
+    ) -> None:
         payload = await self._request(
             "POST",
             "/api/v1/add/alias",
@@ -91,26 +99,21 @@ class MailcowClient:
                 "active": 1,
                 "internal": 0,
                 "sender_allowed": 1,
-                "sogo_visible": 0,
+                "sogo_visible": 1 if sogo_visible else 0,
                 "goto_null": 0,
                 "goto_spam": 0,
                 "goto_ham": 0,
                 "private_comment": private_comment,
-                "public_comment": "",
+                "public_comment": public_comment,
             },
         )
         self._ensure_success(payload)
 
-    async def update_description(self, alias_id: int, description: str) -> None:
-        payload = await self._request(
-            "POST",
-            "/api/v1/edit/alias",
-            json={"items": [str(alias_id)], "attr": {"private_comment": description}},
-        )
-        self._ensure_success(payload)
-
-    async def update_metadata(
-        self, alias_id: int, description: str, public_comment: str
+    async def update_alias_preferences(
+        self,
+        alias_id: int,
+        public_comment: str,
+        sogo_visible: bool,
     ) -> None:
         payload = await self._request(
             "POST",
@@ -118,8 +121,28 @@ class MailcowClient:
             json={
                 "items": [str(alias_id)],
                 "attr": {
-                    "private_comment": description,
                     "public_comment": public_comment,
+                    "sogo_visible": 1 if sogo_visible else 0,
+                },
+            },
+        )
+        self._ensure_success(payload)
+
+    async def assign_reserved_alias(
+        self,
+        alias_id: int,
+        public_comment: str,
+        sogo_visible: bool,
+    ) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/alias",
+            json={
+                "items": [str(alias_id)],
+                "attr": {
+                    "private_comment": "",
+                    "public_comment": public_comment,
+                    "sogo_visible": 1 if sogo_visible else 0,
                 },
             },
         )
