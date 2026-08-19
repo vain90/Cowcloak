@@ -113,6 +113,89 @@ def test_replace_alias_copies_purpose_and_sogo_then_disables_old_alias(monkeypat
     assert fake.active_updates == [(42, False)]
 
 
+def test_replace_alias_can_use_readable_random_format(monkeypatch):
+    fake = FakeMailcow(alias_record(sogo_visible=False))
+    monkeypatch.setattr(main_module, "readable_local_part", lambda _language: "river-moon-42")
+
+    with make_client(monkeypatch, fake) as client:
+        response = client.post(
+            "/aliases/42/replace",
+            data={"csrf_token": "test", "mode": "readable"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["address"] == "river-moon-42@example.org"
+    assert fake.created == [
+        {
+            "address": "river-moon-42@example.org",
+            "target": "hidden@example.org",
+            "public_comment": "Amazon",
+            "private_comment": "",
+            "sogo_visible": False,
+        }
+    ]
+    assert fake.active_updates == [(42, False)]
+
+
+def test_replace_alias_can_use_custom_local_part(monkeypatch):
+    fake = FakeMailcow(alias_record())
+
+    with make_client(monkeypatch, fake) as client:
+        response = client.post(
+            "/aliases/42/replace",
+            data={
+                "csrf_token": "test",
+                "mode": "custom",
+                "local_part": "amazon-neu",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["address"] == "amazon-neu@example.org"
+    assert fake.created == [
+        {
+            "address": "amazon-neu@example.org",
+            "target": "hidden@example.org",
+            "public_comment": "Amazon",
+            "private_comment": "",
+            "sogo_visible": True,
+        }
+    ]
+    assert fake.active_updates == [(42, False)]
+
+
+def test_replace_alias_rejects_invalid_custom_local_part(monkeypatch):
+    fake = FakeMailcow(alias_record())
+
+    with make_client(monkeypatch, fake) as client:
+        response = client.post(
+            "/aliases/42/replace",
+            data={
+                "csrf_token": "test",
+                "mode": "custom",
+                "local_part": "Not Allowed!",
+            },
+        )
+
+    assert response.status_code == 400
+    assert fake.created == []
+    assert fake.active_updates == []
+
+
+def test_replace_alias_rejects_unknown_mode(monkeypatch):
+    fake = FakeMailcow(alias_record())
+
+    with make_client(monkeypatch, fake) as client:
+        response = client.post(
+            "/aliases/42/replace",
+            data={"csrf_token": "test", "mode": "unknown"},
+        )
+
+    assert response.status_code == 400
+    assert fake.created == []
+    assert fake.active_updates == []
+
+
 def test_replace_alias_reports_partial_result_when_old_alias_cannot_be_disabled(monkeypatch):
     fake = FakeMailcow(alias_record(), fail_disable=True)
 
