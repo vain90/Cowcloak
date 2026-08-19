@@ -19,7 +19,7 @@ Cowcloak deliberately keeps its authorization model small:
 - Private mailcow admin comments are not exposed or edited by Cowcloak.
 - SOGo visibility can be enabled per alias when the alias should appear as a selectable sender.
 
-For example, `alice@example.org` may create `shop-k7p4@example.org`, but not an alias on another domain and not an alias that forwards to `bob@example.org`.
+For example, `alice@example.org` may create `shop-k7@example.org`, but not an alias on another domain and not an alias that forwards to `bob@example.org`.
 
 ## Offline alias pool
 
@@ -31,9 +31,11 @@ Offline pool aliases are hidden from the SOGo sender chooser until they are assi
 
 ## Alias styles
 
-- **Name + random suffix (default):** `amazon-k7p4@example.org`
+- **Name + random suffix (default):** `amazon-k7@example.org`
 - **Readable random:** `hafen-feder-27@example.org`
 - **Custom:** `my-choice@example.org`
+
+Named aliases use a two-character ASCII suffix chosen from lowercase letters and digits. Visually ambiguous characters such as `0`, `1`, `i`, `l` and `o` are excluded so addresses stay short and easier to dictate or spell.
 
 Cowcloak ships curated English and German word lists with 250 unique words each. Every readable word is at most six characters long. The readable-random generator combines exactly two distinct words with a two-digit number, keeping generated local parts compact while remaining easy to read and dictate.
 
