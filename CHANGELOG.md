@@ -7,12 +7,14 @@ All notable changes to Cowcloak are documented here.
 ### Added
 
 - self-updating `update.sh` for deployments following the latest stable release
+- explicit `--beta` updater mode for testing the unreleased `edge` image and refreshing the updater from `main`
 - automatic health verification after updates with rollback to the previously running image on failure
 - `--check`, `--yes`, `--force` and version/help options for the updater
 
 ### Changed
 
 - `latest` is reserved for stable releases while `edge` follows `main`
+- the updater selects `latest` or `edge` through `COWCLOAK_TAG` without requiring Compose edits between stable and beta updates
 - alias edit popovers close when clicking outside them
 - removed a redundant address-immutability hint from the alias creation form
 
