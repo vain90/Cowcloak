@@ -1,5 +1,6 @@
 const modeSelect = document.querySelector('[data-mode-select]');
 const customLocalPart = document.querySelector('[data-custom-local-part]');
+const copiedLabel = document.body.dataset.copiedLabel || 'Copied';
 
 function syncAliasMode() {
   if (!modeSelect || !customLocalPart) return;
@@ -13,7 +14,7 @@ document.querySelectorAll('[data-copy]').forEach((button) => {
   button.addEventListener('click', async () => {
     await navigator.clipboard.writeText(button.dataset.copy);
     const original = button.textContent;
-    button.textContent = 'Copied';
+    button.textContent = copiedLabel;
     setTimeout(() => { button.textContent = original; }, 1200);
   });
 });
@@ -25,7 +26,7 @@ document.querySelector('[data-copy-pool]')?.addEventListener('click', async (eve
   await navigator.clipboard.writeText(addresses);
   const button = event.currentTarget;
   const original = button.textContent;
-  button.textContent = 'Copied';
+  button.textContent = copiedLabel;
   setTimeout(() => { button.textContent = original; }, 1200);
 });
 
