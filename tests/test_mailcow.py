@@ -105,6 +105,42 @@ async def test_assign_reserved_alias_clears_only_reservation_marker_fields():
     }
 
 
+async def test_set_active_many_updates_all_selected_aliases_in_one_request():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.set_active_many([12, 42, 77], False)
+    await client.close()
+
+    assert captured["path"] == "/api/v1/edit/alias"
+    assert captured["json"] == {
+        "items": ["12", "42", "77"],
+        "attr": {"active": 0},
+    }
+
+
+async def test_set_sogo_visible_many_updates_all_selected_aliases_in_one_request():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json=[{"type": "success", "msg": ["alias_modified"]}])
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    await client.set_sogo_visible_many([12, 42], True)
+    await client.close()
+
+    assert captured["json"] == {
+        "items": ["12", "42"],
+        "attr": {"sogo_visible": 1},
+    }
+
+
 async def test_delete_alias_uses_mailcow_alias_delete_endpoint():
     captured = {}
 
