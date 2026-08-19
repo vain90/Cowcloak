@@ -24,6 +24,7 @@ class SenderEvent:
     alias: str
     sender_domain: str
     sender_address: str | None
+    mode: str
     event_at: int
 
 
@@ -298,6 +299,13 @@ class StatsStore:
         recorded = 0
         with self._connect() as connection:
             for event in events:
+                current_mode = connection.execute(
+                    "SELECT mode FROM sender_mode_state WHERE mailbox = ?",
+                    (event.mailbox.lower(),),
+                ).fetchone()
+                if current_mode is None or str(current_mode["mode"]) != event.mode:
+                    continue
+
                 inserted = connection.execute(
                     """
                     INSERT OR IGNORE INTO sender_processed_events (
