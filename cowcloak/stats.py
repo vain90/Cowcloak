@@ -175,6 +175,17 @@ class StatsStore:
             raise RuntimeError("Usage database does not contain tracking_started_at")
         return int(row["value"])
 
+    async def sender_mode(self, mailbox: str) -> str | None:
+        return await asyncio.to_thread(self._sender_mode, mailbox)
+
+    def _sender_mode(self, mailbox: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT mode FROM sender_mode_state WHERE mailbox = ?",
+                (mailbox.lower(),),
+            ).fetchone()
+        return str(row["mode"]) if row is not None else None
+
     async def sync_sender_modes(
         self,
         modes: dict[str, str],
@@ -189,6 +200,12 @@ class StatsStore:
     def _sync_sender_modes(self, modes: dict[str, str], now: int) -> dict[str, int]:
         starts: dict[str, int] = {}
         with self._connect() as connection:
+            initial_row = connection.execute(
+                "SELECT value FROM usage_meta WHERE key = ?",
+                ("tracking_started_at",),
+            ).fetchone()
+            initial_start = int(initial_row["value"]) if initial_row is not None else now
+
             for mailbox, mode in modes.items():
                 mailbox = mailbox.lower()
                 target_mode = StatsMode(mode)
@@ -202,9 +219,9 @@ class StatsStore:
                         INSERT INTO sender_mode_state (mailbox, mode, tracking_started_at)
                         VALUES (?, ?, ?)
                         """,
-                        (mailbox, mode, now),
+                        (mailbox, mode, initial_start),
                     )
-                    starts[mailbox] = now
+                    starts[mailbox] = initial_start
                     continue
 
                 current_mode = StatsMode(str(row["mode"]))
