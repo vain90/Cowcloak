@@ -4,12 +4,19 @@ import asyncio
 import hashlib
 import json
 import logging
+from email.utils import parseaddr
 from typing import Any
 
 from cowcloak.aliases import is_owned_alias, is_primary_mailbox_alias
 from cowcloak.config import Settings
 from cowcloak.mailcow import MailcowClient
-from cowcloak.stats import StatsStore, UsageEvent
+from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
+from cowcloak.stats_mode import (
+    StatsMode,
+    StatsModeState,
+    normalise_tags,
+    resolve_stats_mode,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,13 +31,6 @@ ACCEPTED_ACTIONS = frozenset(
         "probable spam",
     }
 )
-
-
-def _tags(payload: dict[str, Any]) -> set[str]:
-    tags = payload.get("tags")
-    if not isinstance(tags, list):
-        return set()
-    return {str(tag).strip().casefold() for tag in tags if str(tag).strip()}
 
 
 def _normalise_address(value: Any) -> str:
@@ -58,7 +58,7 @@ def _event_timestamp(item: dict[str, Any]) -> int | None:
 def _event_key(kind: str, item: dict[str, Any], alias: str, event_at: int) -> str:
     # Only the SHA-256 digest is persisted. When a message ID is available it is
     # preferred over scan time so repeated Rspamd scans of the same message do not
-    # inflate the counter. Raw message IDs, senders and subjects never enter SQLite.
+    # inflate the counter. Raw message IDs and subjects never enter SQLite.
     message_id = str(item.get("message-id") or item.get("message_id") or "").strip()
     if message_id:
         fingerprint = {
@@ -81,22 +81,45 @@ def _event_key(kind: str, item: dict[str, Any], alias: str, event_at: int) -> st
     return hashlib.sha256(payload).hexdigest()
 
 
+def _sender_identity(item: dict[str, Any]) -> tuple[str, str] | None:
+    raw = item.get("sender_mime") or item.get("sender_smtp")
+    if isinstance(raw, list):
+        raw = raw[0] if raw else ""
+    _, address = parseaddr(str(raw or ""))
+    address = address.strip().lower()
+    if "@" not in address:
+        return None
+    local_part, domain = address.rsplit("@", 1)
+    domain = domain.strip().strip(".").lower()
+    if not local_part or not domain:
+        return None
+    return address, domain
+
+
+async def mailbox_stats_state(
+    settings: Settings,
+    mailcow: MailcowClient,
+    email: str,
+) -> StatsModeState:
+    if not settings.usage_stats:
+        return resolve_stats_mode([], [], settings.usage_tag)
+
+    mailbox = await mailcow.get_mailbox(email)
+    domain = str(mailbox.get("domain") or email.rsplit("@", 1)[-1]).strip().lower()
+    domain_details = await mailcow.get_domain(domain)
+    return resolve_stats_mode(
+        mailbox.get("tags"),
+        domain_details.get("tags"),
+        settings.usage_tag,
+    )
+
+
 async def mailbox_usage_enabled(
     settings: Settings,
     mailcow: MailcowClient,
     email: str,
 ) -> bool:
-    if not settings.usage_stats:
-        return False
-
-    usage_tag = settings.usage_tag.casefold()
-    mailbox = await mailcow.get_mailbox(email)
-    if usage_tag in _tags(mailbox):
-        return True
-
-    domain = str(mailbox.get("domain") or email.rsplit("@", 1)[-1]).strip().lower()
-    domain_details = await mailcow.get_domain(domain)
-    return usage_tag in _tags(domain_details)
+    return (await mailbox_stats_state(settings, mailcow, email)).enabled
 
 
 class UsageCollector:
@@ -104,49 +127,86 @@ class UsageCollector:
         self.settings = settings
         self.mailcow = mailcow
         self.store = store
+        self._reported_conflicts: set[str] = set()
 
-    async def eligible_mailboxes(self) -> set[str]:
-        usage_tag = self.settings.usage_tag.casefold()
+    def _resolve_inventory(
+        self,
+        domains: list[dict[str, Any]],
+        mailboxes: list[dict[str, Any]],
+    ) -> dict[str, StatsModeState]:
+        domain_payloads: dict[str, dict[str, Any]] = {}
+        for domain_payload in domains:
+            domain = str(
+                domain_payload.get("domain") or domain_payload.get("domain_name") or ""
+            ).strip().lower()
+            if domain:
+                domain_payloads[domain] = domain_payload
+
         access_tag = self.settings.access_tag.casefold()
-        domains, mailboxes = await asyncio.gather(
-            self.mailcow.list_domains(),
-            self.mailcow.list_mailboxes(),
-        )
-
-        usage_domains = {
-            str(domain.get("domain") or "").strip().lower()
-            for domain in domains
-            if usage_tag in _tags(domain)
+        access_domains = {
+            domain
+            for domain, payload in domain_payloads.items()
+            if access_tag and access_tag in normalise_tags(payload.get("tags"))
         }
-        usage_domains.discard("")
 
-        access_domains: set[str] = set()
-        if access_tag:
-            access_domains = {
-                str(domain.get("domain") or "").strip().lower()
-                for domain in domains
-                if access_tag in _tags(domain)
-            }
-            access_domains.discard("")
-
-        eligible: set[str] = set()
+        states: dict[str, StatsModeState] = {}
         for mailbox in mailboxes:
             username = str(mailbox.get("username") or "").strip().lower()
             if not username or "@" not in username:
                 continue
             domain = str(mailbox.get("domain") or username.rsplit("@", 1)[1]).strip().lower()
-            mailbox_tags = _tags(mailbox)
-            usage_allowed = usage_tag in mailbox_tags or domain in usage_domains
+            mailbox_tags = normalise_tags(mailbox.get("tags"))
             access_allowed = (
                 not access_tag or access_tag in mailbox_tags or domain in access_domains
             )
-            if usage_allowed and access_allowed:
-                eligible.add(username)
-        return eligible
+            if not access_allowed:
+                continue
+
+            domain_payload = domain_payloads.get(domain, {})
+            states[username] = resolve_stats_mode(
+                mailbox.get("tags"),
+                domain_payload.get("tags"),
+                self.settings.usage_tag,
+            )
+        return states
+
+    async def mailbox_states(self) -> dict[str, StatsModeState]:
+        domains, mailboxes = await asyncio.gather(
+            self.mailcow.list_domains(),
+            self.mailcow.list_mailboxes(),
+        )
+        states = self._resolve_inventory(domains, mailboxes)
+        self._log_new_conflicts(states)
+        return states
+
+    def _log_new_conflicts(self, states: dict[str, StatsModeState]) -> None:
+        conflicts = {mailbox for mailbox, state in states.items() if state.conflict}
+        for mailbox in sorted(conflicts - self._reported_conflicts):
+            state = states[mailbox]
+            LOGGER.warning(
+                "Conflicting Cowcloak statistics tags for %s on %s level; statistics disabled",
+                mailbox,
+                state.conflict_source.value if state.conflict_source is not None else "unknown",
+            )
+        self._reported_conflicts = conflicts
+
+    async def eligible_mailboxes(self) -> set[str]:
+        return {
+            mailbox
+            for mailbox, state in (await self.mailbox_states()).items()
+            if state.enabled
+        }
 
     async def collect_once(self) -> int:
         tracking_started_at = await self.store.tracking_started_at()
-        eligible = await self.eligible_mailboxes()
+        states = await self.mailbox_states()
+        if not states:
+            return 0
+
+        sender_starts = await self.store.sync_sender_modes(
+            {mailbox: state.effective.value for mailbox, state in states.items()}
+        )
+        eligible = {mailbox for mailbox, state in states.items() if state.enabled}
         if not eligible:
             return 0
 
@@ -168,6 +228,7 @@ class UsageCollector:
 
         received_events: list[UsageEvent] = []
         sent_events: list[UsageEvent] = []
+        sender_events: list[SenderEvent] = []
 
         for item in history:
             action = str(item.get("action") or "").strip().lower()
@@ -179,15 +240,38 @@ class UsageCollector:
                 continue
 
             recipients = _normalise_recipients(item.get("rcpt_smtp"))
+            sender_identity = _sender_identity(item)
             for alias in recipients.intersection(alias_targets):
+                mailbox = alias_targets[alias]
                 received_events.append(
                     UsageEvent(
                         event_key=_event_key("received", item, alias, event_at),
-                        mailbox=alias_targets[alias],
+                        mailbox=mailbox,
                         alias=alias,
                         event_at=event_at,
                     )
                 )
+
+                mode = states[mailbox].effective
+                sender_start = sender_starts.get(mailbox, event_at + 1)
+                if (
+                    mode in {StatsMode.DOMAIN, StatsMode.FULL}
+                    and event_at >= sender_start
+                    and sender_identity is not None
+                ):
+                    sender_address, sender_domain = sender_identity
+                    sender_events.append(
+                        SenderEvent(
+                            event_key=_event_key("sender-detail", item, alias, event_at),
+                            mailbox=mailbox,
+                            alias=alias,
+                            sender_domain=sender_domain,
+                            sender_address=(
+                                sender_address if mode is StatsMode.FULL else None
+                            ),
+                            event_at=event_at,
+                        )
+                    )
 
             authenticated_user = _normalise_address(item.get("user"))
             if authenticated_user not in eligible:
@@ -215,13 +299,15 @@ class UsageCollector:
 
         received = await self.store.record_received(received_events)
         sent = await self.store.record_sent(sent_events)
-        if received or sent:
+        senders = await self.store.record_senders(sender_events)
+        if received or sent or senders:
             LOGGER.info(
-                "Recorded %d received and %d sent Cowcloak alias event(s)",
+                "Recorded %d received, %d sent and %d sender-detail Cowcloak event(s)",
                 received,
                 sent,
+                senders,
             )
-        return received + sent
+        return received + sent + senders
 
     async def run_forever(self) -> None:
         while True:
