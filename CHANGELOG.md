@@ -2,6 +2,14 @@
 
 All notable changes to Cowcloak are documented here.
 
+## 0.1.2 - Unreleased
+
+### Changed
+
+- improved the assigned-alias layout on small screens
+- reduced the visual weight and size of active/SOGo status badges on mobile
+- changed the mobile alias edit popover into a viewport-safe bottom sheet with its own scrolling area
+
 ## 0.1.1 - 2026-08-19
 
 ### Added
