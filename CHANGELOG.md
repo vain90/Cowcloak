@@ -11,6 +11,7 @@ All notable changes to Cowcloak are documented here.
 - automatic health verification after updates with rollback to the previously running image on failure
 - `--check`, `--yes`, `--force` and version/help options for the updater
 - bulk selection for assigned aliases with enable, disable, SOGo visibility and clipboard actions
+- alias replacement workflow that creates a fresh address with the same purpose and SOGo visibility while keeping the previous alias disabled for traceability
 
 ### Changed
 
@@ -32,7 +33,7 @@ First public release.
 - mailcow OAuth2 login without a separate Cowcloak user database
 - mailbox-isolated alias management with server-side ownership checks
 - name + random suffix, readable random and custom alias creation
-- offline alias pool with individual assignment and deletion of unused entries
+- offline pool with individual assignment and deletion of unused entries
 - active/disabled filtering, live search and pagination
 - optional SOGo sender visibility per alias
 - catch-all detection with a user-facing warning
