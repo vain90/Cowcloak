@@ -28,16 +28,24 @@ def test_local_part_is_conservative():
         validate_local_part("Not Allowed!")
 
 
-def test_wordlists_have_broad_variety():
-    assert len(load_words("de")) >= 200
-    assert len(load_words("en")) >= 200
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_wordlists_are_short_unique_and_varied(language: str):
+    words = load_words(language)
+    assert 200 <= len(words) <= 250
+    assert len(words) == len(set(words))
+    assert max(map(len, words)) <= 6
 
 
 @pytest.mark.parametrize("language", ["de", "en"])
-def test_readable_aliases_are_valid_local_parts(language: str):
+def test_readable_aliases_are_compact_valid_local_parts(language: str):
     for _ in range(100):
         local_part = readable_local_part(language)
-        assert len(local_part) <= 63
+        parts = local_part.split("-")
+        assert len(parts) == 3
+        assert len(parts[0]) <= 6
+        assert len(parts[1]) <= 6
+        assert len(parts[2]) == 2 and parts[2].isdigit()
+        assert len(local_part) <= 16
         assert validate_local_part(local_part) == local_part
 
 
