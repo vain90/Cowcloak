@@ -148,6 +148,17 @@ class MailcowClient:
         )
         self._ensure_success(payload)
 
+    async def set_sender_allowed(self, alias_id: int, allowed: bool) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/alias",
+            json={
+                "items": [str(alias_id)],
+                "attr": {"sender_allowed": 1 if allowed else 0},
+            },
+        )
+        self._ensure_success(payload)
+
     async def set_active(self, alias_id: int, active: bool) -> None:
         payload = await self._request(
             "POST",
