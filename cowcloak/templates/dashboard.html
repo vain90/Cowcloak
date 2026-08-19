@@ -98,11 +98,6 @@
         <button class="button compact" type="submit">+{{ amount }}</button>
       </form>
       {% endfor %}
-      {% if reserved %}
-      <button class="button compact primary" type="button" data-open-assign-dialog>
-        {{ t.assign }}
-      </button>
-      {% endif %}
     </div>
     {% if reserved %}
     <div class="pool-list">
@@ -110,6 +105,11 @@
       <div class="pool-item">
         <code data-pool-address>{{ alias.address }}</code>
         <div class="pool-actions">
+          <button
+            class="button compact primary"
+            type="button"
+            data-open-assign-dialog="{{ alias.id }}"
+          >{{ t.assign }}</button>
           <button class="button compact" type="button" data-copy="{{ alias.address }}">
             {{ t["copy"] }}
           </button>
@@ -202,10 +202,10 @@
           </div>
         </div>
         <div class="alias-actions">
-          <button class="button compact" type="button" data-copy="{{ alias.address }}">
+          <button class="button compact alias-copy-action" type="button" data-copy="{{ alias.address }}">
             {{ t["copy"] }}
           </button>
-          <details>
+          <details class="alias-edit-action">
             <summary class="button compact">{{ t.edit }}</summary>
             <div class="edit-panel">
               <form method="post" action="/aliases/{{ alias.id }}/metadata" class="stack small">
@@ -229,7 +229,7 @@
               </form>
             </div>
           </details>
-          <form method="post" action="/aliases/{{ alias.id }}/toggle">
+          <form class="alias-toggle-action" method="post" action="/aliases/{{ alias.id }}/toggle">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="return_to" value="{{ return_to }}">
             <button class="button compact {{ 'danger' if alias.active else '' }}" type="submit">
@@ -305,8 +305,8 @@
   </div>
 </section>
 
-{% if reserved %}
-<dialog class="assign-dialog" data-assign-dialog>
+{% for alias in reserved %}
+<dialog class="assign-dialog assign-dialog-single" data-assign-dialog="{{ alias.id }}">
   <div class="dialog-head">
     <div>
       <h2>{{ t.assign_prepared }}</h2>
@@ -320,25 +320,23 @@
       data-close-dialog
     >×</button>
   </div>
-  <div class="assign-dialog-list">
-    {% for alias in reserved %}
-    <form method="post" action="/aliases/{{ alias.id }}/description" class="assign-dialog-item">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <code>{{ alias.address }}</code>
+  <form method="post" action="/aliases/{{ alias.id }}/description" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <code class="assign-address">{{ alias.address }}</code>
+    <label>{{ t.purpose }}
       <input
         name="description"
         maxlength="160"
         required
         placeholder="{{ t.used_for_placeholder }}"
       >
-      <label class="check-row compact-check">
-        <input type="checkbox" name="sogo_visible" value="1">
-        <span>{{ t.show_in_sogo }}</span>
-      </label>
-      <button class="button primary compact" type="submit">{{ t.assign }}</button>
-    </form>
-    {% endfor %}
-  </div>
+    </label>
+    <label class="check-row">
+      <input type="checkbox" name="sogo_visible" value="1">
+      <span>{{ t.show_in_sogo }}</span>
+    </label>
+    <button class="button primary" type="submit">{{ t.assign }}</button>
+  </form>
 </dialog>
-{% endif %}
+{% endfor %}
 {% endblock %}

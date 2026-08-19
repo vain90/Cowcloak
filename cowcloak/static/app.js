@@ -46,10 +46,35 @@ function bindPageSize(root = document) {
   });
 }
 
+function bindAssignDialogs(root = document) {
+  root.querySelectorAll('[data-open-assign-dialog]').forEach((button) => {
+    if (button.dataset.bound === 'true') return;
+    button.dataset.bound = 'true';
+    button.addEventListener('click', () => {
+      const dialogId = button.dataset.openAssignDialog;
+      const dialog = document.querySelector(`[data-assign-dialog="${dialogId}"]`);
+      dialog?.showModal();
+      dialog?.querySelector('input[name="description"]')?.focus();
+    });
+  });
+
+  root.querySelectorAll('[data-assign-dialog]').forEach((dialog) => {
+    if (dialog.dataset.bound === 'true') return;
+    dialog.dataset.bound = 'true';
+    dialog.querySelector('[data-close-dialog]')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+  });
+}
+
 function bindDynamicControls(root = document) {
   bindCopyButtons(root);
   bindConfirmForms(root);
   bindPageSize(root);
+  bindAssignDialogs(root);
 }
 
 bindDynamicControls();
@@ -141,16 +166,3 @@ searchClear?.addEventListener('click', () => {
 });
 
 syncSearchClear();
-
-const assignDialog = document.querySelector('[data-assign-dialog]');
-document.querySelector('[data-open-assign-dialog]')?.addEventListener('click', () => {
-  assignDialog?.showModal();
-});
-document.querySelector('[data-close-dialog]')?.addEventListener('click', () => {
-  assignDialog?.close();
-});
-assignDialog?.addEventListener('click', (event) => {
-  if (event.target === assignDialog) {
-    assignDialog.close();
-  }
-});

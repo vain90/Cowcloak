@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem in Cowcloak
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please redact domains, mailbox addresses, tokens, API keys, OAuth secrets, and other private data before submitting.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+      placeholder: A clear description of the unexpected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Cowcloak version or commit
+      placeholder: v0.1.0 or 127d4c9
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / platform
+      placeholder: Safari on iOS, Firefox on macOS, Chrome on Windows, etc.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Optional. Remove all secrets and personal information first.
+      render: shell
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, private domains, mailbox addresses, and other sensitive data from this report.
+          required: true
+        - label: This is not a security vulnerability. I will follow SECURITY.md for security-sensitive reports.
+          required: true
