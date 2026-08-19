@@ -1,13 +1,14 @@
-const modeSelect = document.querySelector('[data-mode-select]');
+const modeOptions = [...document.querySelectorAll('[data-mode-option]')];
 const customLocalPart = document.querySelector('[data-custom-local-part]');
 const copiedLabel = document.body.dataset.copiedLabel || 'Copied';
 
 function syncAliasMode() {
-  if (!modeSelect || !customLocalPart) return;
-  customLocalPart.classList.toggle('hidden', modeSelect.value !== 'custom');
+  if (!customLocalPart) return;
+  const selected = modeOptions.find((option) => option.checked)?.value;
+  customLocalPart.classList.toggle('hidden', selected !== 'custom');
 }
 
-modeSelect?.addEventListener('change', syncAliasMode);
+modeOptions.forEach((option) => option.addEventListener('change', syncAliasMode));
 syncAliasMode();
 
 document.querySelectorAll('[data-copy]').forEach((button) => {
