@@ -47,7 +47,7 @@ async def test_set_mailbox_tags_replaces_removed_tags_and_preserves_unrelated_ta
     assert captured == [
         ("GET", "/api/v1/get/mailbox/user@example.org", None),
         (
-            "DELETE",
+            "POST",
             "/api/v1/delete/mailbox/tag/user@example.org",
             ["cowcloak-stats-full"],
         ),
@@ -89,7 +89,7 @@ async def test_set_mailbox_tags_can_remove_stats_override_without_adding_tags():
     assert captured == [
         ("GET", "/api/v1/get/mailbox/user@example.org", None),
         (
-            "DELETE",
+            "POST",
             "/api/v1/delete/mailbox/tag/user@example.org",
             ["cowcloak-stats-domain"],
         ),
