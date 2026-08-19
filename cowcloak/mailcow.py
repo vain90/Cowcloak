@@ -83,6 +83,24 @@ class MailcowClient:
             raise MailcowError("mailcow domain does not exist")
         return payload
 
+    async def list_domains(self) -> list[dict[str, Any]]:
+        payload = await self._request("GET", "/api/v1/get/domain/all")
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
+
+    async def list_mailboxes(self) -> list[dict[str, Any]]:
+        payload = await self._request("GET", "/api/v1/get/mailbox/all")
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
+
+    async def get_rspamd_history(self, count: int) -> list[dict[str, Any]]:
+        payload = await self._request("GET", f"/api/v1/get/logs/rspamd-history/{count}")
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
+
     async def _enforce_access_tag(self, email: str, mailbox: dict[str, Any]) -> None:
         configured_tag = self.settings.access_tag.strip().casefold()
         if not configured_tag:
