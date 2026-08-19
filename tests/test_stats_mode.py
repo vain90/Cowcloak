@@ -1,8 +1,10 @@
 from cowcloak.stats_mode import (
     StatsMode,
     StatsModeSource,
+    is_stats_mode_downgrade,
     replace_mailbox_stats_tags,
     resolve_stats_mode,
+    selected_effective_mode,
 )
 
 
@@ -86,3 +88,16 @@ def test_inherit_removes_only_mailbox_stats_family():
     )
 
     assert tags == ["cowcloak", "other-tag"]
+
+
+def test_inherit_resolves_to_domain_default_for_downgrade_detection():
+    target = selected_effective_mode("inherit", StatsMode.BASIC)
+
+    assert target is StatsMode.BASIC
+    assert is_stats_mode_downgrade(StatsMode.FULL, target)
+
+
+def test_upgrades_and_equal_modes_are_not_downgrades():
+    assert not is_stats_mode_downgrade(StatsMode.DOMAIN, StatsMode.FULL)
+    assert not is_stats_mode_downgrade(StatsMode.DOMAIN, StatsMode.DOMAIN)
+    assert is_stats_mode_downgrade(StatsMode.DOMAIN, StatsMode.BASIC)
