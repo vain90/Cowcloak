@@ -4,10 +4,11 @@ from cowcloak.stats import StatsStore
 from cowcloak.usage import UsageCollector
 
 
-def settings(db_path: str) -> Settings:
+def settings(db_path: str, *, access_tag: str = "") -> Settings:
     return Settings(
         COWCLOAK_BASE_URL="https://aliases.example.org",
         COWCLOAK_SESSION_SECRET="x" * 64,
+        COWCLOAK_ACCESS_TAG=access_tag,
         COWCLOAK_USAGE_STATS=True,
         COWCLOAK_USAGE_TAG="cowcloak-stats",
         COWCLOAK_USAGE_DB_PATH=db_path,
@@ -97,6 +98,15 @@ class FakeMailcow:
                 "user": "unknown",
             },
             {
+                "unix_time": self.event_at + 10,
+                "action": "add header",
+                "sender_smtp": "sender@example.net",
+                "rcpt_smtp": ["shop@example.org"],
+                "message-id": "message-1@example.net",
+                "subject": "Test",
+                "user": "unknown",
+            },
+            {
                 "unix_time": self.event_at,
                 "action": "soft reject",
                 "sender_smtp": "sender@example.net",
@@ -167,4 +177,30 @@ async def test_mailbox_tag_enables_stats_without_domain_tag(tmp_path):
     mailcow.list_mailboxes = list_mailboxes
     collector = UsageCollector(settings(str(tmp_path / "usage.sqlite3")), mailcow, store)
 
+    assert await collector.eligible_mailboxes() == {"user@example.org"}
+
+
+async def test_usage_tag_does_not_bypass_configured_access_tag(tmp_path):
+    store = StatsStore(str(tmp_path / "usage.sqlite3"))
+    await store.initialize()
+    started_at = await store.tracking_started_at()
+    mailcow = FakeMailcow(started_at + 1)
+
+    collector = UsageCollector(
+        settings(str(tmp_path / "usage.sqlite3"), access_tag="cowcloak"),
+        mailcow,
+        store,
+    )
+    assert await collector.eligible_mailboxes() == set()
+
+    async def list_mailboxes():
+        return [
+            {
+                "username": "user@example.org",
+                "domain": "example.org",
+                "tags": ["cowcloak"],
+            }
+        ]
+
+    mailcow.list_mailboxes = list_mailboxes
     assert await collector.eligible_mailboxes() == {"user@example.org"}
