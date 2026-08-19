@@ -127,7 +127,7 @@ COWCLOAK_TRUSTED_HOSTS=aliases.example.com
 MAILCOW_URL=https://mail.example.com
 MAILCOW_API_KEY=<read-write-api-key>
 MAILCOW_OAUTH_CLIENT_ID=<client-id>
-MAILCOW_OAUTH_CLIENT_SECRET=<oauth-secret>
+MAILCOW_OAUTH_CLIENT_SECRET=<client-secret>
 ```
 
 Generate a session secret with:
