@@ -27,7 +27,7 @@ Cowcloak can pre-create 1, 5, 10 or 20 active, readable aliases. Copy the list i
 
 Prepared aliases are marked internally with the private comment `[cowcloak:reserved]`. Older Cowcloak aliases using `[reserved] Offline alias` are still recognized. The marker is the only private comment Cowcloak manages. When a prepared alias is assigned, Cowcloak removes that marker and stores the user-visible purpose in the public comment. The email address stays exactly the same.
 
-Offline pool aliases are hidden from the SOGo sender chooser until they are assigned and SOGo visibility is explicitly enabled.
+Offline pool aliases are hidden from the SOGo sender chooser until they are assigned and SOGo visibility is explicitly enabled. Each prepared alias can be assigned individually from the offline-pool list.
 
 ## Alias styles
 
@@ -39,12 +39,22 @@ Cowcloak ships curated English and German word lists with 250 English and 244 Ge
 
 The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
+## Install as a web app
+
+Cowcloak ships a web app manifest, standalone metadata and app icons so the normal web deployment can also be installed as an app-like experience.
+
+- On iPhone or iPad, open Cowcloak in Safari and use **Add to Home Screen**.
+- On macOS, open Cowcloak in Safari and use **Add to Dock**.
+- Other browsers can use their normal install-web-app flow when supported.
+
+The installed app still connects to the same Cowcloak server and mailcow instance. No alias data is copied into a separate local database. Because OAuth and cookie behavior can differ in standalone web apps, test the complete mailcow login and callback flow on the target Apple devices before treating a deployment as production-ready.
+
 ## Architecture
 
 Cowcloak is intentionally stateless. Persistent alias data stays in mailcow.
 
 ```text
-Browser / PWA
+Browser / installed web app
       |
       | OAuth2 login
       v
@@ -132,14 +142,14 @@ Pin `COWCLOAK_TAG` in `.env` if you prefer a fixed release instead of `latest`.
 
 ## Development
 
-Python 3.12 or newer is required.
+Python 3.12 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 ruff check .
-pytest
+pytest -q
 ```
 
 ## Security model
@@ -154,7 +164,7 @@ Before editing or toggling an existing alias, Cowcloak fetches the alias from ma
 
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
-See [SECURITY.md](SECURITY.md) for deployment guidance.
+See [SECURITY.md](SECURITY.md) for deployment and vulnerability-reporting guidance.
 
 ## Status
 
@@ -171,11 +181,15 @@ The current milestone is the first testable MVP:
 - [x] active / disabled status filters with counts
 - [x] configurable SOGo sender visibility per alias
 - [x] offline pool with 1 / 5 / 10 / 20 aliases
+- [x] individual offline-alias assignment
 - [x] plain-text pool export
 - [x] German and English UI with browser detection and manual switching
+- [x] installable web app metadata and icons
 - [x] Docker image and Compose deployment
 - [x] CI and multi-architecture GHCR builds
+- [x] contribution and issue templates
 - [ ] integration test against a real mailcow test instance
+- [ ] iOS and macOS standalone OAuth device test
 - [ ] polished error pages and notifications
 - [ ] alias replacement workflow
 
