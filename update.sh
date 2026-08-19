@@ -12,6 +12,7 @@ SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 ORIGINAL_ARGS=("$@")
 
 ASSUME_YES=false
+BETA=false
 CHECK_ONLY=false
 FORCE=false
 SKIP_SELF_UPDATE=false
@@ -24,11 +25,14 @@ Usage:
   ./update.sh [options]
 
 Options:
-  -c, --check        Check whether a newer stable release is available
+  -c, --check        Check whether an update is available
   -y, --yes          Update without asking for confirmation
-  -f, --force        Pull and recreate even when the installed version is current
+  -f, --force        Pull and recreate even when the installed image is current
+      --beta         Explicitly update from the unreleased edge channel
       --version      Show updater version
   -h, --help         Show this help
+
+Without --beta, the updater always follows the latest stable Cowcloak release.
 EOF
 }
 
@@ -59,6 +63,9 @@ while (($#)); do
       ;;
     -f|--force)
       FORCE=true
+      ;;
+    --beta|-beta)
+      BETA=true
       ;;
     --skip-self-update)
       SKIP_SELF_UPDATE=true
@@ -96,23 +103,35 @@ get_latest_release_tag() {
   printf '%s\n' "${tag}"
 }
 
-LATEST_TAG="$(get_latest_release_tag)"
-LATEST_VERSION="${LATEST_TAG#v}"
+if [[ "${BETA}" == true ]]; then
+  CHANNEL="beta"
+  TARGET_TAG="edge"
+  TARGET_DISPLAY="edge"
+  SELF_UPDATE_REF="main"
+else
+  CHANNEL="stable"
+  TARGET_TAG="latest"
+  LATEST_TAG="$(get_latest_release_tag)"
+  LATEST_VERSION="${LATEST_TAG#v}"
+  TARGET_DISPLAY="${LATEST_VERSION}"
+  SELF_UPDATE_REF="${LATEST_TAG}"
+fi
 
 self_update() {
-  local remote_url tmp_file backup_file
-  remote_url="${RAW_BASE_URL}/${LATEST_TAG}/update.sh"
+  local remote_url tmp_file backup_file source_label
+  remote_url="${RAW_BASE_URL}/${SELF_UPDATE_REF}/update.sh"
   tmp_file="$(mktemp)"
   backup_file="${SCRIPT_PATH}.previous"
+  source_label="${SELF_UPDATE_REF}"
   trap 'rm -f "${tmp_file}"' RETURN
 
   if ! curl --proto '=https' --tlsv1.2 -fsSL "${remote_url}" -o "${tmp_file}"; then
-    log "Updater is not included in ${LATEST_TAG}; keeping the local updater."
+    log "Updater is not available from ${source_label}; keeping the local updater."
     return 0
   fi
 
   if ! bash -n "${tmp_file}"; then
-    die "Downloaded updater from ${LATEST_TAG} failed syntax validation"
+    die "Downloaded updater from ${source_label} failed syntax validation"
   fi
 
   if cmp -s "${SCRIPT_PATH}" "${tmp_file}"; then
@@ -121,7 +140,7 @@ self_update() {
 
   cp -a "${SCRIPT_PATH}" "${backup_file}"
   install -m 0755 "${tmp_file}" "${SCRIPT_PATH}"
-  log "Updater refreshed from ${LATEST_TAG}. Restarting..."
+  log "Updater refreshed from ${source_label}. Restarting..."
   exec "${SCRIPT_PATH}" --skip-self-update "${ORIGINAL_ARGS[@]}"
 }
 
@@ -150,15 +169,15 @@ fi
 [[ -f ".env" ]] || die ".env not found in ${SCRIPT_DIR}"
 
 compose() {
-  docker compose -f "${COMPOSE_FILE}" "$@"
+  COWCLOAK_TAG="${TARGET_TAG}" docker compose -f "${COMPOSE_FILE}" "$@"
 }
 
 RESOLVED_IMAGE="$(compose config --images 2>/dev/null | awk -v image="${IMAGE}:" 'index($0, image) == 1 { print; exit }')"
 if [[ -z "${RESOLVED_IMAGE}" ]]; then
   die "The Cowcloak service does not use ${IMAGE}"
 fi
-if [[ "${RESOLVED_IMAGE}" != "${IMAGE}:latest" ]]; then
-  die "The updater follows stable releases via ${IMAGE}:latest, but Compose resolves to ${RESOLVED_IMAGE}. Set COWCLOAK_TAG=latest or remove the pin before using update.sh."
+if [[ "${RESOLVED_IMAGE}" != "${IMAGE}:${TARGET_TAG}" ]]; then
+  die "The ${CHANNEL} channel requires Compose to resolve to ${IMAGE}:${TARGET_TAG}, but it resolves to ${RESOLVED_IMAGE}. Use image: ${IMAGE}:\${COWCLOAK_TAG:-latest} so update.sh can select latest or edge without editing Compose."
 fi
 
 current_container_id() {
@@ -217,29 +236,56 @@ CURRENT_DISPLAY="${CURRENT_VERSION:-${CURRENT_IMAGE_REF:-not running}}"
 
 log "Cowcloak updater"
 log ""
+log "Channel:   ${CHANNEL}"
 log "Installed: ${CURRENT_DISPLAY}"
-log "Latest:    ${LATEST_VERSION}"
+log "Target:    ${TARGET_DISPLAY}"
 log "Compose:   ${COMPOSE_FILE}"
 
-if [[ "${CHECK_ONLY}" == true ]]; then
-  if [[ "${CURRENT_VERSION}" == "${LATEST_VERSION}" ]]; then
-    log ""
-    log "No update available."
-    exit 3
-  fi
+UPDATE_AVAILABLE=true
+TARGET_IMAGE_ID=""
+
+if [[ "${BETA}" == true ]]; then
   log ""
-  log "Update available."
-  exit 0
+  log "Checking ${IMAGE}:edge..."
+  compose pull cowcloak
+  TARGET_IMAGE_ID="$(docker image inspect "${IMAGE}:edge" --format '{{.Id}}' 2>/dev/null || true)"
+  [[ -n "${TARGET_IMAGE_ID}" ]] || die "Could not inspect the downloaded edge image"
+
+  if [[ -n "${CURRENT_IMAGE_ID}" && "${CURRENT_IMAGE_ID}" == "${TARGET_IMAGE_ID}" ]]; then
+    UPDATE_AVAILABLE=false
+  fi
+else
+  if [[ "${CURRENT_VERSION}" == "${LATEST_VERSION}" ]]; then
+    UPDATE_AVAILABLE=false
+  fi
 fi
 
-if [[ "${CURRENT_VERSION}" == "${LATEST_VERSION}" && "${FORCE}" != true ]]; then
+if [[ "${CHECK_ONLY}" == true ]]; then
   log ""
-  log "Cowcloak is already on the latest stable release."
+  if [[ "${UPDATE_AVAILABLE}" == true ]]; then
+    log "Update available."
+    exit 0
+  fi
+  log "No update available."
+  exit 3
+fi
+
+if [[ "${UPDATE_AVAILABLE}" != true && "${FORCE}" != true ]]; then
+  log ""
+  if [[ "${BETA}" == true ]]; then
+    log "Cowcloak is already on the current edge image."
+  else
+    log "Cowcloak is already on the latest stable release."
+  fi
   exit 0
 fi
 
 if [[ "${ASSUME_YES}" != true ]]; then
-  printf '\nUpdate Cowcloak to %s? [y/N] ' "${LATEST_VERSION}"
+  if [[ "${BETA}" == true ]]; then
+    printf '\nUpdate Cowcloak to the current unreleased edge build? [y/N] '
+  else
+    printf '\nUpdate Cowcloak to %s? [y/N] ' "${LATEST_VERSION}"
+  fi
   read -r response
   if [[ ! "${response}" =~ ^[Yy]([Ee][Ss])?$ ]]; then
     log "Update cancelled."
@@ -251,18 +297,20 @@ if [[ -n "${CURRENT_IMAGE_ID}" ]]; then
   docker tag "${CURRENT_IMAGE_ID}" "${IMAGE}:previous" >/dev/null
 fi
 
-log ""
-log "Pulling ${IMAGE}:latest..."
-compose pull cowcloak
+if [[ "${BETA}" != true ]]; then
+  log ""
+  log "Pulling ${IMAGE}:latest..."
+  compose pull cowcloak
+fi
 
-log "Starting Cowcloak..."
-compose up -d --remove-orphans cowcloak
+log "Starting Cowcloak from ${IMAGE}:${TARGET_TAG}..."
+compose up -d --force-recreate --remove-orphans cowcloak
 
 if wait_for_healthy; then
   UPDATED_CONTAINER="$(current_container_id)"
   UPDATED_VERSION="$(container_version "${UPDATED_CONTAINER}")"
   log "Health check: OK"
-  log "Cowcloak ${UPDATED_VERSION:-${LATEST_VERSION}} is running."
+  log "Cowcloak ${UPDATED_VERSION:-${TARGET_DISPLAY}} is running."
   exit 0
 fi
 
@@ -271,7 +319,7 @@ compose logs --tail=50 cowcloak >&2 || true
 
 if [[ -n "${CURRENT_IMAGE_ID}" ]]; then
   log "Rolling back to the previously running image..."
-  docker tag "${CURRENT_IMAGE_ID}" "${IMAGE}:latest"
+  docker tag "${CURRENT_IMAGE_ID}" "${IMAGE}:${TARGET_TAG}"
   compose up -d --force-recreate --remove-orphans cowcloak
   if wait_for_healthy; then
     log "Rollback health check: OK"

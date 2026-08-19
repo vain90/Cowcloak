@@ -147,33 +147,42 @@ Pin `COWCLOAK_TAG` in `.env` if you prefer a fixed release instead of `latest`.
 
 ## Updating
 
-Starting with Cowcloak 0.1.1, deployments that follow `latest` can use the bundled updater:
+Starting with Cowcloak 0.1.1, deployments using the parameterized image below can use the bundled updater for both stable and explicit beta updates:
+
+```yaml
+image: ghcr.io/vain90/cowcloak:${COWCLOAK_TAG:-latest}
+```
+
+A normal update always follows the latest stable release:
 
 ```bash
 ./update.sh
 ```
 
-The updater:
+The stable updater refreshes itself from the immutable latest release, pulls `ghcr.io/vain90/cowcloak:latest`, recreates the Cowcloak container, waits for the health check and rolls back to the previously running image when the new container does not become healthy.
 
-- checks GitHub's latest stable Cowcloak release,
-- refreshes itself from that immutable release when the updater changed,
-- pulls `ghcr.io/vain90/cowcloak:latest`,
-- recreates the Cowcloak container,
-- waits for the container health check,
-- and rolls back to the previously running image when the new container does not become healthy.
+To deliberately test the current unreleased `main` build on the same deployment, opt in explicitly:
+
+```bash
+./update.sh --beta
+```
+
+Beta mode refreshes the updater from `main` and uses `ghcr.io/vain90/cowcloak:edge`. It never changes the Compose file or `.env`; the updater supplies `COWCLOAK_TAG=edge` only for that invocation. Running `./update.sh` without `--beta` switches the deployment back to the stable `latest` channel when necessary.
 
 Useful options:
 
 ```bash
 ./update.sh --check
+./update.sh --beta --check
 ./update.sh --yes
+./update.sh --beta --yes
 ./update.sh --force
 ./update.sh --version
 ```
 
-`--check` exits with `0` when an update is available and `3` when the installed stable version is current.
+`--check` exits with `0` when an update is available and `3` when the selected channel is current. In beta mode the check pulls the current `edge` image metadata/layers if needed so the running image can be compared with the newest `edge` build without restarting it.
 
-The updater automatically uses `compose.local.yml` when it exists, otherwise `compose.yml`. Set `COWCLOAK_COMPOSE_FILE` when a deployment uses a different file name. The resolved Cowcloak image must be `ghcr.io/vain90/cowcloak:latest`; pinned deployments remain intentionally manual.
+The updater automatically uses `compose.local.yml` when it exists, otherwise `compose.yml`. Set `COWCLOAK_COMPOSE_FILE` when a deployment uses a different file name. The Compose image must remain parameterized as `ghcr.io/vain90/cowcloak:${COWCLOAK_TAG:-latest}` so the updater can select stable or beta without rewriting local deployment configuration. Fixed-version deployments remain intentionally manual.
 
 To add `update.sh` to an existing installation after 0.1.1 has been released:
 
@@ -243,7 +252,7 @@ The current milestone is the first testable MVP:
 - [x] German and English UI with browser detection and manual switching
 - [x] installable web app metadata and icons
 - [x] Docker image and Compose deployment
-- [x] stable release updater with self-update and health rollback
+- [x] stable release updater with self-update, explicit beta channel and health rollback
 - [x] CI and multi-architecture GHCR builds
 - [x] contribution and issue templates
 - [ ] integration test against a real mailcow test instance
