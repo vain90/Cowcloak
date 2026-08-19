@@ -236,30 +236,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request.session.clear()
         return RedirectResponse("/", status_code=303)
 
-    @app.post("/mailbox/sender-protection")
-    async def set_primary_sender_protection(
-        request: Request,
-        blocked: bool = Form(...),
-        csrf_token: str = Form(...),
-    ):
-        validate_csrf(request, csrf_token)
-        user = require_user(request)
-        try:
-            aliases = await client(request).list_aliases()
-            primary_alias = next(
-                (alias for alias in aliases if is_primary_mailbox_alias(alias, user)),
-                None,
-            )
-            if primary_alias is None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Primary mailbox alias was not found",
-                )
-            await client(request).set_sender_allowed(primary_alias.id, not blocked)
-        except MailcowError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return RedirectResponse("/aliases", status_code=303)
-
     @app.get("/aliases", response_class=HTMLResponse)
     async def aliases_dashboard(
         request: Request,
@@ -339,7 +315,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 request,
                 user=user,
                 domain=domain,
-                primary_alias=primary_alias,
                 catch_all=catch_all,
                 assigned=assigned,
                 assigned_total=len(assigned_all),
