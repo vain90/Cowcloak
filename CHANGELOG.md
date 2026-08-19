@@ -39,7 +39,7 @@ All notable changes to Cowcloak are documented here.
 - the alias replacement dialog has clearer spacing between the current address and replacement format selection
 - the offline pool stays compact and scrolls internally instead of stretching the create-alias card
 - alias edit popovers close when clicking outside them
-- removed a redundant address-immutability hint from alias creation
+- removed a redundant address-immutability hint from the alias creation form
 
 ## 0.1.0 - 2026-08-19
 
