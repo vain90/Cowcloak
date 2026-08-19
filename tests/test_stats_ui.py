@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 import cowcloak
-from cowcloak.aliases import AliasRecord
+from cowcloak.aliases import RESERVED_COMMENT, AliasRecord
 from cowcloak.config import Settings
 from cowcloak.i18n import translations
 from cowcloak.stats_mode import StatsMode, StatsModeSource, StatsModeState
@@ -68,7 +68,11 @@ async def test_stats_disabled_skips_mailcow_lookup():
     assert mailcow.domain_calls == 0
 
 
-def render_dashboard(*, mode: StatsMode = StatsMode.FULL) -> str:
+def render_dashboard(
+    *,
+    mode: StatsMode = StatsMode.FULL,
+    include_reserved: bool = False,
+) -> str:
     alias = AliasRecord(
         id=1,
         address="amazon-k7@example.org",
@@ -79,12 +83,75 @@ def render_dashboard(*, mode: StatsMode = StatsMode.FULL) -> str:
         public_comment="Amazon",
         sogo_visible=True,
     )
+    reserved_alias = AliasRecord(
+        id=2,
+        address="feder-hafen-27@example.org",
+        goto="user@example.org",
+        domain="example.org",
+        active=True,
+        private_comment=RESERVED_COMMENT,
+        public_comment="",
+        sogo_visible=False,
+    )
     state = StatsModeState(
         effective=mode,
         source=StatsModeSource.MAILBOX,
         mailbox_override=mode,
         domain_default=StatsMode.BASIC,
     )
+    usage_stats = {
+        "amazon-k7@example.org": {
+            "received_count": 7,
+            "sent_count": 3,
+            "last_used_at": 1787167766,
+        }
+    }
+    sender_stats = {
+        "amazon-k7@example.org": [
+            {
+                "sender_key": "news@amazon.de",
+                "label": "news@amazon.de",
+                "domain": "amazon.de",
+                "received_count": 6,
+                "last_received_at": 1787167766,
+                "expected": True,
+                "review_source": "automatic",
+                "manual_expected": None,
+                "match_token": "amazon",
+            },
+            {
+                "sender_key": "odd@unexpected.example",
+                "label": "odd@unexpected.example",
+                "domain": "unexpected.example",
+                "received_count": 1,
+                "last_received_at": 1787167700,
+                "expected": False,
+                "review_source": "unreviewed",
+                "manual_expected": None,
+                "match_token": None,
+            },
+        ]
+    }
+    if include_reserved:
+        usage_stats[reserved_alias.address] = {
+            "received_count": 2,
+            "sent_count": 0,
+            "last_used_at": 1787167800,
+        }
+        sender_stats[reserved_alias.address] = [
+            {
+                "sender_key": "sender@example.net",
+                "label": "sender@example.net",
+                "domain": "example.net",
+                "received_count": 2,
+                "last_received_at": 1787167800,
+                "expected": False,
+                "review_source": "unreviewed",
+                "manual_expected": None,
+                "match_token": None,
+            }
+        ]
+
     return TEMPLATES.get_template("dashboard.html").render(
         language="de",
         t=translations("de"),
@@ -96,7 +163,7 @@ def render_dashboard(*, mode: StatsMode = StatsMode.FULL) -> str:
         assigned=[alias],
         assigned_total=1,
         filtered_total=1,
-        reserved=[],
+        reserved=[reserved_alias] if include_reserved else [],
         csrf_token="csrf",
         search_query="",
         status_filter="all",
@@ -112,40 +179,10 @@ def render_dashboard(*, mode: StatsMode = StatsMode.FULL) -> str:
         stats_error=False,
         stats_state=state,
         stats_mode_selection=mode.value,
+        stats_confirmation_mode=mode.value,
         usage_stats_visible=mode is not StatsMode.OFF,
-        usage_stats={
-            "amazon-k7@example.org": {
-                "received_count": 7,
-                "sent_count": 3,
-                "last_used_at": 1787167766,
-            }
-        },
-        sender_stats={
-            "amazon-k7@example.org": [
-                {
-                    "sender_key": "news@amazon.de",
-                    "label": "news@amazon.de",
-                    "domain": "amazon.de",
-                    "received_count": 6,
-                    "last_received_at": 1787167766,
-                    "expected": True,
-                    "review_source": "automatic",
-                    "manual_expected": None,
-                    "match_token": "amazon",
-                },
-                {
-                    "sender_key": "odd@unexpected.example",
-                    "label": "odd@unexpected.example",
-                    "domain": "unexpected.example",
-                    "received_count": 1,
-                    "last_received_at": 1787167700,
-                    "expected": False,
-                    "review_source": "unreviewed",
-                    "manual_expected": None,
-                    "match_token": None,
-                },
-            ]
-        },
+        usage_stats=usage_stats,
+        sender_stats=sender_stats,
     )
 
 
@@ -179,3 +216,20 @@ def test_off_mode_hides_usage_and_sender_details_but_shows_setting():
     assert "Nutzungsstatistik" in html
     assert 'class="usage-summary"' not in html
     assert 'class="sender-stats"' not in html
+
+
+def test_used_reserved_alias_is_highlighted_and_shows_sender_in_full_mode():
+    html = render_dashboard(include_reserved=True)
+
+    assert "pool-item pool-item-used" in html
+    assert "2 empfangen" in html
+    assert 'data-local-timestamp="1787167800"' in html
+    assert "sender@example.net" in html
+
+
+def test_used_reserved_alias_in_basic_mode_shows_count_without_sender_identity():
+    html = render_dashboard(mode=StatsMode.BASIC, include_reserved=True)
+
+    assert "pool-item pool-item-used" in html
+    assert "2 empfangen" in html
+    assert "sender@example.net" not in html
