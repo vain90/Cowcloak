@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from cowcloak.stats_mode import StatsMode, is_stats_mode_downgrade
+
 SCHEMA_VERSION = 1
 
 
@@ -189,6 +191,7 @@ class StatsStore:
         with self._connect() as connection:
             for mailbox, mode in modes.items():
                 mailbox = mailbox.lower()
+                target_mode = StatsMode(mode)
                 row = connection.execute(
                     "SELECT mode, tracking_started_at FROM sender_mode_state WHERE mailbox = ?",
                     (mailbox,),
@@ -204,24 +207,27 @@ class StatsStore:
                     starts[mailbox] = now
                     continue
 
-                current_mode = str(row["mode"])
+                current_mode = StatsMode(str(row["mode"]))
                 current_start = int(row["tracking_started_at"])
-                if current_mode == mode:
+                if current_mode is target_mode:
                     starts[mailbox] = current_start
                     continue
 
-                # Sender detail is intentionally reset on every mode change. This prevents
-                # full addresses from surviving a downgrade and avoids retroactively
-                # reprocessing old Rspamd history after increasing detail.
-                connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
-                connection.execute(
-                    "DELETE FROM sender_processed_events WHERE mailbox = ?",
-                    (mailbox,),
-                )
-                connection.execute(
-                    "DELETE FROM sender_expectations WHERE mailbox = ?",
-                    (mailbox,),
-                )
+                if is_stats_mode_downgrade(current_mode, target_mode):
+                    # Data that the target privacy mode is not allowed to retain is
+                    # removed before collection continues at the lower detail level.
+                    connection.execute("DELETE FROM sender_usage WHERE mailbox = ?", (mailbox,))
+                    connection.execute(
+                        "DELETE FROM sender_processed_events WHERE mailbox = ?",
+                        (mailbox,),
+                    )
+                    connection.execute(
+                        "DELETE FROM sender_expectations WHERE mailbox = ?",
+                        (mailbox,),
+                    )
+                    if target_mode is StatsMode.OFF:
+                        connection.execute("DELETE FROM alias_usage WHERE mailbox = ?", (mailbox,))
+
                 connection.execute(
                     """
                     UPDATE sender_mode_state
