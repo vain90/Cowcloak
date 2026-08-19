@@ -41,6 +41,12 @@ Cowcloak ships curated English and German word lists with 250 unique words each.
 
 The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
 
+## Replacing an alias
+
+When an assigned alias is no longer trustworthy, Cowcloak can replace it without deleting its history. The replacement action creates a fresh name-based alias using the same purpose and SOGo visibility, then disables the previous alias. The old address remains stored in mailcow so it can still be traced back to the service that used it and is never silently recycled.
+
+The new address is shown immediately after replacement with a copy action. If the new alias is created but mailcow cannot disable the previous alias, Cowcloak reports the partial result and shows the new address so both aliases can be checked explicitly.
+
 ## Catch-all
 
 If an active catch-all forwards unmatched addresses on the mailbox domain to the authenticated mailbox, Cowcloak shows a warning without adding the catch-all to the normal alias list.
@@ -121,7 +127,7 @@ COWCLOAK_TRUSTED_HOSTS=aliases.example.com
 MAILCOW_URL=https://mail.example.com
 MAILCOW_API_KEY=<read-write-api-key>
 MAILCOW_OAUTH_CLIENT_ID=<client-id>
-MAILCOW_OAUTH_CLIENT_SECRET=<client-secret>
+MAILCOW_OAUTH_CLIENT_SECRET=<oauth-secret>
 ```
 
 Generate a session secret with:
@@ -220,7 +226,7 @@ pytest -q
 
 The read/write mailcow API key is highly privileged. Cowcloak therefore enforces ownership server-side on every modifying request. Neither the alias domain nor the forwarding target is accepted from the browser. Both are derived from the mailbox authenticated by mailcow.
 
-Before editing, toggling or applying a bulk action to an alias, Cowcloak verifies that the alias belongs exclusively to the authenticated mailbox. Bulk actions reject reserved offline aliases and the primary mailbox alias even if an arbitrary ID is submitted manually.
+Before editing, toggling, replacing or applying a bulk action to an alias, Cowcloak verifies that the alias belongs exclusively to the authenticated mailbox. Bulk actions reject reserved offline aliases and the primary mailbox alias even if an arbitrary ID is submitted manually. Replacement also rejects reserved aliases and the primary mailbox alias server-side.
 
 Private mailcow comments are deliberately not surfaced to mailbox users. The only private-comment value Cowcloak interprets or changes is its own offline reservation marker.
 
@@ -254,10 +260,10 @@ The current milestone is the first testable MVP:
 - [x] stable release updater with self-update, explicit beta channel and health rollback
 - [x] CI and multi-architecture GHCR builds
 - [x] contribution and issue templates
+- [x] alias replacement workflow
 - [ ] integration test against a real mailcow test instance
 - [ ] iOS and macOS standalone OAuth device test
 - [ ] polished error pages and notifications
-- [ ] alias replacement workflow
 
 ## Project name
 
