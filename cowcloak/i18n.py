@@ -39,7 +39,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "copied": "Copied",
         "delete": "Delete",
         "delete_confirm": (
-            "Delete this unused offline alias permanently? Only do this if you have never handed it out."
+            "Delete this unused offline alias permanently? Only do this if you have never "
+            "handed it out."
         ),
         "copy_all": "Copy all",
         "plain_text": "Plain text",
@@ -68,7 +69,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "edit_sogo_hint": (
             "SOGo visibility controls whether this active alias appears as a selectable sender."
         ),
-        "private_comment_hint": "Private mailcow comments are never shown or edited by Cowcloak.",
+        "private_comment_hint": (
+            "Private mailcow admin comments are not shown or edited. Cowcloak only uses the "
+            "private field for its own offline reservation marker."
+        ),
         "address_unchanged": "The alias address stays unchanged.",
         "no_search_matches": "No aliases match your search and status filter.",
         "no_assigned_aliases": "No assigned aliases yet.",
@@ -81,7 +85,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "pagination_aria": "Alias pages",
         "assign_prepared": "Assign a prepared alias",
         "assign_hint": (
-            "After using one offline, add its purpose here. The private Cowcloak reservation marker is removed."
+            "After using one offline, add its purpose here. The private Cowcloak reservation "
+            "marker is removed."
         ),
         "used_for_placeholder": "Used for …",
         "assign": "Assign",
@@ -107,7 +112,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "custom_local_part": "Eigener lokaler Teil",
         "custom_address": "Eigene Adresse",
         "immutable_hint": (
-            "Die Adresse wird auf {domain} erstellt und ändert sich nicht, wenn du den Verwendungszweck änderst."
+            "Die Adresse wird auf {domain} erstellt und ändert sich nicht, wenn du den "
+            "Verwendungszweck änderst."
         ),
         "show_in_sogo": "In SOGo als Absender anzeigen",
         "sogo_create_hint": (
@@ -115,19 +121,23 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "create_alias_button": "Alias erstellen",
         "offline_pool": "Offline-Vorrat",
-        "offline_pool_hint": "Bereite aktive Aliase vor und speichere sie zum Beispiel in deinen Handynotizen.",
+        "offline_pool_hint": (
+            "Bereite aktive Aliase vor und speichere sie zum Beispiel in deinen Handynotizen."
+        ),
         "copy": "Kopieren",
         "copied": "Kopiert",
         "delete": "Löschen",
         "delete_confirm": (
-            "Diesen unbenutzten Offline-Alias dauerhaft löschen? Nur fortfahren, wenn du ihn noch nie weitergegeben hast."
+            "Diesen unbenutzten Offline-Alias dauerhaft löschen? Nur fortfahren, wenn du ihn "
+            "noch nie weitergegeben hast."
         ),
         "copy_all": "Alle kopieren",
         "plain_text": "Klartext",
         "no_prepared_aliases": "Noch keine vorbereiteten Aliase vorhanden.",
         "assigned_aliases": "Zugeordnete Aliase",
         "assigned_summary": (
-            "{filtered} von {total} Aliasen werden angezeigt, die ausschließlich auf dein Postfach zeigen."
+            "{filtered} von {total} Aliasen werden angezeigt, die ausschließlich auf dein "
+            "Postfach zeigen."
         ),
         "search_placeholder": "Adresse oder Verwendungszweck suchen",
         "search_aria": "Aliase durchsuchen",
@@ -147,10 +157,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "disable": "Deaktivieren",
         "enable": "Aktivieren",
         "edit_sogo_hint": (
-            "Die SOGo-Sichtbarkeit legt fest, ob dieser aktive Alias als auswählbarer Absender erscheint."
+            "Die SOGo-Sichtbarkeit legt fest, ob dieser aktive Alias als auswählbarer "
+            "Absender erscheint."
         ),
         "private_comment_hint": (
-            "Private mailcow-Kommentare werden von Cowcloak weder angezeigt noch bearbeitet."
+            "Private mailcow-Admin-Kommentare werden weder angezeigt noch bearbeitet. "
+            "Cowcloak nutzt das private Feld nur für seine eigene Offline-Vorratsmarkierung."
         ),
         "address_unchanged": "Die Alias-Adresse bleibt unverändert.",
         "no_search_matches": "Keine Aliase entsprechen der Suche und dem gewählten Status.",
