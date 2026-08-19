@@ -1,51 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Aliases · Cowcloak{% endblock %}
+{% block title %}{{ t.aliases_title }}{% endblock %}
 {% block content %}
 <header class="topbar">
   <div>
     <p class="eyebrow">{{ domain }}</p>
-    <h1>Your aliases</h1>
-    <p class="muted">Signed in as {{ user }}</p>
+    <h1>{{ t.your_aliases }}</h1>
+    <p class="muted">{{ t.signed_in_as.format(user=user) }}</p>
   </div>
   <form method="post" action="/logout">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="button ghost" type="submit">Sign out</button>
+    <button class="button ghost" type="submit">{{ t.sign_out }}</button>
   </form>
 </header>
 
 <section class="grid two">
   <div class="card">
-    <h2>Create alias</h2>
+    <h2>{{ t.create_alias }}</h2>
     <form method="post" action="/aliases" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>Description
-        <input name="description" maxlength="160" required placeholder="Amazon, hotel, newsletter …">
+      <label>{{ t.purpose }}
+        <input
+          name="description"
+          maxlength="160"
+          required
+          placeholder="{{ t.purpose_placeholder }}"
+        >
       </label>
-      <label>Address style
+      <label>{{ t.address_style }}
         <select name="mode" data-mode-select>
-          <option value="readable">Readable random</option>
-          <option value="named">Name + random suffix</option>
-          <option value="custom">Custom local part</option>
+          <option value="readable">{{ t.readable_random }}</option>
+          <option value="named">{{ t.name_random }}</option>
+          <option value="custom">{{ t.custom_local_part }}</option>
         </select>
       </label>
-      <label class="hidden" data-custom-local-part>Custom address
+      <label class="hidden" data-custom-local-part>{{ t.custom_address }}
         <div class="address-input">
           <input name="local_part" maxlength="63" placeholder="my-alias" autocomplete="off">
           <span>@{{ domain }}</span>
         </div>
       </label>
-      <p class="hint">
-        The address is created on {{ domain }} and never changes when you rename its description.
-      </p>
-      <button class="button primary" type="submit">Create alias</button>
+      <label class="check-row">
+        <input type="checkbox" name="sogo_visible" value="1">
+        <span>{{ t.show_in_sogo }}</span>
+      </label>
+      <p class="hint">{{ t.sogo_create_hint }}</p>
+      <p class="hint">{{ t.immutable_hint.format(domain=domain) }}</p>
+      <button class="button primary" type="submit">{{ t.create_alias_button }}</button>
     </form>
   </div>
 
   <div class="card" id="pool">
     <div class="section-head">
       <div>
-        <h2>Offline pool</h2>
-        <p class="muted">Prepare active aliases and keep them in your phone notes.</p>
+        <h2>{{ t.offline_pool }}</h2>
+        <p class="muted">{{ t.offline_pool_hint }}</p>
       </div>
       <span class="count">{{ reserved|length }}</span>
     </div>
@@ -64,25 +72,27 @@
       <div class="pool-item">
         <code data-pool-address>{{ alias.address }}</code>
         <div class="pool-actions">
-          <button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button>
+          <button class="button compact" type="button" data-copy="{{ alias.address }}">
+            {{ t.copy }}
+          </button>
           <form
             method="post"
             action="/aliases/{{ alias.id }}/delete-reserved"
-            data-confirm="Delete this unused offline alias permanently? Only do this if you have never handed it out."
+            data-confirm="{{ t.delete_confirm }}"
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="button compact danger" type="submit">Delete</button>
+            <button class="button compact danger" type="submit">{{ t.delete }}</button>
           </form>
         </div>
       </div>
       {% endfor %}
     </div>
     <div class="button-row top-gap">
-      <button class="button ghost" type="button" data-copy-pool>Copy all</button>
-      <a class="button ghost" href="/aliases/pool.txt">Plain text</a>
+      <button class="button ghost" type="button" data-copy-pool>{{ t.copy_all }}</button>
+      <a class="button ghost" href="/aliases/pool.txt">{{ t.plain_text }}</a>
     </div>
     {% else %}
-    <p class="empty">No prepared aliases yet.</p>
+    <p class="empty">{{ t.no_prepared_aliases }}</p>
     {% endif %}
   </div>
 </section>
@@ -90,72 +100,110 @@
 <section class="card top-gap">
   <div class="section-head alias-toolbar">
     <div>
-      <h2>Assigned aliases</h2>
+      <h2>{{ t.assigned_aliases }}</h2>
       <p class="muted">
-        {{ filtered_total }} shown out of {{ assigned_total }} aliases pointing exclusively to your mailbox.
+        {{ t.assigned_summary.format(filtered=filtered_total, total=assigned_total) }}
       </p>
     </div>
     <form method="get" action="/aliases" class="search-form">
       <input type="hidden" name="per_page" value="{{ per_page }}">
+      <input type="hidden" name="status" value="{{ status_filter }}">
       <input
         class="search"
         type="search"
         name="q"
         value="{{ search_query }}"
-        placeholder="Search address, description or comment"
-        aria-label="Search aliases"
+        placeholder="{{ t.search_placeholder }}"
+        aria-label="{{ t.search_aria }}"
       >
-      <button class="button compact" type="submit">Search</button>
+      <button class="button compact" type="submit">{{ t.search }}</button>
       {% if search_query %}
-      <a class="button compact ghost" href="/aliases?per_page={{ per_page }}">Clear</a>
+      <a
+        class="button compact ghost"
+        href="/aliases?status={{ status_filter }}&per_page={{ per_page }}"
+      >{{ t.clear }}</a>
       {% endif %}
     </form>
   </div>
 
+  <nav class="status-filters" aria-label="{{ t.filter_aria }}">
+    <a
+      class="filter-pill {% if status_filter == 'all' %}current{% endif %}"
+      href="/aliases?status=all&q={{ search_query|urlencode }}&per_page={{ per_page }}"
+    >{{ t.filter_all }} <span>{{ status_counts["all"] }}</span></a>
+    <a
+      class="filter-pill {% if status_filter == 'active' %}current{% endif %}"
+      href="/aliases?status=active&q={{ search_query|urlencode }}&per_page={{ per_page }}"
+    >{{ t.filter_active }} <span>{{ status_counts["active"] }}</span></a>
+    <a
+      class="filter-pill {% if status_filter == 'disabled' %}current{% endif %}"
+      href="/aliases?status=disabled&q={{ search_query|urlencode }}&per_page={{ per_page }}"
+    >{{ t.filter_disabled }} <span>{{ status_counts["disabled"] }}</span></a>
+  </nav>
+
+  <p class="hint metadata-hint">{{ t.private_comment_hint }}</p>
+
   <div class="alias-list">
     {% for alias in assigned %}
-    <article class="alias-row">
+    <article class="alias-row {% if not alias.active %}disabled-row{% endif %}">
       <div class="alias-main">
         <div class="alias-info">
-          <strong>{{ alias.description or "No description" }}</strong>
+          <strong>{{ alias.description or t.no_purpose }}</strong>
           <code>{{ alias.address }}</code>
-          <span class="alias-comment">
-            <span class="muted">Comment:</span> {{ alias.public_comment or "—" }}
+        </div>
+        <div class="status-row">
+          <span class="status {{ 'on' if alias.active else 'off' }}">
+            {{ t.status_active if alias.active else t.status_disabled }}
+          </span>
+          <span class="status {{ 'sogo-on' if alias.sogo_visible else 'sogo-off' }}">
+            {{ t.sogo_on if alias.sogo_visible else t.sogo_off }}
           </span>
         </div>
-        <span class="status {{ 'on' if alias.active else 'off' }}">
-          {{ 'Active' if alias.active else 'Disabled' }}
-        </span>
       </div>
       <div class="alias-actions">
-        <button class="button compact" type="button" data-copy="{{ alias.address }}">Copy</button>
+        <button class="button compact" type="button" data-copy="{{ alias.address }}">
+          {{ t.copy }}
+        </button>
         <details>
-          <summary class="button compact">Edit</summary>
+          <summary class="button compact">{{ t.edit }}</summary>
           <div class="edit-panel">
             <form method="post" action="/aliases/{{ alias.id }}/metadata" class="stack small">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <label>Description
+              <input type="hidden" name="return_to" value="{{ return_to }}">
+              <label>{{ t.purpose }}
                 <input name="description" maxlength="160" value="{{ alias.description }}">
               </label>
-              <label>Comment
-                <input name="public_comment" maxlength="160" value="{{ alias.public_comment }}">
+              <label class="check-row">
+                <input
+                  type="checkbox"
+                  name="sogo_visible"
+                  value="1"
+                  {% if alias.sogo_visible %}checked{% endif %}
+                >
+                <span>{{ t.show_in_sogo }}</span>
               </label>
-              <p class="hint">The alias address stays unchanged.</p>
-              <button class="button primary compact" type="submit">Save</button>
+              <p class="hint">{{ t.edit_sogo_hint }}</p>
+              <p class="hint">{{ t.address_unchanged }}</p>
+              <button class="button primary compact" type="submit">{{ t.save }}</button>
             </form>
           </div>
         </details>
         <form method="post" action="/aliases/{{ alias.id }}/toggle">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
           <button class="button compact {{ 'danger' if alias.active else '' }}" type="submit">
-            {{ 'Disable' if alias.active else 'Enable' }}
+            {{ t.disable if alias.active else t.enable }}
           </button>
         </form>
       </div>
     </article>
     {% else %}
     <p class="empty">
-      {% if search_query %}No aliases match your search.{% else %}No assigned aliases yet.{% endif %}
+      {% if search_query or status_filter != 'all' %}
+        {{ t.no_search_matches }}
+      {% else %}
+        {{ t.no_assigned_aliases }}
+      {% endif %}
     </p>
     {% endfor %}
   </div>
@@ -163,31 +211,32 @@
   <div class="list-footer">
     <div class="range-summary">
       {% if filtered_total %}
-      Showing {{ range_start }}–{{ range_end }} of {{ filtered_total }}
+      {{ t.showing_range.format(start=range_start, end=range_end, total=filtered_total) }}
       {% else %}
-      Showing 0 aliases
+      {{ t.showing_zero }}
       {% endif %}
     </div>
 
     <form method="get" action="/aliases" class="page-size-form">
       <input type="hidden" name="q" value="{{ search_query }}">
-      <label>Rows per page
+      <input type="hidden" name="status" value="{{ status_filter }}">
+      <label>{{ t.rows_per_page }}
         <select name="per_page" data-page-size>
           {% for size in page_sizes %}
           <option value="{{ size }}" {% if size == per_page %}selected{% endif %}>{{ size }}</option>
           {% endfor %}
         </select>
       </label>
-      <noscript><button class="button compact" type="submit">Apply</button></noscript>
+      <noscript><button class="button compact" type="submit">{{ t.apply }}</button></noscript>
     </form>
 
     {% if total_pages > 1 %}
-    <nav class="pagination" aria-label="Alias pages">
+    <nav class="pagination" aria-label="{{ t.pagination_aria }}">
       {% if page > 1 %}
       <a
         class="page-link"
-        href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page - 1 }}"
-      >Previous</a>
+        href="/aliases?status={{ status_filter }}&q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page - 1 }}"
+      >{{ t.previous }}</a>
       {% endif %}
 
       {% for item in pagination_items %}
@@ -198,7 +247,7 @@
         {% else %}
         <a
           class="page-link"
-          href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ item }}"
+          href="/aliases?status={{ status_filter }}&q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ item }}"
         >{{ item }}</a>
         {% endif %}
       {% endfor %}
@@ -206,8 +255,8 @@
       {% if page < total_pages %}
       <a
         class="page-link"
-        href="/aliases?q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page + 1 }}"
-      >Next</a>
+        href="/aliases?status={{ status_filter }}&q={{ search_query|urlencode }}&per_page={{ per_page }}&page={{ page + 1 }}"
+      >{{ t.next }}</a>
       {% endif %}
     </nav>
     {% endif %}
@@ -216,16 +265,25 @@
 
 {% if reserved %}
 <section class="card top-gap">
-  <h2>Assign a prepared alias</h2>
-  <p class="muted">After using one offline, add its purpose here. Only the mailcow description changes.</p>
+  <h2>{{ t.assign_prepared }}</h2>
+  <p class="muted">{{ t.assign_hint }}</p>
   <div class="alias-list">
     {% for alias in reserved %}
     <article class="alias-row">
       <div class="alias-main"><code>{{ alias.address }}</code></div>
-      <form method="post" action="/aliases/{{ alias.id }}/description" class="inline-form">
+      <form method="post" action="/aliases/{{ alias.id }}/description" class="inline-form assign-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input name="description" maxlength="160" required placeholder="Used for …">
-        <button class="button primary compact" type="submit">Assign</button>
+        <input
+          name="description"
+          maxlength="160"
+          required
+          placeholder="{{ t.used_for_placeholder }}"
+        >
+        <label class="check-row compact-check">
+          <input type="checkbox" name="sogo_visible" value="1">
+          <span>{{ t.show_in_sogo }}</span>
+        </label>
+        <button class="button primary compact" type="submit">{{ t.assign }}</button>
       </form>
     </article>
     {% endfor %}
