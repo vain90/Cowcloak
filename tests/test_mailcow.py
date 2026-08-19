@@ -2,20 +2,104 @@ import json
 from urllib.parse import parse_qs
 
 import httpx
+import pytest
+from fastapi import HTTPException
 
 from cowcloak.config import Settings
 from cowcloak.mailcow import MailcowClient
 
 
-def settings() -> Settings:
+def settings(access_tag: str = "") -> Settings:
     return Settings(
         COWCLOAK_BASE_URL="https://aliases.example.org",
         COWCLOAK_SESSION_SECRET="x" * 64,
+        COWCLOAK_ACCESS_TAG=access_tag,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
         MAILCOW_OAUTH_CLIENT_SECRET="oauth-secret",
     )
+
+
+async def test_get_mailbox_allows_every_mailbox_when_access_tag_is_empty():
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={"username": "hidden@example.org", "domain": "example.org", "tags": []},
+        )
+
+    client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
+    mailbox = await client.get_mailbox("hidden@example.org")
+    await client.close()
+
+    assert mailbox["username"] == "hidden@example.org"
+    assert paths == ["/api/v1/get/mailbox/hidden@example.org"]
+
+
+async def test_get_mailbox_allows_matching_mailbox_tag_without_domain_lookup():
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "username": "hidden@example.org",
+                "domain": "example.org",
+                "tags": ["Cowcloak"],
+            },
+        )
+
+    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    mailbox = await client.get_mailbox("hidden@example.org")
+    await client.close()
+
+    assert mailbox["username"] == "hidden@example.org"
+    assert paths == ["/api/v1/get/mailbox/hidden@example.org"]
+
+
+async def test_get_mailbox_allows_matching_domain_tag():
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path.startswith("/api/v1/get/mailbox/"):
+            return httpx.Response(
+                200,
+                json={"username": "hidden@example.org", "domain": "example.org", "tags": []},
+            )
+        return httpx.Response(200, json={"domain_name": "example.org", "tags": ["cowcloak"]})
+
+    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    mailbox = await client.get_mailbox("hidden@example.org")
+    await client.close()
+
+    assert mailbox["username"] == "hidden@example.org"
+    assert paths == [
+        "/api/v1/get/mailbox/hidden@example.org",
+        "/api/v1/get/domain/example.org",
+    ]
+
+
+async def test_get_mailbox_rejects_when_mailbox_and_domain_lack_access_tag():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/api/v1/get/mailbox/"):
+            return httpx.Response(
+                200,
+                json={"username": "hidden@example.org", "domain": "example.org", "tags": ["other"]},
+            )
+        return httpx.Response(200, json={"domain_name": "example.org", "tags": []})
+
+    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    with pytest.raises(HTTPException) as exc_info:
+        await client.get_mailbox("hidden@example.org")
+    await client.close()
+
+    assert exc_info.value.status_code == 403
+    assert "cowcloak" in str(exc_info.value.detail)
 
 
 async def test_create_alias_sets_public_purpose_sender_permission_and_sogo_visibility():

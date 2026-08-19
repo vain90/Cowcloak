@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from fastapi import HTTPException, status
 
 from cowcloak.aliases import AliasRecord
 from cowcloak.config import Settings
@@ -55,6 +56,41 @@ class MailcowClient:
             messages = [str(entry.get("msg", "unknown mailcow error")) for entry in failures]
             raise MailcowError("; ".join(messages))
 
+    @staticmethod
+    def _tags(payload: dict[str, Any]) -> set[str]:
+        tags = payload.get("tags")
+        if not isinstance(tags, list):
+            return set()
+        return {str(tag).strip().casefold() for tag in tags if str(tag).strip()}
+
+    async def get_domain(self, domain: str) -> dict[str, Any]:
+        payload = await self._request("GET", f"/api/v1/get/domain/{quote(domain, safe='')}")
+        if isinstance(payload, list) and payload:
+            payload = payload[0]
+        if not isinstance(payload, dict) or not payload:
+            raise MailcowError("mailcow domain does not exist")
+        return payload
+
+    async def _enforce_access_tag(self, email: str, mailbox: dict[str, Any]) -> None:
+        configured_tag = self.settings.access_tag.strip().casefold()
+        if not configured_tag:
+            return
+        if configured_tag in self._tags(mailbox):
+            return
+
+        domain = str(mailbox.get("domain") or email.rsplit("@", 1)[-1]).strip().lower()
+        domain_details = await self.get_domain(domain)
+        if configured_tag in self._tags(domain_details):
+            return
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Mailbox is not enabled for Cowcloak "
+                f"(missing mailcow tag '{self.settings.access_tag}')"
+            ),
+        )
+
     async def list_aliases(self) -> list[AliasRecord]:
         payload = await self._request("GET", "/api/v1/get/alias/all")
         if not isinstance(payload, list):
@@ -79,6 +115,7 @@ class MailcowClient:
             payload = payload[0]
         if not isinstance(payload, dict) or not payload:
             raise MailcowError("Authenticated mailcow mailbox does not exist")
+        await self._enforce_access_tag(email, payload)
         return payload
 
     async def create_alias(

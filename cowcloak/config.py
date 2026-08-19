@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     session_secret: str = Field(alias="COWCLOAK_SESSION_SECRET", min_length=32)
     cookie_secure: bool = Field(default=True, alias="COWCLOAK_COOKIE_SECURE")
     trusted_hosts: str = Field(default="*", alias="COWCLOAK_TRUSTED_HOSTS")
+    access_tag: str = Field(default="", alias="COWCLOAK_ACCESS_TAG")
 
     mailcow_url: str = Field(alias="MAILCOW_URL")
     mailcow_api_key: str = Field(alias="MAILCOW_API_KEY", min_length=1)
@@ -22,6 +23,11 @@ class Settings(BaseSettings):
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("access_tag")
+    @classmethod
+    def strip_access_tag(cls, value: str) -> str:
+        return value.strip()
 
     @property
     def oauth_callback_url(self) -> str:
