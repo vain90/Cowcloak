@@ -80,6 +80,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "no_prepared_aliases": "No prepared aliases.",
         "assigned_aliases": "Assigned aliases",
         "assigned_summary": "{filtered} of {total} aliases",
+        "usage_stats_note": (
+            "Usage statistics are active. Counts include accepted messages tracked by Cowcloak."
+        ),
+        "usage_received": "received",
+        "usage_sent": "sent",
+        "usage_last_used": "last used",
         "search_placeholder": "Search address or purpose",
         "search_aria": "Search aliases",
         "clear_search": "Clear search",
@@ -198,6 +204,13 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "no_prepared_aliases": "Keine vorbereiteten Aliase.",
         "assigned_aliases": "Zugeordnete Aliase",
         "assigned_summary": "{filtered} von {total} Aliasen",
+        "usage_stats_note": (
+            "Nutzungsstatistik aktiv. Gezählt werden akzeptierte Nachrichten, "
+            "die Cowcloak seit Aktivierung des Trackings erfasst."
+        ),
+        "usage_received": "empfangen",
+        "usage_sent": "gesendet",
+        "usage_last_used": "zuletzt",
         "search_placeholder": "Adresse oder Zweck suchen",
         "search_aria": "Aliase durchsuchen",
         "clear_search": "Suche leeren",
