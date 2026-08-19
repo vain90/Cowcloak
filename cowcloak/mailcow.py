@@ -174,7 +174,7 @@ class MailcowClient:
         if not tags:
             return
         payload = await self._request(
-            "DELETE",
+            "POST",
             f"/api/v1/delete/mailbox/tag/{quote(email, safe='@')}",
             json=tags,
         )
