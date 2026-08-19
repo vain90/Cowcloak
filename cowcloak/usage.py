@@ -114,7 +114,9 @@ class UsageCollector:
             domain = str(mailbox.get("domain") or username.rsplit("@", 1)[1]).strip().lower()
             mailbox_tags = _tags(mailbox)
             usage_allowed = usage_tag in mailbox_tags or domain in usage_domains
-            access_allowed = not access_tag or access_tag in mailbox_tags or domain in access_domains
+            access_allowed = (
+                not access_tag or access_tag in mailbox_tags or domain in access_domains
+            )
             if usage_allowed and access_allowed:
                 eligible.add(username)
         return eligible
