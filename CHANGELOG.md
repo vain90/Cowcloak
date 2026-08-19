@@ -10,6 +10,7 @@ All notable changes to Cowcloak are documented here.
 - `cowcloak-stats` style mailcow tag opt-in for individual mailboxes or complete domains
 - versioned SQLite storage for alias counters and deduplication, created only when statistics are enabled
 - background collection of accepted incoming alias deliveries from mailcow Rspamd history
+- background collection of accepted authenticated outgoing alias sends from mailcow Rspamd history
 - persistent Docker data volume for deployments that enable statistics
 
 ### Changed

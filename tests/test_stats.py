@@ -45,13 +45,13 @@ async def test_stats_store_deduplicates_received_events(tmp_path):
     started_at = await store.tracking_started_at()
 
     event = UsageEvent(
-        event_key="event-1",
+        event_key="received-1",
         mailbox="user@example.org",
         alias="shop@example.org",
         event_at=started_at + 1,
     )
     newer = UsageEvent(
-        event_key="event-2",
+        event_key="received-2",
         mailbox="user@example.org",
         alias="shop@example.org",
         event_at=started_at + 2,
@@ -65,3 +65,39 @@ async def test_stats_store_deduplicates_received_events(tmp_path):
     assert usage["shop@example.org"].sent_count == 0
     assert usage["shop@example.org"].last_received_at == started_at + 2
     assert usage["shop@example.org"].last_sent_at is None
+
+
+async def test_stats_store_deduplicates_sent_events_on_existing_alias_row(tmp_path):
+    db_path = tmp_path / "usage.sqlite3"
+    store = StatsStore(str(db_path))
+    await store.initialize()
+    started_at = await store.tracking_started_at()
+
+    received = UsageEvent(
+        event_key="received-1",
+        mailbox="user@example.org",
+        alias="shop@example.org",
+        event_at=started_at + 1,
+    )
+    sent = UsageEvent(
+        event_key="sent-1",
+        mailbox="user@example.org",
+        alias="shop@example.org",
+        event_at=started_at + 2,
+    )
+    newer = UsageEvent(
+        event_key="sent-2",
+        mailbox="user@example.org",
+        alias="shop@example.org",
+        event_at=started_at + 3,
+    )
+
+    assert await store.record_received([received]) == 1
+    assert await store.record_sent([sent, sent]) == 1
+    assert await store.record_sent([sent, newer]) == 1
+
+    usage = await store.alias_usage("user@example.org", ["shop@example.org"])
+    assert usage["shop@example.org"].received_count == 1
+    assert usage["shop@example.org"].sent_count == 2
+    assert usage["shop@example.org"].last_received_at == started_at + 1
+    assert usage["shop@example.org"].last_sent_at == started_at + 3

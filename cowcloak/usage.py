@@ -14,8 +14,8 @@ from cowcloak.stats import StatsStore, UsageEvent
 LOGGER = logging.getLogger(__name__)
 
 # These Rspamd actions still represent accepted mail. Reject/soft reject/greylist
-# entries are deliberately excluded because they were not delivered to the alias.
-ACCEPTED_INCOMING_ACTIONS = frozenset(
+# entries are deliberately excluded because the message was not accepted.
+ACCEPTED_ACTIONS = frozenset(
     {
         "clean",
         "no action",
@@ -31,6 +31,10 @@ def _tags(payload: dict[str, Any]) -> set[str]:
     if not isinstance(tags, list):
         return set()
     return {str(tag).strip().casefold() for tag in tags if str(tag).strip()}
+
+
+def _normalise_address(value: Any) -> str:
+    return str(value or "").strip().lower()
 
 
 def _normalise_recipients(value: Any) -> set[str]:
@@ -51,24 +55,25 @@ def _event_timestamp(item: dict[str, Any]) -> int | None:
         return None
 
 
-def _received_event_key(item: dict[str, Any], alias: str, event_at: int) -> str:
+def _event_key(kind: str, item: dict[str, Any], alias: str, event_at: int) -> str:
     # Only the SHA-256 digest is persisted. When a message ID is available it is
     # preferred over scan time so repeated Rspamd scans of the same message do not
     # inflate the counter. Raw message IDs, senders and subjects never enter SQLite.
     message_id = str(item.get("message-id") or item.get("message_id") or "").strip()
     if message_id:
         fingerprint = {
-            "kind": "received",
+            "kind": kind,
             "alias": alias.lower(),
             "message_id": message_id,
         }
     else:
         fingerprint = {
-            "kind": "received",
+            "kind": kind,
             "alias": alias.lower(),
             "event_at": event_at,
             "queue_id": str(item.get("qid") or item.get("queue_id") or ""),
-            "sender": str(item.get("sender_smtp") or ""),
+            "sender_smtp": str(item.get("sender_smtp") or ""),
+            "sender_mime": str(item.get("sender_mime") or ""),
             "subject": str(item.get("subject") or ""),
             "user": str(item.get("user") or ""),
         }
@@ -143,29 +148,62 @@ class UsageCollector:
             if is_owned_alias(alias, target):
                 alias_targets[address] = target
 
-        events: list[UsageEvent] = []
+        received_events: list[UsageEvent] = []
+        sent_events: list[UsageEvent] = []
+
         for item in history:
             action = str(item.get("action") or "").strip().lower()
-            if action not in ACCEPTED_INCOMING_ACTIONS:
+            if action not in ACCEPTED_ACTIONS:
                 continue
+
             event_at = _event_timestamp(item)
             if event_at is None or event_at < tracking_started_at:
                 continue
+
             recipients = _normalise_recipients(item.get("rcpt_smtp"))
             for alias in recipients.intersection(alias_targets):
-                events.append(
+                received_events.append(
                     UsageEvent(
-                        event_key=_received_event_key(item, alias, event_at),
+                        event_key=_event_key("received", item, alias, event_at),
                         mailbox=alias_targets[alias],
                         alias=alias,
                         event_at=event_at,
                     )
                 )
 
-        recorded = await self.store.record_received(events)
-        if recorded:
-            LOGGER.info("Recorded %d new Cowcloak alias delivery event(s)", recorded)
-        return recorded
+            authenticated_user = _normalise_address(item.get("user"))
+            if authenticated_user not in eligible:
+                continue
+
+            # Prefer the visible MIME From address. Fall back to the SMTP envelope
+            # sender because some clients or mail paths may rewrite one but not the other.
+            sender_mime = _normalise_address(item.get("sender_mime"))
+            sender_smtp = _normalise_address(item.get("sender_smtp"))
+            sent_alias = ""
+            if alias_targets.get(sender_mime) == authenticated_user:
+                sent_alias = sender_mime
+            elif alias_targets.get(sender_smtp) == authenticated_user:
+                sent_alias = sender_smtp
+
+            if sent_alias:
+                sent_events.append(
+                    UsageEvent(
+                        event_key=_event_key("sent", item, sent_alias, event_at),
+                        mailbox=authenticated_user,
+                        alias=sent_alias,
+                        event_at=event_at,
+                    )
+                )
+
+        received = await self.store.record_received(received_events)
+        sent = await self.store.record_sent(sent_events)
+        if received or sent:
+            LOGGER.info(
+                "Recorded %d received and %d sent Cowcloak alias event(s)",
+                received,
+                sent,
+            )
+        return received + sent
 
     async def run_forever(self) -> None:
         while True:

@@ -151,8 +151,77 @@ async def test_collector_counts_only_accepted_opted_in_owned_aliases(tmp_path):
         ["shop@example.org", "offline@example.org", "shared@example.org"],
     )
     assert usage["shop@example.org"].received_count == 1
+    assert usage["shop@example.org"].sent_count == 0
     assert "offline@example.org" not in usage
     assert "shared@example.org" not in usage
+
+
+async def test_collector_counts_authenticated_alias_sends_once(tmp_path):
+    store = StatsStore(str(tmp_path / "usage.sqlite3"))
+    await store.initialize()
+    started_at = await store.tracking_started_at()
+    mailcow = FakeMailcow(started_at + 1)
+
+    async def get_rspamd_history(count: int):
+        assert count == 100
+        return [
+            {
+                "unix_time": started_at + 1,
+                "action": "no action",
+                "sender_smtp": "shop@example.org",
+                "sender_mime": "shop@example.org",
+                "rcpt_smtp": ["outside@example.net"],
+                "message-id": "outbound-1@example.org",
+                "user": "user@example.org",
+            },
+            {
+                "unix_time": started_at + 2,
+                "action": "add header",
+                "sender_smtp": "shop@example.org",
+                "sender_mime": "shop@example.org",
+                "rcpt_smtp": ["outside@example.net"],
+                "message-id": "outbound-1@example.org",
+                "user": "user@example.org",
+            },
+            {
+                "unix_time": started_at + 3,
+                "action": "no action",
+                "sender_smtp": "user@example.org",
+                "sender_mime": "shop@example.org",
+                "rcpt_smtp": ["outside@example.net"],
+                "message-id": "outbound-2@example.org",
+                "user": "user@example.org",
+            },
+            {
+                "unix_time": started_at + 4,
+                "action": "no action",
+                "sender_smtp": "shop@example.org",
+                "sender_mime": "shop@example.org",
+                "rcpt_smtp": ["outside@example.net"],
+                "message-id": "wrong-user@example.org",
+                "user": "other@other.org",
+            },
+            {
+                "unix_time": started_at + 5,
+                "action": "soft reject",
+                "sender_smtp": "shop@example.org",
+                "sender_mime": "shop@example.org",
+                "rcpt_smtp": ["outside@example.net"],
+                "message-id": "rejected@example.org",
+                "user": "user@example.org",
+            },
+        ]
+
+    mailcow.get_rspamd_history = get_rspamd_history
+    collector = UsageCollector(settings(str(tmp_path / "usage.sqlite3")), mailcow, store)
+
+    assert await collector.collect_once() == 2
+    assert await collector.collect_once() == 0
+
+    usage = await store.alias_usage("user@example.org", ["shop@example.org"])
+    assert usage["shop@example.org"].received_count == 0
+    assert usage["shop@example.org"].sent_count == 2
+    assert usage["shop@example.org"].last_sent_at == started_at + 3
 
 
 async def test_mailbox_tag_enables_stats_without_domain_tag(tmp_path):
