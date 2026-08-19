@@ -62,12 +62,22 @@ def sender_domain_tokens(sender_domain: str) -> set[str]:
     return _tokens(" ".join(labels))
 
 
+def sender_match_token(
+    alias_address: str,
+    description: str,
+    sender_domain: str,
+) -> str | None:
+    matches = alias_identity_tokens(alias_address, description) & sender_domain_tokens(
+        sender_domain
+    )
+    if not matches:
+        return None
+    return sorted(matches, key=lambda token: (-len(token), token))[0]
+
+
 def sender_matches_alias(
     alias_address: str,
     description: str,
     sender_domain: str,
 ) -> bool:
-    alias_tokens = alias_identity_tokens(alias_address, description)
-    if not alias_tokens:
-        return False
-    return bool(alias_tokens & sender_domain_tokens(sender_domain))
+    return sender_match_token(alias_address, description, sender_domain) is not None
