@@ -31,7 +31,11 @@ async def test_sender_store_keeps_all_sender_rows_and_manual_reviews(tmp_path):
         True,
     )
     usage = await store.sender_usage("user@example.org", ["amazon-k7@example.org"])
-    reviewed = next(row for row in usage["amazon-k7@example.org"] if row.sender_key == sender_key)
+    reviewed = next(
+        row
+        for row in usage["amazon-k7@example.org"]
+        if row.sender_key == sender_key
+    )
     assert reviewed.manual_expected is True
 
     await store.set_sender_expectation(
@@ -41,7 +45,11 @@ async def test_sender_store_keeps_all_sender_rows_and_manual_reviews(tmp_path):
         None,
     )
     usage = await store.sender_usage("user@example.org", ["amazon-k7@example.org"])
-    reviewed = next(row for row in usage["amazon-k7@example.org"] if row.sender_key == sender_key)
+    reviewed = next(
+        row
+        for row in usage["amazon-k7@example.org"]
+        if row.sender_key == sender_key
+    )
     assert reviewed.manual_expected is None
 
 
@@ -70,9 +78,6 @@ async def test_mode_change_removes_sender_details_and_reviews(tmp_path):
     await store.sync_sender_modes({"user@example.org": "domain"}, now=200)
 
     assert await store.sender_usage("user@example.org", ["amazon-k7@example.org"]) == {}
-
-
-aSync_placeholder = None
 
 
 async def test_stale_full_event_is_rejected_after_downgrade(tmp_path):
