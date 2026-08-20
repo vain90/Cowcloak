@@ -80,6 +80,14 @@ async def test_full_to_domain_preserves_only_unanimous_resolved_decision(tmp_pat
     assert rows[ALIAS][0].sender_key == DOMAIN
     assert rows[ALIAS][0].manual_expected is None
 
+    store = await _full_store(tmp_path / "partial.sqlite3")
+    await store.set_sender_expectation(MAILBOX, ALIAS, SENDER_ONE, True)
+
+    await store.sync_sender_modes({MAILBOX: "domain"}, now=200)
+    rows = await store.sender_usage(MAILBOX, [ALIAS])
+    assert len(rows[ALIAS]) == 1
+    assert rows[ALIAS][0].manual_expected is None
+
     store = await _full_store(tmp_path / "unanimous.sqlite3")
     await store.set_sender_expectation(MAILBOX, ALIAS, DOMAIN, True)
 
