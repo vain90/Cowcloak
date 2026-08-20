@@ -12,7 +12,10 @@ from cowcloak.collector_health import (
     CollectorHealthStore,
     assess_collector_health,
 )
+from cowcloak.mailcow import MailcowError
 from cowcloak.security import require_user, validate_csrf
+from cowcloak.stats_mode import StatsMode
+from cowcloak.usage import mailbox_stats_state
 
 router = APIRouter()
 
@@ -169,4 +172,65 @@ async def update_unexpected_monitoring(
     return {
         "alias": alias.address,
         "ignored": ignored,
+    }
+
+
+@router.post("/aliases/{alias_id}/sender-domain-expectation")
+async def set_sender_domain_expectation(
+    request: Request,
+    alias_id: int,
+    sender_key: str = Form(...),
+    csrf_token: str = Form(...),
+):
+    validate_csrf(request, csrf_token)
+    user = require_user(request)
+    settings = request.app.state.settings
+    stats_store = getattr(request.app.state, "stats_store", None)
+    if not settings.usage_stats or stats_store is None:
+        raise HTTPException(status_code=409, detail="Usage statistics are disabled")
+
+    alias = await request.app.state.mailcow.get_alias(alias_id)
+    if (
+        not is_owned_alias(alias, user)
+        or alias.is_reserved
+        or is_primary_mailbox_alias(alias, user)
+    ):
+        raise HTTPException(status_code=403, detail="Alias cannot be managed here")
+
+    sender_key = sender_key.strip().lower()
+    if not sender_key or len(sender_key) > 320:
+        raise HTTPException(status_code=400, detail="Invalid sender key")
+
+    try:
+        state = await mailbox_stats_state(settings, request.app.state.mailcow, user)
+    except MailcowError as exc:
+        raise HTTPException(status_code=502, detail="Statistics state is unavailable") from exc
+    if state.conflict or state.effective is not StatsMode.FULL:
+        raise HTTPException(
+            status_code=409,
+            detail="Domain expectation is only available in full statistics mode",
+        )
+
+    stored = await stats_store.sender_usage(user, [alias.address])
+    sender = next(
+        (
+            entry
+            for entry in stored.get(alias.address.lower(), [])
+            if entry.sender_key == sender_key and entry.sender_address is not None
+        ),
+        None,
+    )
+    if sender is None:
+        raise HTTPException(status_code=404, detail="Sender statistic does not exist")
+
+    await stats_store.set_sender_expectation(
+        user,
+        alias.address,
+        sender.sender_domain,
+        True,
+    )
+    return {
+        "alias": alias.address,
+        "domain": sender.sender_domain,
+        "expected": True,
     }
