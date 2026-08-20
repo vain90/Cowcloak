@@ -12,6 +12,7 @@
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
+  <script src="/static/theme.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/help.css">
   <link rel="stylesheet" href="/static/stats.css">
@@ -19,6 +20,7 @@
   <link rel="stylesheet" href="/static/review.css">
   <link rel="stylesheet" href="/static/dialogs.css">
   <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/theme.css">
   <script src="/static/dialogs.js" defer></script>
   <script src="/static/app.js" defer></script>
   <script src="/static/stats.js" defer></script>
@@ -45,6 +47,19 @@
       href="/language/en?next={{ return_to|urlencode }}"
       {% if language == 'en' %}aria-current="true"{% endif %}
     >EN</a>
+    <span class="top-control-divider" aria-hidden="true"></span>
+    <label class="theme-control">
+      <select
+        class="theme-select"
+        data-theme-select
+        aria-label="{% if language == 'de' %}Darstellung{% else %}Appearance{% endif %}"
+        title="{% if language == 'de' %}Darstellung{% else %}Appearance{% endif %}"
+      >
+        <option value="system">System</option>
+        <option value="light">{% if language == 'de' %}Hell{% else %}Light{% endif %}</option>
+        <option value="dark">{% if language == 'de' %}Dunkel{% else %}Dark{% endif %}</option>
+      </select>
+    </label>
     <span class="top-control-divider" aria-hidden="true"></span>
     <button
       class="help-trigger"
