@@ -33,7 +33,8 @@ from cowcloak.i18n import (
     translations,
 )
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
-from cowcloak.review_settings import AliasReviewSettingsStore, router as review_settings_router
+from cowcloak.review_settings import AliasReviewSettingsStore
+from cowcloak.review_settings import router as review_settings_router
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.senders import sender_match_token
 from cowcloak.stats import StatsStore
