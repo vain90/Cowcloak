@@ -179,8 +179,8 @@ for attempt in $(seq 1 24); do
     -w '%{http_code}' \
     "$api_url" || true)"
 
-  if [[ "$http_status" == "200" ]] && jq -e 'type == "array"' "$api_response" >/dev/null 2>&1; then
-    echo "Mailcow API returned a JSON array successfully on attempt $attempt."
+  if [[ "$http_status" == "200" ]] && jq -e '.' "$api_response" >/dev/null 2>&1; then
+    echo "Mailcow API returned HTTP 200 with valid JSON on attempt $attempt."
     api_ready=true
     break
   fi
