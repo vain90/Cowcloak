@@ -20,42 +20,39 @@ def _pool_item(page: Page, address: str):
     return page.locator(".pool-item").filter(has_text=address)
 
 
-def _login(
-    page: Page,
-    base_url: str,
-    *,
-    dismiss_used_pool: bool = True,
-    dismiss_review: bool = True,
-) -> None:
+def _login(page: Page, base_url: str, *, dismiss_action: bool = True) -> None:
     page.goto(f"{base_url}/oauth/callback?code=e2e&state=e2e")
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"))
     expect(page.locator("[data-alias-results-region]")).to_be_visible()
 
-    used_dialog = page.locator("dialog[data-used-pool-prompt]")
-    expect(used_dialog).to_be_visible(timeout=5000)
-    if dismiss_used_pool:
-        used_dialog.locator(".used-pool-actions button").nth(1).click()
-
-    if dismiss_used_pool:
-        review_dialog = page.locator("dialog[data-unexpected-review-dialog]")
-        expect(review_dialog).to_be_visible(timeout=5000)
-        if dismiss_review:
-            review_dialog.locator(".dialog-close").click()
+    dialog = page.locator("dialog[data-action-required-dialog]")
+    expect(dialog).to_be_visible(timeout=5000)
+    if dismiss_action:
+        dialog.locator(".dialog-close").click()
 
 
-def test_login_callback_opens_attention_dialogs_in_sequence(page: Page, base_url: str) -> None:
-    _login(page, base_url, dismiss_used_pool=False, dismiss_review=False)
+def test_login_callback_opens_one_action_required_surface(page: Page, base_url: str) -> None:
+    _login(page, base_url, dismiss_action=False)
 
-    used_dialog = page.locator("dialog[data-used-pool-prompt]")
-    expect(used_dialog).to_contain_text(USED_POOL)
-    expect(used_dialog.locator('.used-pool-purpose input')).to_be_focused()
+    dialog = page.locator("dialog[data-action-required-dialog]")
+    expect(dialog).to_contain_text("Action required")
+    expect(dialog).to_contain_text("Used offline aliases")
+    expect(dialog).to_contain_text(USED_POOL)
+    expect(dialog).to_contain_text("Unexpected senders")
+    expect(dialog).to_contain_text(AMAZON)
+    expect(dialog).to_contain_text("odd@unexpected.example")
+    expect(page.locator("dialog[open]")).to_have_count(1)
+    expect(page.locator("dialog[data-used-pool-prompt]")).to_have_count(0)
 
-    used_dialog.locator(".used-pool-actions button").nth(1).click()
+    dialog.locator(".dialog-close").click()
+    page.reload()
+    expect(page.locator("dialog[data-action-required-dialog][open]")).to_have_count(0)
 
-    review_dialog = page.locator("dialog[data-unexpected-review-dialog]")
-    expect(review_dialog).to_be_visible(timeout=5000)
-    expect(review_dialog).to_contain_text(AMAZON)
-    expect(review_dialog).to_contain_text("odd@unexpected.example")
+    action = page.locator("[data-action-required-open]")
+    expect(action).to_be_visible()
+    expect(action).to_contain_text("Action required")
+    action.click()
+    expect(dialog).to_be_visible()
 
 
 def test_live_search_keeps_server_unexpected_filter_and_filtering_works(
@@ -97,7 +94,7 @@ def test_live_search_keeps_server_unexpected_filter_and_filtering_works(
     )
 
 
-def test_sender_dialog_and_review_submission_reopen_with_fresh_state(
+def test_sender_review_reopens_action_required_with_fresh_state(
     page: Page,
     base_url: str,
 ) -> None:
@@ -116,51 +113,85 @@ def test_sender_dialog_and_review_submission_reopen_with_fresh_state(
     expect(sender_dialog).to_contain_text("odd@unexpected.example")
     sender_dialog.locator(".dialog-close").click()
 
-    review_all = page.locator("[data-unexpected-review-all]")
-    expect(review_all).to_be_visible(timeout=5000)
-    review_all.click()
-
-    review_dialog = page.locator("dialog[data-unexpected-review-dialog]")
-    expect(review_dialog).to_be_visible()
-    amazon_review = review_dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
+    page.locator("[data-action-required-open]").click()
+    action_dialog = page.locator("dialog[data-action-required-dialog]")
+    expect(action_dialog).to_be_visible()
+    amazon_review = action_dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
     unexpected_sender = amazon_review.locator(".sender-stats-row.unexpected")
     expect(unexpected_sender).to_have_count(1)
     expect(unexpected_sender).to_contain_text("odd@unexpected.example")
 
     unexpected_sender.locator('.sender-review-form button[type="submit"]').click()
 
-    expect(review_dialog).to_be_visible(timeout=5000)
-    expect(review_dialog.locator(".unexpected-review-list .empty")).to_be_visible()
-    review_dialog.locator(".dialog-close").click()
+    expect(action_dialog).to_be_visible(timeout=5000)
+    expect(action_dialog.locator(".unexpected-review-alias")).to_have_count(0)
+    expect(action_dialog).to_contain_text("Used offline aliases")
+    action_dialog.locator(".dialog-close").click()
     expect(page.locator("[data-unexpected-filter] span")).to_have_text("0", timeout=5000)
 
 
-def test_per_alias_unexpected_review_can_be_disabled(page: Page, base_url: str) -> None:
-    _login(page, base_url)
+def test_action_required_can_disable_per_alias_unexpected_review(
+    page: Page,
+    base_url: str,
+) -> None:
+    _login(page, base_url, dismiss_action=False)
 
-    amazon_row = _alias_row(page, AMAZON)
-    trigger = amazon_row.locator(".sender-stats-trigger")
-    dialog_id = trigger.get_attribute("aria-controls")
-    assert dialog_id
-    trigger.click()
-    dialog = page.locator(f"#{dialog_id}")
-    expect(dialog).to_be_visible()
-
-    checkbox = dialog.locator(".sender-review-settings input[type=checkbox]")
+    dialog = page.locator("dialog[data-action-required-dialog]")
+    amazon_review = dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
+    checkbox = amazon_review.locator(".sender-review-settings input[type=checkbox]")
     expect(checkbox).not_to_be_checked()
     checkbox.check()
 
+    expect(dialog).to_be_visible(timeout=5000)
+    expect(dialog.locator(".unexpected-review-alias")).to_have_count(0)
     expect(page.locator("[data-unexpected-filter] span")).to_have_text("0", timeout=5000)
+    dialog.locator(".dialog-close").click()
+
     fresh_row = _alias_row(page, AMAZON)
     expect(fresh_row.locator(".sender-review-muted")).to_be_visible()
 
-    fresh_trigger = fresh_row.locator(".sender-stats-trigger")
-    fresh_dialog_id = fresh_trigger.get_attribute("aria-controls")
-    assert fresh_dialog_id
-    fresh_trigger.click()
-    expect(
-        page.locator(f"#{fresh_dialog_id} .sender-review-settings input[type=checkbox]")
-    ).to_be_checked()
+
+def test_action_required_can_replace_alias_and_continue(
+    page: Page,
+    base_url: str,
+) -> None:
+    _login(page, base_url, dismiss_action=False)
+
+    action_dialog = page.locator("dialog[data-action-required-dialog]")
+    amazon_review = action_dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
+    replace_button = amazon_review.locator('[data-review-replace-alias="1"]')
+    expect(replace_button).to_be_visible()
+    replace_button.click()
+
+    replacement_dialog = page.locator("dialog.assign-dialog[open]").filter(
+        has=page.locator('input[name="replacement-mode"]')
+    )
+    expect(replacement_dialog).to_be_visible()
+    replacement_dialog.locator(
+        'label.mode-option:has(input[value="custom"])'
+    ).click()
+    replacement_dialog.locator(".address-input input").fill("amazon-safe")
+    replacement_dialog.locator(".button.primary").click()
+
+    result_dialog = page.locator("dialog.assign-dialog-single[open]").filter(
+        has_text="Alias replaced"
+    )
+    expect(result_dialog).to_be_visible(timeout=5000)
+    expect(result_dialog).to_contain_text("amazon-safe@example.org")
+    result_dialog.locator(".dialog-close").click()
+
+    expect(action_dialog).to_be_visible(timeout=5000)
+    expect(action_dialog.locator(".unexpected-review-alias")).to_have_count(0)
+    expect(action_dialog).to_contain_text("Used offline aliases")
+    action_dialog.locator(".dialog-close").click()
+
+    old_alias = _alias_row(page, AMAZON)
+    expect(old_alias).to_have_count(1)
+    expect(old_alias.locator("[data-alias-select]")).to_have_attribute("data-active", "0")
+    new_alias = _alias_row(page, "amazon-safe@example.org")
+    expect(new_alias).to_have_count(1)
+    expect(new_alias.locator(".alias-info strong")).to_have_text("Amazon")
+    expect(new_alias.locator("[data-alias-select]")).to_have_attribute("data-sogo", "1")
 
 
 def test_used_offline_alias_stays_protected_and_sender_dialog_survives_filter(
@@ -213,19 +244,43 @@ def test_used_offline_alias_stays_protected_and_sender_dialog_survives_filter(
     assert USED_POOL not in exported
 
 
-def test_used_offline_prompt_assigns_alias(page: Page, base_url: str) -> None:
-    _login(page, base_url, dismiss_used_pool=False, dismiss_review=False)
+def test_action_required_assigns_used_offline_alias(page: Page, base_url: str) -> None:
+    _login(page, base_url, dismiss_action=False)
 
-    dialog = page.locator("dialog[data-used-pool-prompt]")
+    dialog = page.locator("dialog[data-action-required-dialog]")
     row = dialog.locator('[data-pool-alias-id="11"]')
     expect(row).to_be_visible()
     row.locator(".used-pool-purpose input").fill("Hotel booking")
     dialog.locator(".used-pool-actions .primary").click()
 
+    expect(dialog).to_be_visible(timeout=5000)
+    expect(dialog.locator('[data-pool-alias-id="11"]')).to_have_count(0)
+    expect(dialog).to_contain_text("Unexpected senders")
+    dialog.locator(".dialog-close").click()
+
     assigned = _alias_row(page, USED_POOL)
-    expect(assigned).to_have_count(1, timeout=5000)
+    expect(assigned).to_have_count(1)
     expect(assigned.locator(".alias-info strong")).to_have_text("Hotel booking")
     expect(_pool_item(page, USED_POOL)).to_have_count(0)
+
+
+def test_action_required_empty_state_after_pending_work_is_resolved(
+    page: Page,
+    base_url: str,
+) -> None:
+    _login(page, base_url, dismiss_action=False)
+    dialog = page.locator("dialog[data-action-required-dialog]")
+
+    pool_row = dialog.locator('[data-pool-alias-id="11"]')
+    pool_row.locator(".used-pool-purpose input").fill("Hotel booking")
+    dialog.locator(".used-pool-actions .primary").click()
+
+    expect(dialog).to_be_visible(timeout=5000)
+    unexpected = dialog.locator(".unexpected-review-alias .sender-stats-row.unexpected")
+    unexpected.locator('.sender-review-form button[type="submit"]').click()
+
+    expect(dialog).to_be_visible(timeout=5000)
+    expect(dialog.locator(".action-required-empty")).to_have_text("Nothing to do.")
 
 
 def test_expired_browser_session_redirects_to_login(page: Page, base_url: str) -> None:
@@ -239,26 +294,25 @@ def test_expired_browser_session_redirects_to_login(page: Page, base_url: str) -
     expect(page.locator("body")).not_to_contain_text("Authentication required")
 
 
-def test_mobile_dialogs_and_alias_actions_stay_inside_viewport(page: Page, base_url: str) -> None:
+def test_mobile_action_required_and_alias_actions_stay_inside_viewport(
+    page: Page,
+    base_url: str,
+) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
-    _login(page, base_url)
+    _login(page, base_url, dismiss_action=False)
 
-    amazon_row = _alias_row(page, AMAZON)
-    expect(amazon_row.locator(".alias-copy-action")).to_be_visible()
-    expect(amazon_row.locator("details.alias-edit-action > summary")).to_be_visible()
-    expect(amazon_row.locator(".alias-toggle-action button")).to_be_visible()
-
-    trigger = amazon_row.locator(".sender-stats-trigger")
-    dialog_id = trigger.get_attribute("aria-controls")
-    assert dialog_id
-    trigger.click()
-    dialog = page.locator(f"#{dialog_id}")
+    dialog = page.locator("dialog[data-action-required-dialog]")
     expect(dialog).to_be_visible()
-
     box = dialog.bounding_box()
     assert box
     assert box["x"] >= -1
     assert box["y"] >= -1
     assert box["x"] + box["width"] <= 391
     assert box["y"] + box["height"] <= 845
+    dialog.locator(".dialog-close").click()
+
+    amazon_row = _alias_row(page, AMAZON)
+    expect(amazon_row.locator(".alias-copy-action")).to_be_visible()
+    expect(amazon_row.locator("details.alias-edit-action > summary")).to_be_visible()
+    expect(amazon_row.locator(".alias-toggle-action button")).to_be_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")

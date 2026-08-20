@@ -21,13 +21,17 @@
 }
 
 .unexpected-review-all-button {
+  border-color: #d0d5dd;
+}
+
+.unexpected-review-all-button.has-action-required {
   border-color: #fda29b;
   background: #fff7f6;
   color: #b42318;
 }
 
-.unexpected-review-all-button:hover,
-.unexpected-review-all-button:focus-visible {
+.unexpected-review-all-button.has-action-required:hover,
+.unexpected-review-all-button.has-action-required:focus-visible {
   border-color: #f97066;
   color: #912018;
 }
@@ -37,6 +41,80 @@
   max-height: min(860px, calc(100vh - 32px));
 }
 
+.action-required-intro {
+  margin: 4px 0 0;
+}
+
+.action-required-content {
+  display: grid;
+  gap: 16px;
+  max-height: min(690px, calc(100vh - 190px));
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.action-required-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.action-required-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.action-required-section-head h3 {
+  margin: 0;
+}
+
+.action-required-section > .muted,
+.action-required-section > .hint {
+  margin: 0;
+}
+
+.action-required-empty {
+  margin: 18px 0;
+  text-align: center;
+}
+
+.action-required-pool-form {
+  margin-top: 2px;
+}
+
+.action-required-alias-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-required-health-warning {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #fdb022;
+  border-radius: 10px;
+  background: #fffaeb;
+}
+
+.action-required-health-warning.state-gap,
+.action-required-health-warning.state-failed {
+  border-color: #fda29b;
+  background: #fff7f6;
+}
+
+.action-required-health-warning p {
+  margin: 0;
+}
+
 .unexpected-review-intro {
   margin-top: 0;
 }
@@ -44,10 +122,7 @@
 .unexpected-review-list {
   display: grid;
   gap: 12px;
-  max-height: min(650px, calc(100vh - 210px));
   padding: 2px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .unexpected-review-alias {
@@ -122,14 +197,22 @@
     padding-right: 12px;
   }
 
-  .unexpected-review-list {
-    max-height: calc(100vh - 215px);
+  .action-required-content {
+    max-height: calc(100vh - 190px);
+  }
+
+  .action-required-section {
+    padding: 11px;
   }
 
   .unexpected-review-alias-head {
     align-items: stretch;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+  }
+
+  .action-required-alias-actions {
+    justify-content: flex-start;
   }
 
   .unexpected-review-alias-head .sender-stats-alert {
