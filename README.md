@@ -1,352 +1,222 @@
 # Cowcloak
 
-Cowcloak is a self-hosted privacy alias manager for [mailcow](https://mailcow.email/). It gives mailbox users a fast way to create, label, disable and prepare email aliases while keeping mailcow as the source of truth.
+**Self-hosted privacy aliases for mailcow.**
 
-> Early development. The project is not yet ready for production use.
+Cowcloak gives mailcow users a simple self-service interface for creating and managing email aliases without exposing the mailcow administration interface.
 
-## Core rules
+Instead of using the same primary email address everywhere, you can give each service its own address. If one address is leaked, sold or starts receiving unwanted mail, you can identify the affected service and disable or replace only that alias. Your real mailbox address does not have to change.
 
-Cowcloak deliberately keeps its authorization model small:
+> Cowcloak is under active development. Review the security and deployment notes before using it in an Internet-facing environment.
 
-- Authentication is delegated to mailcow via OAuth2.
-- There is no separate Cowcloak user database or password store.
-- A mailbox may create aliases only on its own domain.
-- Every alias created by a mailbox points only to that mailbox.
-- Multiple mailboxes on the same mailcow domain remain isolated from each other.
-- Cowcloak only manages an existing alias when its target is exactly the authenticated mailbox.
-- Alias addresses are immutable in Cowcloak. Renaming a purpose never renames the address.
-- User-visible alias purposes are stored in mailcow's public comment.
-- Private mailcow admin comments are not exposed or edited by Cowcloak except for Cowcloak's own reserved offline-alias lifecycle markers.
-- SOGo visibility can be enabled per alias when the alias should appear as a selectable sender.
+## Why use aliases?
 
-For example, `alice@example.org` may create `shop-k7@example.org`, but not an alias on another domain and not an alias that forwards to `bob@example.org`.
+Using one email address for every account makes it difficult to tell where unwanted mail originated and difficult to revoke one compromised address without affecting everything else.
 
-## Offline alias pool
-
-Cowcloak can pre-create 1, 5, 10 or 20 active, readable aliases. Copy the list into your phone notes and hand out an address even when Cowcloak is unreachable or you have no internet connection.
-
-Prepared aliases are marked internally with the private comment `[cowcloak:reserved]`. Older Cowcloak aliases using `[reserved] Offline alias` are still recognized. When an opted-in statistics collector observes accepted incoming mail or an authenticated outgoing send for a prepared alias, Cowcloak changes its private marker to `[cowcloak:reserved-used]`. That second marker contains no counter, timestamp or sender information; it only preserves the lifecycle fact that the address has already been used.
-
-A used prepared alias stays in the offline-pool view so it can be identified and assigned, but it is no longer treated as an unused address: it cannot be deleted and is omitted from **Copy all** and the plain-text pool export. It must first be assigned a purpose. Assignment removes either reservation marker, keeps the email address unchanged and turns the address into a normal managed alias that can later be disabled or replaced.
-
-If usage statistics are enabled, Cowcloak can also show received/sent counts, last use and optional sender information for a used prepared alias. Those statistics remain subject to the selected privacy mode and may be deleted by a privacy downgrade; the minimal used-reserved lifecycle marker remains in mailcow so the delete/export protection is not lost.
-
-Offline pool aliases are hidden from the SOGo sender chooser until they are assigned and SOGo visibility is explicitly enabled. Each prepared alias can be assigned individually from the offline-pool list. When Cowcloak detects used prepared aliases, it can also prompt once per login to assign them.
-
-## Alias styles
-
-- **Name + random suffix (default):** `amazon-k7@example.org`
-- **Readable random:** `hafen-feder-27@example.org`
-- **Custom:** `my-choice@example.org`
-
-Named aliases use a two-character ASCII suffix chosen from lowercase letters and digits. Visually ambiguous characters such as `0`, `1`, `i`, `l` and `o` are excluded so addresses stay short and easier to dictate or spell.
-
-Cowcloak ships curated English and German word lists with 250 unique words each. Every readable word is at most six characters long. The readable-random generator combines exactly two distinct words with a two-digit number, keeping generated local parts compact while remaining easy to read and dictate.
-
-The readable-random generator follows the selected Cowcloak UI language: German uses the German list, all other browser languages default to English. Users can switch between DE and EN in the interface; the preference is stored in a Cowcloak cookie.
-
-## Replacing an alias
-
-When an assigned alias is no longer trustworthy, Cowcloak can replace it without deleting its history. The replacement action creates a fresh alias in the selected name-based, readable-random or custom format using the same purpose and SOGo visibility, then disables the previous alias. The old address remains stored in mailcow so it can still be traced back to the service that used it and is never silently recycled.
-
-The new address is shown immediately after replacement with a copy action. If the new alias is created but mailcow cannot disable the previous alias, Cowcloak reports the partial result and shows the new address so both aliases can be checked explicitly.
-
-## Catch-all
-
-If an active catch-all forwards unmatched addresses on the mailbox domain to the authenticated mailbox, Cowcloak shows a warning without adding the catch-all to the normal alias list.
-
-A catch-all weakens the one-alias-per-service model because addresses that were never explicitly created can still receive mail. For clean separation and individually revocable aliases, use explicit aliases instead of catch-all delivery.
-
-## Optional usage statistics
-
-Usage statistics are disabled globally by default. With the default `COWCLOAK_USAGE_STATS=false`, Cowcloak does not create or open a statistics database, does not start the statistics collector and does not request Rspamd history for statistics.
-
-To enable the subsystem:
-
-```dotenv
-COWCLOAK_USAGE_STATS=true
-COWCLOAK_USAGE_TAG=cowcloak-stats
-```
-
-`COWCLOAK_USAGE_TAG` is the base tag for a four-level statistics policy:
-
-- `cowcloak-stats-off`: no new statistics for the mailbox.
-- `cowcloak-stats`: received/sent counters only.
-- `cowcloak-stats-domain`: counters plus sender-domain aggregation for incoming mail.
-- `cowcloak-stats-full`: counters plus full sender-address aggregation for incoming mail.
-
-A statistics tag on the mailbox overrides the domain setting. When the mailbox has no statistics tag, the domain setting is inherited. Multiple statistics-mode tags on the same level are treated as a configuration conflict and statistics are paused for that mailbox until the conflict is resolved.
-
-Mailbox users can select their own statistics mode in Cowcloak. Cowcloak changes only the authenticated mailbox's statistics-tag family and preserves all unrelated mailcow tags. In particular, the normal Cowcloak access tag remains administrator-controlled and is never granted by the statistics selector.
-
-Accepted incoming deliveries and accepted authenticated sends using exclusively owned Cowcloak aliases are counted. This includes reserved offline aliases before assignment, which lets Cowcloak detect that a prepared address has already been used. Primary mailbox addresses, shared aliases, catch-all aliases and rejected/soft-rejected messages are excluded.
-
-Sender detail is opt-in and starts only when the effective mode is `domain` or `full`. More detailed modes do not retroactively import older Rspamd history: additional detail starts from the mode change onward. A privacy downgrade removes data that the target mode is no longer allowed to retain. In particular, `FULL -> DOMAIN` collapses stored full sender addresses to domain-level aggregates, preserving counts and latest timestamps and retaining a manual review decision only when all reviewed addresses in that domain agree. Downgrades to `basic` remove sender aggregates and sender-review decisions. Switching to `off` additionally removes stored alias usage counters. The separate `[cowcloak:reserved-used]` marker is lifecycle metadata rather than statistics and is therefore retained for used prepared aliases.
-
-For `domain` and `full`, Cowcloak shows every sender identity it has recorded for an alias rather than hiding low-frequency senders. Users can mark a sender as expected or explicitly unexpected. Cowcloak also performs a deliberately conservative automatic check: meaningful words from the alias local part and purpose may mark a sender as expected when the same word appears as a sender-domain label. For example, an alias named `amazon-k7` with purpose `Amazon` can automatically recognize `amazon.de` or `mail.amazon.de`. Generic words such as `shop`, `mail`, `info` and `newsletter` are ignored for automatic approval.
-
-### Unexpected-sender review
-
-Aliases with at least one unresolved unexpected sender are highlighted and included in the **Unexpected / Nicht erwartet** review count. The separate **Review all / Alle prüfen** action opens one review view across affected aliases, with the complete recorded sender list for each alias rather than only the unexpected rows.
-
-When unresolved review items exist, Cowcloak opens this review view automatically once after a genuine login. Ordinary page reloads do not repeatedly reopen it. A review submission may reopen the view after the resulting reload so an in-progress review can continue with current server state.
-
-Some aliases naturally receive mail from many unrelated senders. For those, unexpected-sender review can be disabled per alias. Sender counters remain visible, but the alias is excluded from the unexpected count, filter and aggregate review queue until monitoring is enabled again. This Cowcloak-only preference is stored in the same optional SQLite database as the statistics subsystem rather than in mailcow alias comments.
-
-When enabled, counters, sender aggregates, manual sender-review decisions, per-alias unexpected-review settings and deduplication hashes are stored in a versioned SQLite database at `/data/cowcloak-stats.sqlite3` by default. Raw subjects and message IDs are not persisted. In `domain` mode no full sender address is stored. In `full` mode the sender address and its domain are stored as aggregate keys.
-
-The collector necessarily reads the global Rspamd history response from mailcow before filtering it in memory, but only currently eligible Cowcloak alias data is written to the local database. If a deployment requires sender metadata for non-opted-in mailboxes to never reach the Cowcloak process at all, use a server-side filtered exporter instead of the built-in Rspamd-history collector.
-
-The repository Compose file mounts a persistent `cowcloak-data` volume at `/data`. The volume may exist while statistics are disabled; in that case no statistics database is created. Future schema changes are handled by Cowcloak's internal database schema version rather than by manual SQL steps.
-
-## Install as a web app
-
-Cowcloak ships a web app manifest, standalone metadata and app icons so the normal web deployment can also be installed as an app-like experience.
-
-- On iPhone or iPad, open Cowcloak in Safari and use **Add to Home Screen**.
-- On macOS, open Cowcloak in Safari and use **Add to Dock**.
-- Other browsers can use their normal install-web-app flow when supported.
-
-The installed app still connects to the same Cowcloak server and mailcow instance. Alias data remains in mailcow; optional usage statistics, when enabled on the server, remain in Cowcloak's server-side SQLite database. Because OAuth and cookie behavior can differ in standalone web apps, test the complete mailcow login and callback flow on the target Apple devices before treating a deployment as production-ready.
-
-## Architecture
-
-Cowcloak is stateless by default. Persistent alias data stays in mailcow. Optional usage statistics add a local server-side SQLite store for aggregate counters, sender aggregates, review state and deduplication state.
+With Cowcloak, each service can receive a separate address while all mail still arrives in the same mailbox:
 
 ```text
-Browser / installed web app
-      |
-      | OAuth2 login
-      v
-   Cowcloak  -------- mailcow OAuth2
-      |
-      | X-API-Key
-      v
-   mailcow API
-      |
-      +-- alias address
-      +-- target mailbox
-      +-- public comment / purpose
-      +-- private Cowcloak reserved / reserved-used lifecycle marker
-      +-- active state
-      +-- SOGo visibility / sender permission metadata
-      +-- mailbox/domain tags
-      +-- Rspamd history (stats only, filtered in memory)
-
-Optional when usage statistics are enabled:
-
-   Cowcloak
-      |
-      v
-   SQLite /data/cowcloak-stats.sqlite3
-      +-- aggregate alias counters
-      +-- optional sender domain/address aggregates
-      +-- manual expected/unexpected sender decisions
-      +-- per-alias unexpected-review settings
-      +-- hashed event deduplication keys
+Amazon  -> amazon-k7@example.org --------\
+Hotel   -> hotel-feder-27@example.org -----+-> alice@example.org
+Shop    -> shop-wald-42@example.org -------/
 ```
 
-The mailcow API key is never sent to the browser.
+If `hotel-feder-27@example.org` later becomes unwanted, that alias can be disabled or replaced while the other aliases and `alice@example.org` continue to work normally.
 
-## mailcow setup
+Cowcloak is not a spam filter. Its purpose is to make email addresses easier to isolate, trace and revoke.
 
-### 1. Create an OAuth2 client
+## How it works
 
-In mailcow, log in as administrator and open **Configuration → Access → OAuth2**. Add a client with this redirect URI:
+mailcow remains the source of truth for alias data. Cowcloak authenticates users through mailcow OAuth2 and uses the mailcow API to manage aliases on behalf of the signed-in mailbox.
+
+A user can manage only aliases that belong exclusively to their authenticated mailbox. Cowcloak derives the alias domain and forwarding target on the server instead of accepting them from the browser.
+
+By default, Cowcloak does not need its own user database. Optional usage statistics use a local SQLite database for counters, sender aggregates and review state; the aliases themselves remain in mailcow.
+
+## Features
+
+- Create aliases on the user's own mailcow domain.
+- Choose between name-based aliases such as `amazon-k7`, readable random aliases such as `hafen-feder-27`, or a custom local part.
+- Add a purpose or description to each alias.
+- Enable and disable aliases without deleting them.
+- Replace an alias while keeping the old address disabled for traceability.
+- Optionally expose individual aliases as selectable SOGo sender addresses.
+- Prepare offline aliases in advance and assign them later after they have been used.
+- Detect catch-all delivery and warn when it weakens the one-alias-per-service model.
+- Search, filter and manage aliases from one responsive dashboard.
+- Review used offline aliases, unexpected senders and collector warnings in the **Action required / Handlungsbedarf** view.
+- Optionally collect received/sent usage counters and sender information with configurable privacy levels.
+- Review sender identities that do not match the expected use of an alias and mark them as expected or unexpected.
+- Monitor the health and Rspamd-history coverage of the optional statistics collector.
+- German and English interface.
+- Installable web-app experience on supported desktop and mobile browsers.
+
+## Installation
+
+### Requirements
+
+You need:
+
+- a running mailcow installation that Cowcloak can reach;
+- Docker with Docker Compose;
+- a hostname for Cowcloak served over HTTPS;
+- mailcow administrator access to create an OAuth2 client and a read/write API key.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/vain90/Cowcloak.git
+cd Cowcloak
+cp .env.example .env
+```
+
+### 2. Create a mailcow OAuth2 client
+
+In the mailcow administration interface, open **Configuration -> Access -> OAuth2** and create a client with this redirect URI:
 
 ```text
 https://aliases.example.com/oauth/callback
 ```
 
-Save the generated client ID and client secret.
+Replace `aliases.example.com` with the hostname you will use for Cowcloak, then copy the generated client ID and client secret into `.env`.
 
-Cowcloak uses mailcow's OAuth2 endpoints:
+### 3. Create a mailcow API key
 
-```text
-/oauth/authorize
-/oauth/token
-/oauth/profile
-```
+Create a **read/write** API key in mailcow. Cowcloak needs it to create and manage aliases and, when usage-statistics self-service is enabled, to update the authenticated mailbox's statistics tags.
 
-### 2. Create a read/write API key
+Restrict the API key to the Cowcloak server's source IP whenever your network design allows it.
 
-Cowcloak needs a mailcow read/write API key to create and update aliases and, when statistics self-service is enabled globally, to update the authenticated mailbox's statistics tags. Restrict the API key to the Cowcloak host's source IP in mailcow whenever your network design allows it.
+### 4. Configure Cowcloak
 
-### 3. Configure Cowcloak
-
-```bash
-cp .env.example .env
-```
-
-Set at least:
+At minimum, set these values in `.env`:
 
 ```dotenv
 COWCLOAK_BASE_URL=https://aliases.example.com
 COWCLOAK_SESSION_SECRET=<random-secret>
 COWCLOAK_TRUSTED_HOSTS=aliases.example.com
+
 MAILCOW_URL=https://mail.example.com
 MAILCOW_API_KEY=<read-write-api-key>
-MAILCOW_OAUTH_CLIENT_ID=<client-id>
-MAILCOW_OAUTH_CLIENT_SECRET=<oauth-secret>
+MAILCOW_OAUTH_CLIENT_ID=<oauth-client-id>
+MAILCOW_OAUTH_CLIENT_SECRET=<oauth-client-secret>
 ```
 
-Generate a session secret with:
+Generate a strong session secret with:
 
 ```bash
 openssl rand -hex 32
 ```
 
-### 4. Start with Docker Compose
+See [.env.example](.env.example) for the complete configuration reference and all optional settings.
+
+### 5. Start Cowcloak
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-By default Cowcloak listens on host port `8080`. Put your normal HTTPS reverse proxy in front of it.
+The repository Compose file publishes Cowcloak on host port `8080` by default. Put your normal HTTPS reverse proxy, such as Caddy, nginx or Traefik, in front of it and forward requests to Cowcloak.
 
-The container tags intentionally separate releases from development builds:
+Then open your configured `COWCLOAK_BASE_URL` and sign in through mailcow.
 
-- `latest` points to the latest stable release.
-- SemVer tags such as `0.1.0`, `0.1` and `0` are created for stable releases.
-- `edge` follows the current `main` branch and may contain unreleased changes.
+## Optional configuration
 
-Pin `COWCLOAK_TAG` in `.env` if you prefer a fixed release instead of `latest`.
+### Restrict access with a mailcow tag
+
+By default, every successfully authenticated mailcow mailbox can use Cowcloak. To restrict access, configure a tag:
+
+```dotenv
+COWCLOAK_ACCESS_TAG=cowcloak
+```
+
+Assign the same tag to an allowed mailbox or domain in mailcow. Cowcloak checks access after authentication and keeps mailbox ownership isolated even when multiple users share the same domain.
+
+### Usage statistics and sender review
+
+Usage statistics are globally disabled by default:
+
+```dotenv
+COWCLOAK_USAGE_STATS=false
+```
+
+Enable them with:
+
+```dotenv
+COWCLOAK_USAGE_STATS=true
+```
+
+The default statistics policy uses the `cowcloak-stats` tag family and supports four privacy levels:
+
+| Mode | Stored information |
+| --- | --- |
+| `off` | No new usage statistics |
+| `basic` | Received and sent counters |
+| `domain` | Counters plus sender-domain aggregates |
+| `full` | Counters plus full sender-address aggregates |
+
+A mailbox can override its domain's statistics mode; otherwise it inherits the domain setting. Users can change only their own statistics mode through Cowcloak.
+
+When sender detail is enabled, Cowcloak can flag sender identities that appear unrelated to an alias and let the user review them. This is a traceability feature, not spam classification or threat intelligence.
+
+Statistics and review state are stored in the persistent SQLite database configured by `COWCLOAK_USAGE_DB_PATH`. Alias configuration remains in mailcow.
+
+The dashboard also reports collector health and warns when Rspamd history coverage may be too small, stale or interrupted. See [Statistics collector health](docs/statistics-collector-health.md) for the operational details.
+
+### Offline aliases
+
+Cowcloak can prepare aliases before they are needed. They can be copied to a phone or password manager and handed out even when Cowcloak is not currently reachable.
+
+Once a prepared address has been used, Cowcloak can surface it in **Action required / Handlungsbedarf** so a purpose can be assigned. The address itself does not change when it is assigned.
+
+### Install as a web app
+
+Cowcloak includes a web-app manifest and icons. On supported platforms it can be installed from the browser, for example with **Add to Home Screen** on iPhone/iPad or **Add to Dock** in Safari on macOS.
+
+The installed app uses the same Cowcloak server and mailcow OAuth login as the normal browser version.
 
 ## Updating
 
-Starting with Cowcloak 0.1.1, deployments using the parameterized image below can use the bundled updater for both stable and explicit beta updates:
-
-```yaml
-image: ghcr.io/vain90/cowcloak:${COWCLOAK_TAG:-latest}
-```
-
-A normal update always follows the latest stable release:
+For deployments following the stable release channel:
 
 ```bash
 ./update.sh
 ```
 
-The stable updater refreshes itself from the immutable latest release, pulls `ghcr.io/vain90/cowcloak:latest`, recreates the Cowcloak container, waits for the health check and rolls back to the previously running image when the new container does not become healthy.
+Check whether an update is available without changing the running deployment:
 
-To deliberately test the current unreleased `main` build on the same deployment, opt in explicitly:
+```bash
+./update.sh --check
+```
+
+To deliberately run the current unreleased `main` build from the `edge` image:
 
 ```bash
 ./update.sh --beta
 ```
 
-Beta mode refreshes the updater from `main` and uses `ghcr.io/vain90/cowcloak:edge`. It never changes the Compose file or `.env`; the updater supplies `COWCLOAK_TAG=edge` only for that invocation. Running `./update.sh` without `--beta` switches the deployment back to the stable `latest` channel when necessary.
+Run `./update.sh --help` for all updater options.
 
-Useful options:
+The default Docker image tag is `latest`. A fixed release can be pinned with `COWCLOAK_TAG`, while `edge` follows the current `main` branch. See [.env.example](.env.example) for details.
 
-```bash
-./update.sh --check
-./update.sh --beta --check
-./update.sh --yes
-./update.sh --beta --yes
-./update.sh --force
-./update.sh --version
-```
-
-`--check` exits with `0` when an update is available and `3` when the selected channel is current. In beta mode the check pulls the current `edge` image metadata/layers if needed so the running image can be compared with the newest `edge` build without restarting it.
-
-The updater automatically uses `compose.local.yml` when it exists, otherwise `compose.yml`. Set `COWCLOAK_COMPOSE_FILE` when a deployment uses a different file name. The Compose image must remain parameterized as `ghcr.io/vain90/cowcloak:${COWCLOAK_TAG:-latest}` so the updater can select stable or beta without rewriting local deployment configuration. Fixed-version deployments remain intentionally manual.
-
-To add `update.sh` to an existing installation after 0.1.1 has been released:
-
-```bash
-LATEST_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
-  https://github.com/vain90/Cowcloak/releases/latest)
-LATEST_TAG=${LATEST_URL##*/}
-curl -fsSLo update.sh \
-  "https://raw.githubusercontent.com/vain90/Cowcloak/${LATEST_TAG}/update.sh"
-chmod +x update.sh
-```
-
-Manual updates remain possible:
+Manual Docker Compose updates remain possible:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
+## Security
+
+Cowcloak holds a privileged mailcow read/write API key. Keep the API key and OAuth credentials on the server, use HTTPS, use secure cookies in production and restrict the API key by source IP where possible.
+
+Alias ownership is validated server-side before Cowcloak modifies an existing alias.
+
+See [SECURITY.md](SECURITY.md) for deployment recommendations and vulnerability reporting.
+
 ## Development
 
-Python 3.12 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
-ruff check .
-pytest -q
-```
-
-## Security model
-
-The read/write mailcow API key is highly privileged. Cowcloak therefore enforces ownership server-side on every modifying request. Neither the alias domain nor the forwarding target is accepted from the browser. Both are derived from the mailbox authenticated by mailcow.
-
-Before editing, toggling, replacing or applying a bulk action to an alias, Cowcloak verifies that the alias belongs exclusively to the authenticated mailbox. Bulk actions reject reserved offline aliases and the primary mailbox alias even if an arbitrary ID is submitted manually. Replacement also rejects reserved aliases and the primary mailbox alias server-side. Used reserved aliases are protected against deletion server-side even if a crafted request bypasses the browser UI.
-
-Private mailcow comments are deliberately not surfaced to mailbox users. Cowcloak interprets and changes only its own offline reservation lifecycle markers: `[cowcloak:reserved]`, `[cowcloak:reserved-used]` and the recognized legacy reservation marker. Assignment clears the Cowcloak marker; unrelated private comments are neither exposed nor modified.
-
-When optional usage statistics are enabled, the effective statistics mode is resolved from the authenticated mailbox and its domain. The mailbox can change only its own statistics-tag family through Cowcloak; all unrelated tags are preserved. Sender review actions are accepted only for sender rows already stored for an alias owned by the authenticated mailbox.
-
-The collector reads recent Rspamd history using the same server-side mailcow API connection, filters it against currently eligible mailbox aliases and stores only data allowed by the effective statistics mode. Mode transitions reset the tracking start for newly collected detail, privacy downgrades prune data disallowed by the target mode, and sender writes are checked against the current persisted mode so a collector iteration that started before a privacy downgrade cannot reinsert more detailed sender data afterward.
-
-Normal browser navigation with an expired or missing session is redirected back to the Cowcloak login screen. Non-HTML/API requests continue to receive an explicit JSON `401` so frontend code can detect authentication loss rather than silently consuming a login page.
-
-Main-mailbox sender blocking remains an administrator-side mail-server setting and is not controlled by Cowcloak.
-
-See [SECURITY.md](SECURITY.md) for deployment and vulnerability-reporting guidance.
-
-## Status
-
-The current milestone is the first testable MVP:
-
-- [x] mailcow OAuth2 login
-- [x] mailbox-derived alias domain
-- [x] mailbox-isolated alias listing
-- [x] readable, named and custom aliases
-- [x] user-visible purposes stored as mailcow public comments
-- [x] private mailcow admin comments kept private
-- [x] immutable alias addresses when purposes change
-- [x] enable / disable aliases
-- [x] bulk selection with enable / disable, SOGo visibility and clipboard actions
-- [x] active / disabled status filters with counts
-- [x] configurable SOGo sender visibility per alias
-- [x] offline pool with 1 / 5 / 10 / 20 aliases
-- [x] individual and prompted assignment of used offline aliases
-- [x] plain-text and clipboard pool export excluding already-used addresses
-- [x] persistent protection against deleting used offline aliases
-- [x] catch-all notice for the authenticated mailbox
-- [x] concise built-in help
-- [x] German and English UI with browser detection and manual switching
-- [x] installable web app metadata and icons
-- [x] Docker image and Compose deployment
-- [x] stable release updater with self-update, explicit beta channel and health rollback
-- [x] CI and multi-architecture GHCR builds
-- [x] contribution and issue templates
-- [x] alias replacement workflow
-- [x] optional usage-statistics backend foundation
-- [x] incoming and outgoing alias usage classification from verified mailcow events
-- [x] inline usage-statistics UI
-- [x] mailbox/domain statistics modes with mailbox self-service overrides
-- [x] privacy-preserving statistics downgrade handling
-- [x] optional sender-domain and full-address aggregation
-- [x] manual and automatic expected-sender review
-- [x] unexpected-sender filter, aggregate review flow and per-alias review opt-out
-- [x] expired browser-session redirect with API-safe `401` behavior
-- [ ] integration test against a real mailcow test instance
-- [ ] iOS and macOS standalone OAuth device test
-- [ ] polished error pages and notifications
-
-Future enhancements are tracked as individual [GitHub issues](https://github.com/vain90/Cowcloak/issues) so implementation scope, dependencies and acceptance criteria can evolve without duplicating a second roadmap in this README.
-
-## Project name
-
-`Cowcloak` is a working project name and may change before the first stable release.
+Development setup, test commands and contribution guidelines are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. Cowcloak is an independent project and is not affiliated with or endorsed by the mailcow project or The Infrastructure Company GmbH.
+Cowcloak is licensed under the [MIT License](LICENSE).
