@@ -329,6 +329,11 @@
   color: #b42318;
 }
 
+.sender-review-muted {
+  background: #f2f4f7;
+  color: #667085;
+}
+
 .sender-stats-dialog {
   width: min(760px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 48px));
@@ -336,6 +341,25 @@
 
 .sender-stats-dialog-content {
   min-height: 80px;
+}
+
+.sender-review-settings {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.sender-review-settings .check-row {
+  font-size: 12px;
+}
+
+.sender-review-settings .hint {
+  padding-left: 22px;
+  font-size: 10.5px;
 }
 
 .sender-stats-dialog .sender-stats-list {
