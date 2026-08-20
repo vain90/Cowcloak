@@ -675,12 +675,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def export_pool(request: Request):
         user = require_user(request)
         aliases = await client(request).list_aliases()
-        reserved = sorted(
-            alias.address
+        reserved_aliases = [
+            alias
             for alias in aliases
             if is_owned_alias(alias, user) and alias.is_reserved and alias.active
+        ]
+        used_addresses = {
+            alias.address.lower() for alias in reserved_aliases if alias.is_reserved_used
+        }
+
+        stats_store = request.app.state.stats_store
+        if stats_store is not None and reserved_aliases:
+            stored_usage = await stats_store.alias_usage(
+                user,
+                [alias.address for alias in reserved_aliases],
+            )
+            used_addresses.update(
+                address.lower()
+                for address, usage in stored_usage.items()
+                if usage.received_count > 0 or usage.sent_count > 0
+            )
+
+        available = sorted(
+            alias.address
+            for alias in reserved_aliases
+            if alias.address.lower() not in used_addresses
         )
-        return PlainTextResponse("\n".join(reserved) + ("\n" if reserved else ""))
+        return PlainTextResponse("\n".join(available) + ("\n" if available else ""))
 
     @app.post("/aliases/bulk", response_class=PlainTextResponse)
     async def bulk_aliases(
@@ -892,6 +913,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Only unused offline aliases can be deleted",
+            )
+        if alias.is_reserved_used:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Used offline aliases must be assigned before they can be deleted",
             )
 
         stats_store = request.app.state.stats_store
