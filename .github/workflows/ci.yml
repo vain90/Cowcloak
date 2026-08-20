@@ -60,3 +60,7 @@ jobs:
           name: browser-e2e-results
           path: test-results
           if-no-files-found: ignore
+
+  mailcow-feasibility:
+    if: github.event_name == 'pull_request' && github.head_ref == 'test/issue-58-mailcow-feasibility'
+    uses: ./.github/workflows/mailcow-feasibility.yml
