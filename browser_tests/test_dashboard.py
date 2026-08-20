@@ -276,8 +276,21 @@ def test_action_required_empty_state_after_pending_work_is_resolved(
     dialog.locator(".used-pool-actions .primary").click()
 
     expect(dialog).to_be_visible(timeout=5000)
-    unexpected = dialog.locator(".unexpected-review-alias .sender-stats-row.unexpected")
-    unexpected.locator('.sender-review-form button[type="submit"]').click()
+    expect(dialog.locator(".unexpected-review-alias")).to_have_count(2)
+
+    amazon_review = dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
+    amazon_sender = amazon_review.locator(".sender-stats-row.unexpected")
+    expect(amazon_sender).to_have_count(1)
+    expect(amazon_sender).to_contain_text("odd@unexpected.example")
+    amazon_sender.locator('.sender-review-form button[type="submit"]').click()
+
+    expect(dialog).to_be_visible(timeout=5000)
+    expect(dialog.locator(".unexpected-review-alias")).to_have_count(1)
+    assigned_review = dialog.locator(".unexpected-review-alias").filter(has_text=USED_POOL)
+    assigned_sender = assigned_review.locator(".sender-stats-row.unexpected")
+    expect(assigned_sender).to_have_count(1)
+    expect(assigned_sender).to_contain_text("booking@example.net")
+    assigned_sender.locator('.sender-review-form button[type="submit"]').click()
 
     expect(dialog).to_be_visible(timeout=5000)
     expect(dialog.locator(".action-required-empty")).to_have_text("Nothing to do.")
