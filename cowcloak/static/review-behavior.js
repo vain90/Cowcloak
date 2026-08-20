@@ -1,10 +1,16 @@
 (() => {
   const language = document.documentElement.lang?.toLowerCase().startsWith("de") ? "de" : "en";
   const text = language === "de"
-    ? { reviewAll: "Alle prüfen" }
-    : { reviewAll: "Review all" };
+    ? {
+        actionRequired: "Handlungsbedarf",
+        actionRequiredCount: (count) => `Handlungsbedarf (${count})`,
+      }
+    : {
+        actionRequired: "Action required",
+        actionRequiredCount: (count) => `Action required (${count})`,
+      };
 
-  const LOGIN_PROMPT_PREFIX = "cowcloak-unexpected-review-login:";
+  const LOGIN_PROMPT_PREFIX = "cowcloak-action-required-login:";
   let loginPromptEvaluated = false;
 
   const csrfToken = () => document.querySelector('input[name="csrf_token"]')?.value || "";
@@ -35,94 +41,66 @@
     }
   };
 
-  const unexpectedCount = () => {
-    const value = document
-      .querySelector("[data-unexpected-filter] > span")
-      ?.textContent
-      ?.trim();
-    if (!value || value === "…") return null;
-    const count = Number.parseInt(value, 10);
-    return Number.isFinite(count) ? count : null;
-  };
+  const hasBlockingDialog = () =>
+    Boolean(document.querySelector("dialog[open]:not([data-action-required-dialog])"));
 
-  const internalReviewTrigger = () =>
-    document.querySelector("[data-unexpected-review-trigger]");
-
-  const usedPoolPromptPending = () =>
-    Boolean(
-      document.querySelector(".pool-item.pool-item-used")
-      && !document.querySelector("[data-used-pool-prompt]"),
-    );
-
-  const ensureReviewAction = () => {
+  const ensureAction = () => {
     const filters = document.querySelector(".status-filters");
-    const internal = internalReviewTrigger();
-    if (!filters || !internal) return;
-
-    internal.classList.add("unexpected-review-internal-trigger");
+    if (!filters) return null;
 
     let actions = document.querySelector("[data-unexpected-review-actions]");
     if (!actions) {
       actions = document.createElement("div");
-      actions.className = "unexpected-review-actions";
+      actions.className = "unexpected-review-actions action-required-actions";
       actions.dataset.unexpectedReviewActions = "1";
 
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "button compact unexpected-review-all-button";
+      button.className = "button compact unexpected-review-all-button action-required-button";
       button.dataset.unexpectedReviewAll = "1";
-      button.textContent = text.reviewAll;
-      button.addEventListener("click", () => internalReviewTrigger()?.click());
+      button.dataset.actionRequiredOpen = "1";
+      button.textContent = text.actionRequired;
+      button.addEventListener("click", () => window.CowcloakActionRequired?.open());
       actions.append(button);
       filters.insertAdjacentElement("beforebegin", actions);
     }
+    return actions.querySelector("[data-action-required-open]");
+  };
 
-    const count = unexpectedCount();
-    const button = actions.querySelector("[data-unexpected-review-all]");
-    if (button) button.hidden = count === null || count < 1;
+  const refresh = async () => {
+    const action = ensureAction();
+    const api = window.CowcloakActionRequired;
+    if (!action || !api?.summary) return;
 
-    if (loginPromptEvaluated || wasLoginPromptEvaluated() || count === null) return;
-    if (usedPoolPromptPending() || document.querySelector("dialog[open]")) return;
+    const summary = await api.summary();
+    action.textContent = summary.total > 0
+      ? text.actionRequiredCount(summary.total)
+      : text.actionRequired;
+    action.classList.toggle("has-action-required", summary.total > 0);
+
+    if (loginPromptEvaluated || wasLoginPromptEvaluated()) return;
+    if (hasBlockingDialog()) return;
 
     loginPromptEvaluated = true;
     markLoginPromptEvaluated();
-    if (count > 0) internal.click();
-  };
-
-  const styleOfflineSenderDialogs = (root = document) => {
-    const dialogs = [];
-    if (root instanceof Element && root.matches("[data-review-pool-dialog]")) dialogs.push(root);
-    root.querySelectorAll?.("[data-review-pool-dialog]").forEach((dialog) => dialogs.push(dialog));
-
-    dialogs.forEach((dialog) => {
-      dialog.querySelectorAll(".sender-stats-row").forEach((row) => {
-        row.classList.add("unexpected");
-      });
-    });
+    if (summary.total > 0) await api.open();
   };
 
   const start = () => {
     if (!document.querySelector(".status-filters")) return;
+    ensureAction();
+    refresh();
 
-    styleOfflineSenderDialogs();
-    ensureReviewAction();
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node instanceof Element) styleOfflineSenderDialogs(node);
-        });
-      });
-      ensureReviewAction();
-    });
-
+    const observer = new MutationObserver(() => ensureAction());
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      characterData: true,
     });
 
-    document.addEventListener("close", ensureReviewAction, true);
+    document.addEventListener("close", () => {
+      if (!loginPromptEvaluated && !wasLoginPromptEvaluated()) refresh();
+    }, true);
+    document.addEventListener("cowcloak:action-required-ready", refresh);
   };
 
   if (document.readyState === "loading") {

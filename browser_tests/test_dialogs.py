@@ -12,13 +12,9 @@ def _login(page: Page, base_url: str) -> None:
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"))
     expect(page.locator("[data-alias-results-region]")).to_be_visible()
 
-    used_dialog = page.locator("dialog[data-used-pool-prompt]")
-    expect(used_dialog).to_be_visible(timeout=5000)
-    used_dialog.locator(".used-pool-actions button").nth(1).click()
-
-    review_dialog = page.locator("dialog[data-unexpected-review-dialog]")
-    expect(review_dialog).to_be_visible(timeout=5000)
-    review_dialog.locator(".dialog-close").click()
+    action_dialog = page.locator("dialog[data-action-required-dialog]")
+    expect(action_dialog).to_be_visible(timeout=5000)
+    action_dialog.locator(".dialog-close").click()
 
 
 def _pool_item(page: Page, address: str):
