@@ -59,6 +59,11 @@ def test_collector_health_assets_cover_german_and_english_ui():
     assert "mögliche Lücke" in script
     assert "low headroom" in script
     assert "possible gap" in script
+    assert "3 Einträge geprüft" in script
+    assert "3 entries checked" in script
+    assert "healthy-probe" in script
+    assert "letzten vollständigen Historienfenster" in script
+    assert "last full adaptive history window" in script
     assert "not CPU or server utilization" in script
     assert "/static/collector-health.js" in base
     assert "/static/collector-health.css" in base

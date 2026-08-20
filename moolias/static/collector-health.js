@@ -25,6 +25,13 @@
       headroom: (percent) => `Historienpuffer ${percent} %`,
       headroomPending: 'Historienpuffer wird ermittelt',
       gapHeadroom: 'Historienpuffer nicht abgedeckt',
+      probeShort: '3 Einträge geprüft · Historie unverändert',
+      probeWindow: '3 Einträge geprüft · keine Änderung seit dem vorherigen Poll',
+      probeCoverage: (percent, overlap, count) =>
+        `${percent} % (${overlap} von ${count} Einträgen im letzten vollständigen Historienfenster)`,
+      probeCoverageUnknown: 'Letztes vollständiges Historienfenster ohne berechenbaren Puffer.',
+      probeExplanation:
+        'Der leichte 3er-Probe hat keine Änderung am Kopf der Rspamd-Historie gefunden. Watermarks, Zeitbereich und Historienpuffer stammen deshalb weiterhin aus dem letzten vollständigen adaptiven Historienfenster.',
       limitReached: 'Limit erreicht',
       details: 'Collector-Details',
       lastAttempt: 'Letzter Versuch',
@@ -77,6 +84,13 @@
       headroom: (percent) => `history headroom ${percent} %`,
       headroomPending: 'history headroom is being established',
       gapHeadroom: 'history watermark not covered',
+      probeShort: '3 entries checked · history unchanged',
+      probeWindow: '3 entries checked · no history change since previous poll',
+      probeCoverage: (percent, overlap, count) =>
+        `${percent} % (${overlap} of ${count} entries in the last full history window)`,
+      probeCoverageUnknown: 'The last full history window did not provide measurable headroom.',
+      probeExplanation:
+        'The lightweight three-entry probe found no change at the head of Rspamd history. Watermarks, time range and history headroom therefore remain from the last full adaptive history window.',
       limitReached: 'limit reached',
       details: 'Collector details',
       lastAttempt: 'Last attempt',
@@ -147,8 +161,11 @@
       parts.push(text.ago(age));
     }
 
+    const probeUnchanged = payload.coverage_state === 'healthy-probe';
     const headroom = percentage(payload.headroom_percent);
-    if (payload.coverage_state === 'initial') {
+    if (probeUnchanged) {
+      parts.push(text.probeShort);
+    } else if (payload.coverage_state === 'initial') {
       parts.push(text.headroomPending);
     } else if (headroom !== null && ['healthy', 'low'].includes(payload.state)) {
       parts.push(text.headroom(headroom));
@@ -184,9 +201,11 @@
     addDetail(
       list,
       text.historyWindow,
-      payload.history_count === null || payload.history_count === undefined
-        ? text.notRequested
-        : text.historyCount(payload.history_count, payload.history_limit),
+      probeUnchanged
+        ? text.probeWindow
+        : payload.history_count === null || payload.history_count === undefined
+          ? text.notRequested
+          : text.historyCount(payload.history_count, payload.history_limit),
     );
     addDetail(list, text.oldest, payload.oldest_event_at ? timestamp(payload.oldest_event_at) : text.none);
     addDetail(list, text.newest, payload.newest_event_at ? timestamp(payload.newest_event_at) : text.none);
@@ -202,7 +221,11 @@
     );
 
     let coverageValue = text.coverageUnknown;
-    if (payload.coverage_state === 'initial') coverageValue = text.coverageInitial;
+    if (probeUnchanged) {
+      coverageValue = headroom === null
+        ? text.probeCoverageUnknown
+        : text.probeCoverage(headroom, payload.overlap_count, payload.history_count);
+    } else if (payload.coverage_state === 'initial') coverageValue = text.coverageInitial;
     else if (payload.coverage_state === 'unavailable') coverageValue = text.coverageUnavailable;
     else if (payload.coverage_state === 'gap') coverageValue = text.coverageGap;
     else if (headroom !== null) {
@@ -213,7 +236,7 @@
 
     const explanation = document.createElement('p');
     explanation.className = 'collector-health-explanation';
-    explanation.textContent = text.coverageExplanation;
+    explanation.textContent = probeUnchanged ? text.probeExplanation : text.coverageExplanation;
     details.append(summary, list, explanation);
 
     if (payload.history_full) {
