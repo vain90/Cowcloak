@@ -26,5 +26,6 @@ jobs:
       - run: node --check cowcloak/static/app.js
       - run: node --check cowcloak/static/stats.js
       - run: node --check cowcloak/static/review.js
+      - run: node --check cowcloak/static/review-behavior.js
       - run: node --check cowcloak/static/stats-mode.js
       - run: bash -n update.sh
