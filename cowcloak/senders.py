@@ -30,13 +30,14 @@ _STOPWORDS = frozenset(
     }
 )
 
-# Use tldextract's bundled Public Suffix List snapshot. Sender matching must not
-# cause network access at runtime merely to refresh suffix data.
+# Use tldextract's bundled Public Suffix List snapshot, including private suffixes
+# such as github.io. Sender matching must not cause network access at runtime merely
+# to refresh suffix data, and multi-tenant suffixes must not create brand trust.
 _DOMAIN_EXTRACTOR = tldextract.TLDExtract(
     cache_dir=None,
     suffix_list_urls=(),
     fallback_to_snapshot=True,
-    include_psl_private_domains=False,
+    include_psl_private_domains=True,
 )
 
 
