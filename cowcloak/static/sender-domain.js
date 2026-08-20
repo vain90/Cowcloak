@@ -49,37 +49,39 @@
     }
   }
 
-  function decorate(root = document) {
-    if (!isFullMode()) return;
+  function decorateForm(form) {
+    const key = senderKey(form);
+    const decision = decisionInput(form);
+    if (!key.includes('@') || !decision) return;
 
-    root.querySelectorAll('.sender-review-form').forEach((form) => {
-      const key = senderKey(form);
-      const decision = decisionInput(form);
-      if (!key.includes('@') || !decision) return;
+    if (decision.value === 'expected') {
+      const addressButton = form.querySelector('button[type="submit"]');
+      if (addressButton) addressButton.textContent = text.addressExpected;
 
-      if (decision.value === 'expected') {
-        const addressButton = form.querySelector('button[type="submit"]');
-        if (addressButton) addressButton.textContent = text.addressExpected;
-
-        if (!form.querySelector('[data-expect-domain]')) {
-          const button = document.createElement('button');
-          button.className = 'button compact ghost';
-          button.type = 'button';
-          button.dataset.expectDomain = '1';
-          button.textContent = text.domainExpected;
-          form.append(button);
-        }
-      }
-
-      if (decision.value === 'clear' && !form.querySelector('[data-specific-unexpected]')) {
+      if (!form.querySelector('[data-expect-domain]')) {
         const button = document.createElement('button');
         button.className = 'button compact ghost';
         button.type = 'button';
-        button.dataset.specificUnexpected = '1';
-        button.textContent = text.specificUnexpected;
+        button.dataset.expectDomain = '1';
+        button.textContent = text.domainExpected;
         form.append(button);
       }
-    });
+    }
+
+    if (decision.value === 'clear' && !form.querySelector('[data-specific-unexpected]')) {
+      const button = document.createElement('button');
+      button.className = 'button compact ghost';
+      button.type = 'button';
+      button.dataset.specificUnexpected = '1';
+      button.textContent = text.specificUnexpected;
+      form.append(button);
+    }
+  }
+
+  function decorate(root = document) {
+    if (!isFullMode()) return;
+    if (root.matches?.('.sender-review-form')) decorateForm(root);
+    root.querySelectorAll?.('.sender-review-form').forEach(decorateForm);
   }
 
   document.addEventListener('click', async (event) => {
@@ -91,7 +93,7 @@
       const csrfToken = form?.querySelector('input[name="csrf_token"]')?.value;
       if (!form || !key || !id || !csrfToken || !key.includes('@')) return;
 
-      const domain = key.rsplit ? key.rsplit('@', 1)[1] : key.slice(key.lastIndexOf('@') + 1);
+      const domain = key.slice(key.lastIndexOf('@') + 1);
       const accepted = await window.CowcloakDialog.confirm({
         title: text.title,
         message: text.body(domain),
