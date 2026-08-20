@@ -76,6 +76,8 @@
     if (button) button.hidden = count === null || count < 1;
 
     if (loginPromptEvaluated || wasLoginPromptEvaluated() || count === null) return;
+    if (document.querySelector("dialog[open]")) return;
+
     loginPromptEvaluated = true;
     markLoginPromptEvaluated();
     if (count > 0) internal.click();
@@ -113,6 +115,8 @@
       subtree: true,
       characterData: true,
     });
+
+    document.addEventListener("close", ensureReviewAction, true);
   };
 
   if (document.readyState === "loading") {
