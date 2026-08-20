@@ -16,6 +16,7 @@ from cowcloak.collector_health import (
     CollectorHealthStore,
 )
 from cowcloak.config import Settings
+from cowcloak.dedup import DedupStore, dedup_cleanup_due, dedup_prune_cutoff
 from cowcloak.mailcow import MailcowClient
 from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
 from cowcloak.stats_mode import (
@@ -136,6 +137,7 @@ class UsageCollector:
         self.mailcow = mailcow
         self.store = store
         self.health_store = CollectorHealthStore(store.path)
+        self.dedup_store = DedupStore(store.path)
         self._reported_conflicts: set[str] = set()
         self._last_history: list[dict[str, Any]] | None = None
         self._last_health_warning_signature: tuple[str | None, bool] | None = None
@@ -449,6 +451,36 @@ class UsageCollector:
             )
         return received + sent + senders
 
+    async def _prune_deduplication(self, health: CollectorHealth, *, now: int) -> None:
+        cutoff = dedup_prune_cutoff(
+            previous_watermark=health.previous_watermark,
+            coverage_state=health.coverage_state,
+            poll_interval_seconds=self.settings.usage_poll_seconds,
+            stale_polls=self.settings.usage_stale_polls,
+        )
+        if cutoff is None:
+            return
+
+        last_pruned_at = await self.dedup_store.last_pruned_at()
+        if not dedup_cleanup_due(last_pruned_at=last_pruned_at, now=now):
+            return
+
+        result = await self.dedup_store.prune(cutoff, pruned_at=now)
+        if result.total:
+            LOGGER.info(
+                "Pruned %d Cowcloak statistics deduplication hash(es) at floor %d "
+                "(%d usage, %d sender-detail)",
+                result.total,
+                result.floor_at,
+                result.processed_events,
+                result.sender_processed_events,
+            )
+        else:
+            LOGGER.debug(
+                "Cowcloak statistics deduplication floor is %d; no old hashes to prune",
+                result.floor_at,
+            )
+
     def _log_health_warning(self, health: CollectorHealth) -> None:
         signature = (health.coverage_state, health.history_full)
         if signature == self._last_health_warning_signature:
@@ -496,11 +528,18 @@ class UsageCollector:
             raise
 
         duration_ms = max(0, round((time.monotonic() - started_monotonic) * 1000))
+        finished_at = int(time.time())
         health = await self.health_store.record_success(
-            finished_at=int(time.time()),
+            finished_at=finished_at,
             duration_ms=duration_ms,
             history=self._last_history,
         )
+        try:
+            await self._prune_deduplication(health, now=finished_at)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception("Cowcloak statistics deduplication cleanup failed")
         self._log_health_warning(health)
         return recorded
 
