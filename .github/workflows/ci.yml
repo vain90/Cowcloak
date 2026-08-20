@@ -23,6 +23,7 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest -q
+      - run: node --check cowcloak/static/dialogs.js
       - run: node --check cowcloak/static/app.js
       - run: node --check cowcloak/static/stats.js
       - run: node --check cowcloak/static/review.js
