@@ -14,6 +14,18 @@ def test_service_name_matches_registered_sender_domain():
     )
 
 
+def test_compound_brand_matches_complete_registered_domain_identity():
+    alias = "takko-fashion-k7@example.org"
+    description = "TAKKO Fashion - App"
+
+    assert sender_match_token(alias, description, "contact.takko-fashion.com") == "takko-fashion"
+    assert sender_match_token(alias, description, "contact.takkofashion.com") == "takkofashion"
+
+    assert not sender_matches_alias(alias, description, "contact.takko-service.com")
+    assert not sender_matches_alias(alias, description, "contact.takko-fashion-service.com")
+    assert not sender_matches_alias(alias, description, "contact.takko-fashions.com")
+
+
 def test_multilabel_public_suffix_uses_registered_domain_label():
     assert registered_domain_label("service.vodafone.co.uk") == "vodafone"
     assert sender_matches_alias(
