@@ -1,18 +1,18 @@
-from cowcloak.aliases import RESERVED_COMMENT, USED_RESERVED_COMMENT, AliasRecord
-from cowcloak.config import Settings
-from cowcloak.stats import StatsStore, UsageEvent
-from cowcloak.usage import UsageCollector
+from moolias.aliases import RESERVED_COMMENT, USED_RESERVED_COMMENT, AliasRecord
+from moolias.config import Settings
+from moolias.stats import StatsStore, UsageEvent
+from moolias.usage import UsageCollector
 
 
 def settings(db_path: str, *, access_tag: str = "") -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_ACCESS_TAG=access_tag,
-        COWCLOAK_USAGE_STATS=True,
-        COWCLOAK_USAGE_TAG="cowcloak-stats",
-        COWCLOAK_USAGE_DB_PATH=db_path,
-        COWCLOAK_USAGE_HISTORY_COUNT=100,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_ACCESS_TAG=access_tag,
+        MOOLIAS_USAGE_STATS=True,
+        MOOLIAS_USAGE_TAG="moolias-stats",
+        MOOLIAS_USAGE_DB_PATH=db_path,
+        MOOLIAS_USAGE_HISTORY_COUNT=100,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -27,7 +27,7 @@ class FakeMailcow:
 
     async def list_domains(self):
         return [
-            {"domain": "example.org", "tags": ["Cowcloak-Stats"]},
+            {"domain": "example.org", "tags": ["Moolias-Stats"]},
             {"domain": "other.org", "tags": []},
         ]
 
@@ -174,7 +174,7 @@ async def test_reserved_offline_alias_collects_sender_detail_in_full_mode(tmp_pa
 
     async def list_domains():
         return [
-            {"domain": "example.org", "tags": ["cowcloak-stats-full"]},
+            {"domain": "example.org", "tags": ["moolias-stats-full"]},
             {"domain": "other.org", "tags": []},
         ]
 
@@ -328,7 +328,7 @@ async def test_mailbox_tag_enables_stats_without_domain_tag(tmp_path):
             {
                 "username": "user@example.org",
                 "domain": "example.org",
-                "tags": ["cowcloak-stats"],
+                "tags": ["moolias-stats"],
             }
         ]
 
@@ -346,7 +346,7 @@ async def test_usage_tag_does_not_bypass_configured_access_tag(tmp_path):
     mailcow = FakeMailcow(started_at + 1)
 
     collector = UsageCollector(
-        settings(str(tmp_path / "usage.sqlite3"), access_tag="cowcloak"),
+        settings(str(tmp_path / "usage.sqlite3"), access_tag="moolias"),
         mailcow,
         store,
     )
@@ -357,7 +357,7 @@ async def test_usage_tag_does_not_bypass_configured_access_tag(tmp_path):
             {
                 "username": "user@example.org",
                 "domain": "example.org",
-                "tags": ["cowcloak"],
+                "tags": ["moolias"],
             }
         ]
 

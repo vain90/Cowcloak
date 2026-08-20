@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 UPDATER_VERSION="0.1.1"
-REPOSITORY="vain90/Cowcloak"
-IMAGE="ghcr.io/vain90/cowcloak"
+REPOSITORY="vain90/Moolias"
+IMAGE="ghcr.io/vain90/moolias"
 LATEST_RELEASE_URL="https://github.com/${REPOSITORY}/releases/latest"
 RAW_BASE_URL="https://raw.githubusercontent.com/${REPOSITORY}"
 
@@ -19,7 +19,7 @@ SKIP_SELF_UPDATE=false
 
 usage() {
   cat <<'EOF'
-Cowcloak updater
+Moolias updater
 
 Usage:
   ./update.sh [options]
@@ -32,7 +32,7 @@ Options:
       --version      Show updater version
   -h, --help         Show this help
 
-Without --beta, the updater always follows the latest stable Cowcloak release.
+Without --beta, the updater always follows the latest stable Moolias release.
 EOF
 }
 
@@ -71,7 +71,7 @@ while (($#)); do
       SKIP_SELF_UPDATE=true
       ;;
     --version)
-      printf 'Cowcloak updater %s\n' "${UPDATER_VERSION}"
+      printf 'Moolias updater %s\n' "${UPDATER_VERSION}"
       exit 0
       ;;
     -h|--help)
@@ -94,7 +94,7 @@ get_latest_release_tag() {
       -o /dev/null \
       -w '%{url_effective}' \
       "${LATEST_RELEASE_URL}"
-  )" || die "Could not determine the latest Cowcloak release"
+  )" || die "Could not determine the latest Moolias release"
 
   tag="${final_url##*/}"
   if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+][0-9A-Za-z.-]+)?$ ]]; then
@@ -155,8 +155,8 @@ fi
 
 cd "${SCRIPT_DIR}"
 
-if [[ -n "${COWCLOAK_COMPOSE_FILE:-}" ]]; then
-  COMPOSE_FILE="${COWCLOAK_COMPOSE_FILE}"
+if [[ -n "${MOOLIAS_COMPOSE_FILE:-}" ]]; then
+  COMPOSE_FILE="${MOOLIAS_COMPOSE_FILE}"
 elif [[ -f "compose.local.yml" ]]; then
   COMPOSE_FILE="compose.local.yml"
 elif [[ -f "compose.yml" ]]; then
@@ -169,19 +169,19 @@ fi
 [[ -f ".env" ]] || die ".env not found in ${SCRIPT_DIR}"
 
 compose() {
-  COWCLOAK_TAG="${TARGET_TAG}" docker compose -f "${COMPOSE_FILE}" "$@"
+  MOOLIAS_TAG="${TARGET_TAG}" docker compose -f "${COMPOSE_FILE}" "$@"
 }
 
 RESOLVED_IMAGE="$(compose config --images 2>/dev/null | awk -v image="${IMAGE}:" 'index($0, image) == 1 { print; exit }')"
 if [[ -z "${RESOLVED_IMAGE}" ]]; then
-  die "The Cowcloak service does not use ${IMAGE}"
+  die "The Moolias service does not use ${IMAGE}"
 fi
 if [[ "${RESOLVED_IMAGE}" != "${IMAGE}:${TARGET_TAG}" ]]; then
-  die "The ${CHANNEL} channel requires Compose to resolve to ${IMAGE}:${TARGET_TAG}, but it resolves to ${RESOLVED_IMAGE}. Use image: ${IMAGE}:\${COWCLOAK_TAG:-latest} so update.sh can select latest or edge without editing Compose."
+  die "The ${CHANNEL} channel requires Compose to resolve to ${IMAGE}:${TARGET_TAG}, but it resolves to ${RESOLVED_IMAGE}. Use image: ${IMAGE}:\${MOOLIAS_TAG:-latest} so update.sh can select latest or edge without editing Compose."
 fi
 
 current_container_id() {
-  compose ps -q cowcloak 2>/dev/null | head -n 1
+  compose ps -q moolias 2>/dev/null | head -n 1
 }
 
 container_health() {
@@ -234,7 +234,7 @@ fi
 
 CURRENT_DISPLAY="${CURRENT_VERSION:-${CURRENT_IMAGE_REF:-not running}}"
 
-log "Cowcloak updater"
+log "Moolias updater"
 log ""
 log "Channel:   ${CHANNEL}"
 log "Installed: ${CURRENT_DISPLAY}"
@@ -247,7 +247,7 @@ TARGET_IMAGE_ID=""
 if [[ "${BETA}" == true ]]; then
   log ""
   log "Checking ${IMAGE}:edge..."
-  compose pull cowcloak
+  compose pull moolias
   TARGET_IMAGE_ID="$(docker image inspect "${IMAGE}:edge" --format '{{.Id}}' 2>/dev/null || true)"
   [[ -n "${TARGET_IMAGE_ID}" ]] || die "Could not inspect the downloaded edge image"
 
@@ -273,18 +273,18 @@ fi
 if [[ "${UPDATE_AVAILABLE}" != true && "${FORCE}" != true ]]; then
   log ""
   if [[ "${BETA}" == true ]]; then
-    log "Cowcloak is already on the current edge image."
+    log "Moolias is already on the current edge image."
   else
-    log "Cowcloak is already on the latest stable release."
+    log "Moolias is already on the latest stable release."
   fi
   exit 0
 fi
 
 if [[ "${ASSUME_YES}" != true ]]; then
   if [[ "${BETA}" == true ]]; then
-    printf '\nUpdate Cowcloak to the current unreleased edge build? [y/N] '
+    printf '\nUpdate Moolias to the current unreleased edge build? [y/N] '
   else
-    printf '\nUpdate Cowcloak to %s? [y/N] ' "${LATEST_VERSION}"
+    printf '\nUpdate Moolias to %s? [y/N] ' "${LATEST_VERSION}"
   fi
   read -r response
   if [[ ! "${response}" =~ ^[Yy]([Ee][Ss])?$ ]]; then
@@ -300,30 +300,30 @@ fi
 if [[ "${BETA}" != true ]]; then
   log ""
   log "Pulling ${IMAGE}:latest..."
-  compose pull cowcloak
+  compose pull moolias
 fi
 
-log "Starting Cowcloak from ${IMAGE}:${TARGET_TAG}..."
-compose up -d --force-recreate --remove-orphans cowcloak
+log "Starting Moolias from ${IMAGE}:${TARGET_TAG}..."
+compose up -d --force-recreate --remove-orphans moolias
 
 if wait_for_healthy; then
   UPDATED_CONTAINER="$(current_container_id)"
   UPDATED_VERSION="$(container_version "${UPDATED_CONTAINER}")"
   log "Health check: OK"
-  log "Cowcloak ${UPDATED_VERSION:-${TARGET_DISPLAY}} is running."
+  log "Moolias ${UPDATED_VERSION:-${TARGET_DISPLAY}} is running."
   exit 0
 fi
 
-error "The updated Cowcloak container did not become healthy."
-compose logs --tail=50 cowcloak >&2 || true
+error "The updated Moolias container did not become healthy."
+compose logs --tail=50 moolias >&2 || true
 
 if [[ -n "${CURRENT_IMAGE_ID}" ]]; then
   log "Rolling back to the previously running image..."
   docker tag "${CURRENT_IMAGE_ID}" "${IMAGE}:${TARGET_TAG}"
-  compose up -d --force-recreate --remove-orphans cowcloak
+  compose up -d --force-recreate --remove-orphans moolias
   if wait_for_healthy; then
     log "Rollback health check: OK"
-    log "The previous Cowcloak image is running again."
+    log "The previous Moolias image is running again."
     exit 1
   fi
 fi

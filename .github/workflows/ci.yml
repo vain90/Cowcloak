@@ -10,7 +10,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -23,14 +23,20 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest -q
-      - run: node --check cowcloak/static/dialogs.js
-      - run: node --check cowcloak/static/app.js
-      - run: node --check cowcloak/static/stats.js
-      - run: node --check cowcloak/static/sender-domain.js
-      - run: node --check cowcloak/static/review.js
-      - run: node --check cowcloak/static/review-behavior.js
-      - run: node --check cowcloak/static/stats-mode.js
+      - run: node --check moolias/static/dialogs.js
+      - run: node --check moolias/static/app.js
+      - run: node --check moolias/static/stats.js
+      - run: node --check moolias/static/sender-domain.js
+      - run: node --check moolias/static/review.js
+      - run: node --check moolias/static/review-behavior.js
+      - run: node --check moolias/static/stats-mode.js
       - run: bash -n update.sh
+      - name: Validate Docker Compose
+        run: |
+          cp .env.example .env
+          docker compose config >/dev/null
+      - name: Build Moolias image
+        run: docker build -t moolias:test .
 
   browser-e2e:
     runs-on: ubuntu-latest

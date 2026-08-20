@@ -2,14 +2,14 @@ import json
 
 import httpx
 
-from cowcloak.config import Settings
-from cowcloak.mailcow import MailcowClient
+from moolias.config import Settings
+from moolias.mailcow import MailcowClient
 
 
 def settings() -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -29,7 +29,7 @@ async def test_set_mailbox_tags_replaces_removed_tags_and_preserves_unrelated_ta
                 json={
                     "username": "user@example.org",
                     "domain": "example.org",
-                    "tags": ["cowcloak", "other-tag", "cowcloak-stats-full"],
+                    "tags": ["moolias", "other-tag", "moolias-stats-full"],
                 },
             )
         return httpx.Response(
@@ -40,7 +40,7 @@ async def test_set_mailbox_tags_replaces_removed_tags_and_preserves_unrelated_ta
     client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
     await client.set_mailbox_tags(
         "user@example.org",
-        ["cowcloak", "other-tag", "cowcloak-stats-domain"],
+        ["moolias", "other-tag", "moolias-stats-domain"],
     )
     await client.close()
 
@@ -49,14 +49,14 @@ async def test_set_mailbox_tags_replaces_removed_tags_and_preserves_unrelated_ta
         (
             "POST",
             "/api/v1/delete/mailbox/tag/user@example.org",
-            ["cowcloak-stats-full"],
+            ["moolias-stats-full"],
         ),
         (
             "POST",
             "/api/v1/edit/mailbox",
             {
                 "items": ["user@example.org"],
-                "attr": {"tags": ["cowcloak-stats-domain"]},
+                "attr": {"tags": ["moolias-stats-domain"]},
             },
         ),
     ]
@@ -74,7 +74,7 @@ async def test_set_mailbox_tags_can_remove_stats_override_without_adding_tags():
                 json={
                     "username": "user@example.org",
                     "domain": "example.org",
-                    "tags": ["cowcloak", "cowcloak-stats-domain"],
+                    "tags": ["moolias", "moolias-stats-domain"],
                 },
             )
         return httpx.Response(
@@ -83,7 +83,7 @@ async def test_set_mailbox_tags_can_remove_stats_override_without_adding_tags():
         )
 
     client = MailcowClient(settings(), transport=httpx.MockTransport(handler))
-    await client.set_mailbox_tags("user@example.org", ["cowcloak"])
+    await client.set_mailbox_tags("user@example.org", ["moolias"])
     await client.close()
 
     assert captured == [
@@ -91,6 +91,6 @@ async def test_set_mailbox_tags_can_remove_stats_override_without_adding_tags():
         (
             "POST",
             "/api/v1/delete/mailbox/tag/user@example.org",
-            ["cowcloak-stats-domain"],
+            ["moolias-stats-domain"],
         ),
     ]

@@ -1,4 +1,4 @@
-from cowcloak.stats_mode import (
+from moolias.stats_mode import (
     StatsMode,
     StatsModeSource,
     is_stats_mode_downgrade,
@@ -10,9 +10,9 @@ from cowcloak.stats_mode import (
 
 def test_mailbox_mode_overrides_domain_mode():
     state = resolve_stats_mode(
-        ["cowcloak-stats-domain"],
-        ["cowcloak-stats-full"],
-        "cowcloak-stats",
+        ["moolias-stats-domain"],
+        ["moolias-stats-full"],
+        "moolias-stats",
     )
 
     assert state.effective is StatsMode.DOMAIN
@@ -23,14 +23,14 @@ def test_mailbox_mode_overrides_domain_mode():
 
 def test_mailbox_basic_and_off_are_explicit_overrides():
     basic = resolve_stats_mode(
-        ["cowcloak-stats"],
-        ["cowcloak-stats-full"],
-        "cowcloak-stats",
+        ["moolias-stats"],
+        ["moolias-stats-full"],
+        "moolias-stats",
     )
     off = resolve_stats_mode(
-        ["cowcloak-stats-off"],
-        ["cowcloak-stats-full"],
-        "cowcloak-stats",
+        ["moolias-stats-off"],
+        ["moolias-stats-full"],
+        "moolias-stats",
     )
 
     assert basic.effective is StatsMode.BASIC
@@ -41,9 +41,9 @@ def test_mailbox_basic_and_off_are_explicit_overrides():
 
 def test_domain_mode_is_used_without_mailbox_override():
     state = resolve_stats_mode(
-        ["cowcloak", "other-tag"],
-        ["cowcloak-stats-domain"],
-        "cowcloak-stats",
+        ["moolias", "other-tag"],
+        ["moolias-stats-domain"],
+        "moolias-stats",
     )
 
     assert state.effective is StatsMode.DOMAIN
@@ -53,9 +53,9 @@ def test_domain_mode_is_used_without_mailbox_override():
 
 def test_conflicting_tags_disable_stats_on_that_level():
     state = resolve_stats_mode(
-        ["cowcloak-stats", "cowcloak-stats-full"],
-        ["cowcloak-stats-domain"],
-        "cowcloak-stats",
+        ["moolias-stats", "moolias-stats-full"],
+        ["moolias-stats-domain"],
+        "moolias-stats",
     )
 
     assert state.effective is StatsMode.OFF
@@ -65,29 +65,29 @@ def test_conflicting_tags_disable_stats_on_that_level():
 
 def test_replacing_mailbox_stats_mode_preserves_unrelated_tags():
     tags = replace_mailbox_stats_tags(
-        ["cowcloak", "other-tag", "cowcloak-stats-full"],
-        "cowcloak-stats",
+        ["moolias", "other-tag", "moolias-stats-full"],
+        "moolias-stats",
         "domain",
     )
 
-    assert tags == ["cowcloak", "other-tag", "cowcloak-stats-domain"]
+    assert tags == ["moolias", "other-tag", "moolias-stats-domain"]
 
 
 def test_inherit_removes_only_mailbox_stats_family():
     tags = replace_mailbox_stats_tags(
         [
-            "cowcloak",
+            "moolias",
             "other-tag",
-            "cowcloak-stats",
-            "cowcloak-stats-domain",
-            "cowcloak-stats-full",
-            "cowcloak-stats-off",
+            "moolias-stats",
+            "moolias-stats-domain",
+            "moolias-stats-full",
+            "moolias-stats-off",
         ],
-        "cowcloak-stats",
+        "moolias-stats",
         "inherit",
     )
 
-    assert tags == ["cowcloak", "other-tag"]
+    assert tags == ["moolias", "other-tag"]
 
 
 def test_inherit_resolves_to_domain_default_for_downgrade_detection():

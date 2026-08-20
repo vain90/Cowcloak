@@ -1,4 +1,4 @@
-from cowcloak.review_settings import AliasReviewSettingsStore
+from moolias.review_settings import AliasReviewSettingsStore
 
 
 async def test_ignore_unexpected_setting_is_persistent_per_alias(tmp_path):

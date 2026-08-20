@@ -1,19 +1,19 @@
 import pytest
 
-from cowcloak.aliases import AliasRecord
-from cowcloak.config import Settings
-from cowcloak.stats import StatsStore
-from cowcloak.usage import UsageCollector
+from moolias.aliases import AliasRecord
+from moolias.config import Settings
+from moolias.stats import StatsStore
+from moolias.usage import UsageCollector
 
 
 def settings(db_path: str) -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_USAGE_STATS=True,
-        COWCLOAK_USAGE_TAG="cowcloak-stats",
-        COWCLOAK_USAGE_DB_PATH=db_path,
-        COWCLOAK_USAGE_HISTORY_COUNT=100,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_USAGE_STATS=True,
+        MOOLIAS_USAGE_TAG="moolias-stats",
+        MOOLIAS_USAGE_DB_PATH=db_path,
+        MOOLIAS_USAGE_HISTORY_COUNT=100,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -69,8 +69,8 @@ class FakeMailcow:
 @pytest.mark.parametrize(
     ("mode_tag", "expected_key", "expected_address"),
     [
-        ("cowcloak-stats-domain", "amazon.de", None),
-        ("cowcloak-stats-full", "news@amazon.de", "news@amazon.de"),
+        ("moolias-stats-domain", "amazon.de", None),
+        ("moolias-stats-full", "news@amazon.de", "news@amazon.de"),
     ],
 )
 async def test_collector_stores_sender_at_selected_detail_level(

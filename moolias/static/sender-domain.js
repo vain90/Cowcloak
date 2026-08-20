@@ -23,7 +23,7 @@
     },
   }[language];
 
-  const REOPEN_KEY = 'cowcloak-unexpected-review-reopen';
+  const REOPEN_KEY = 'moolias-unexpected-review-reopen';
 
   const isFullMode = () => document.body.dataset.statsEffective === 'full';
 
@@ -94,7 +94,7 @@
       if (!form || !key || !id || !csrfToken || !key.includes('@')) return;
 
       const domain = key.slice(key.lastIndexOf('@') + 1);
-      const accepted = await window.CowcloakDialog.confirm({
+      const accepted = await window.MooliasDialog.confirm({
         title: text.title,
         message: text.body(domain),
         confirmLabel: text.confirm,
@@ -125,7 +125,7 @@
       } catch (error) {
         console.error('Sender domain expectation failed', error);
         domainButton.disabled = false;
-        await window.CowcloakDialog.error(text.failed);
+        await window.MooliasDialog.error(text.failed);
       }
       return;
     }

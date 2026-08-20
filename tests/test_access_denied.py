@@ -1,7 +1,7 @@
 import os
 
-os.environ.setdefault("COWCLOAK_BASE_URL", "https://aliases.example.org")
-os.environ.setdefault("COWCLOAK_SESSION_SECRET", "x" * 64)
+os.environ.setdefault("MOOLIAS_BASE_URL", "https://aliases.example.org")
+os.environ.setdefault("MOOLIAS_SESSION_SECRET", "x" * 64)
 os.environ.setdefault("MAILCOW_URL", "https://mail.example.org")
 os.environ.setdefault("MAILCOW_API_KEY", "secret")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_ID", "client")
@@ -9,18 +9,18 @@ os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
 
 from fastapi.testclient import TestClient
 
-import cowcloak.main as main_module
-from cowcloak.config import Settings
-from cowcloak.mailcow import MailcowAccessDenied
-from cowcloak.main import create_app
+import moolias.main as main_module
+from moolias.config import Settings
+from moolias.mailcow import MailcowAccessDenied
+from moolias.main import create_app
 
 
 def settings() -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_ACCESS_TAG="cowcloak",
-        COWCLOAK_COOKIE_SECURE=False,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_ACCESS_TAG="moolias",
+        MOOLIAS_COOKIE_SECURE=False,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -30,7 +30,7 @@ def settings() -> Settings:
 
 class DeniedMailcowClient:
     async def get_mailbox(self, email: str):
-        raise MailcowAccessDenied("cowcloak")
+        raise MailcowAccessDenied("moolias")
 
     async def close(self) -> None:
         pass
@@ -44,11 +44,11 @@ class ToggleMailcowClient:
     async def get_mailbox(self, email: str):
         self.mailbox_checks += 1
         if not self.allowed:
-            raise MailcowAccessDenied("cowcloak")
+            raise MailcowAccessDenied("moolias")
         return {
             "username": email,
             "domain": email.rsplit("@", 1)[-1],
-            "tags": ["cowcloak"],
+            "tags": ["moolias"],
         }
 
     async def list_aliases(self):
@@ -66,7 +66,7 @@ def configure_oauth(monkeypatch) -> None:
     monkeypatch.setattr(main_module, "validate_oauth_state", lambda _request, _state: None)
 
 
-def test_oauth_access_denied_renders_cowcloak_html(monkeypatch):
+def test_oauth_access_denied_renders_moolias_html(monkeypatch):
     configure_oauth(monkeypatch)
 
     app = create_app(settings())
@@ -80,8 +80,8 @@ def test_oauth_access_denied_renders_cowcloak_html(monkeypatch):
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Kein Zugriff auf Cowcloak" in response.text
-    assert "nicht für Cowcloak freigeschaltet" in response.text
+    assert "Kein Zugriff auf Moolias" in response.text
+    assert "nicht für Moolias freigeschaltet" in response.text
     assert '"detail"' not in response.text
 
 
@@ -109,7 +109,7 @@ def test_existing_session_is_revoked_when_access_tag_is_removed(monkeypatch):
 
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
-        assert "Kein Zugriff auf Cowcloak" in response.text
+        assert "Kein Zugriff auf Moolias" in response.text
         assert '"detail"' not in response.text
 
         start_response = client.get("/", follow_redirects=False)

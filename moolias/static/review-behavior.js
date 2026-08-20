@@ -10,7 +10,7 @@
         actionRequiredCount: (count) => `Action required (${count})`,
       };
 
-  const LOGIN_PROMPT_PREFIX = "cowcloak-action-required-login:";
+  const LOGIN_PROMPT_PREFIX = "moolias-action-required-login:";
   let loginPromptEvaluated = false;
 
   const csrfToken = () => document.querySelector('input[name="csrf_token"]')?.value || "";
@@ -60,7 +60,7 @@
       button.dataset.unexpectedReviewAll = "1";
       button.dataset.actionRequiredOpen = "1";
       button.textContent = text.actionRequired;
-      button.addEventListener("click", () => window.CowcloakActionRequired?.open());
+      button.addEventListener("click", () => window.MooliasActionRequired?.open());
       actions.append(button);
       filters.insertAdjacentElement("beforebegin", actions);
     }
@@ -69,7 +69,7 @@
 
   const refresh = async () => {
     const action = ensureAction();
-    const api = window.CowcloakActionRequired;
+    const api = window.MooliasActionRequired;
     if (!action || !api?.summary) return;
 
     const summary = await api.summary();
@@ -100,7 +100,7 @@
     document.addEventListener("close", () => {
       if (!loginPromptEvaluated && !wasLoginPromptEvaluated()) refresh();
     }, true);
-    document.addEventListener("cowcloak:action-required-ready", refresh);
+    document.addEventListener("moolias:action-required-ready", refresh);
   };
 
   if (document.readyState === "loading") {

@@ -1,18 +1,18 @@
 import httpx
 
-from cowcloak.config import Settings
-from cowcloak.mailcow import MailcowClient
-from cowcloak.stats import StatsStore
-from cowcloak.usage import UsageCollector
+from moolias.config import Settings
+from moolias.mailcow import MailcowClient
+from moolias.stats import StatsStore
+from moolias.usage import UsageCollector
 
 
 def settings(db_path: str, *, maximum: int = 1000) -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_USAGE_STATS=True,
-        COWCLOAK_USAGE_DB_PATH=db_path,
-        COWCLOAK_USAGE_HISTORY_COUNT=maximum,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_USAGE_STATS=True,
+        MOOLIAS_USAGE_DB_PATH=db_path,
+        MOOLIAS_USAGE_HISTORY_COUNT=maximum,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",

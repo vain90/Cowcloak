@@ -1,4 +1,4 @@
-from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
+from moolias.stats import SenderEvent, StatsStore, UsageEvent
 
 
 async def test_sender_store_keeps_all_sender_rows_and_manual_reviews(tmp_path):

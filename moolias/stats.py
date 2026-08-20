@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from cowcloak.stats_mode import StatsMode, is_stats_mode_downgrade
+from moolias.stats_mode import StatsMode, is_stats_mode_downgrade
 
 SCHEMA_VERSION = 2
 

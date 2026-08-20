@@ -1,6 +1,6 @@
 import pytest
 
-from cowcloak.aliases import (
+from moolias.aliases import (
     RESERVED_COMMENT,
     AliasRecord,
     is_mailbox_catch_all,

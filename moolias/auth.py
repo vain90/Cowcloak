@@ -5,8 +5,8 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import HTTPException, Request, status
 
-from cowcloak.config import Settings
-from cowcloak.security import new_token
+from moolias.config import Settings
+from moolias.security import new_token
 
 
 class OAuthError(RuntimeError):

@@ -7,35 +7,35 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    base_url: str = Field(alias="COWCLOAK_BASE_URL")
-    session_secret: str = Field(alias="COWCLOAK_SESSION_SECRET", min_length=32)
-    cookie_secure: bool = Field(default=True, alias="COWCLOAK_COOKIE_SECURE")
-    trusted_hosts: str = Field(default="*", alias="COWCLOAK_TRUSTED_HOSTS")
-    access_tag: str = Field(default="", alias="COWCLOAK_ACCESS_TAG")
+    base_url: str = Field(alias="MOOLIAS_BASE_URL")
+    session_secret: str = Field(alias="MOOLIAS_SESSION_SECRET", min_length=32)
+    cookie_secure: bool = Field(default=True, alias="MOOLIAS_COOKIE_SECURE")
+    trusted_hosts: str = Field(default="*", alias="MOOLIAS_TRUSTED_HOSTS")
+    access_tag: str = Field(default="", alias="MOOLIAS_ACCESS_TAG")
 
-    usage_stats: bool = Field(default=False, alias="COWCLOAK_USAGE_STATS")
-    usage_tag: str = Field(default="cowcloak-stats", alias="COWCLOAK_USAGE_TAG")
+    usage_stats: bool = Field(default=False, alias="MOOLIAS_USAGE_STATS")
+    usage_tag: str = Field(default="moolias-stats", alias="MOOLIAS_USAGE_TAG")
     usage_db_path: str = Field(
-        default="/data/cowcloak-stats.sqlite3",
-        alias="COWCLOAK_USAGE_DB_PATH",
+        default="/data/moolias-stats.sqlite3",
+        alias="MOOLIAS_USAGE_DB_PATH",
     )
     usage_poll_seconds: int = Field(
         default=60,
         ge=15,
         le=3600,
-        alias="COWCLOAK_USAGE_POLL_SECONDS",
+        alias="MOOLIAS_USAGE_POLL_SECONDS",
     )
     usage_history_count: int = Field(
         default=1000,
         ge=100,
         le=10000,
-        alias="COWCLOAK_USAGE_HISTORY_COUNT",
+        alias="MOOLIAS_USAGE_HISTORY_COUNT",
     )
     usage_stale_polls: int = Field(
         default=3,
         ge=1,
         le=100,
-        alias="COWCLOAK_USAGE_STALE_POLLS",
+        alias="MOOLIAS_USAGE_STALE_POLLS",
     )
 
     mailcow_url: str = Field(alias="MAILCOW_URL")
@@ -57,9 +57,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_usage_settings(self) -> "Settings":
         if self.usage_stats and not self.usage_tag:
-            raise ValueError("COWCLOAK_USAGE_TAG must be set when usage statistics are enabled")
+            raise ValueError("MOOLIAS_USAGE_TAG must be set when usage statistics are enabled")
         if self.usage_stats and not self.usage_db_path:
-            raise ValueError("COWCLOAK_USAGE_DB_PATH must be set when usage statistics are enabled")
+            raise ValueError("MOOLIAS_USAGE_DB_PATH must be set when usage statistics are enabled")
         return self
 
     @property

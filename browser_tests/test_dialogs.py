@@ -27,16 +27,16 @@ def test_destructive_confirmation_is_internal_and_cancellable(page: Page, base_u
     unused = _pool_item(page, UNUSED_POOL)
     unused.locator('form[action$="/delete-reserved"] button').click()
 
-    dialog = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    dialog = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(dialog).to_be_visible()
-    expect(dialog.locator('[data-cowcloak-dialog-cancel]')).to_be_focused()
-    dialog.locator('[data-cowcloak-dialog-cancel]').click()
+    expect(dialog.locator('[data-moolias-dialog-cancel]')).to_be_focused()
+    dialog.locator('[data-moolias-dialog-cancel]').click()
     expect(_pool_item(page, UNUSED_POOL)).to_have_count(1)
 
     _pool_item(page, UNUSED_POOL).locator('form[action$="/delete-reserved"] button').click()
-    dialog = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    dialog = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(dialog).to_be_visible()
-    dialog.locator('[data-cowcloak-dialog-confirm]').click()
+    dialog.locator('[data-moolias-dialog-confirm]').click()
     expect(_pool_item(page, UNUSED_POOL)).to_have_count(0, timeout=5000)
 
 
@@ -47,13 +47,13 @@ def test_statistics_downgrade_uses_internal_confirmation(page: Page, base_url: s
     form.locator('select[name="mode"]').select_option("basic")
     form.locator('button[type="submit"]').click()
 
-    dialog = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    dialog = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(dialog).to_be_visible()
-    dialog.locator('[data-cowcloak-dialog-cancel]').click()
+    dialog.locator('[data-moolias-dialog-cancel]').click()
     expect(page.locator("body")).to_have_attribute("data-stats-effective", "full")
 
 
-def test_bulk_failure_is_rendered_inside_cowcloak(page: Page, base_url: str) -> None:
+def test_bulk_failure_is_rendered_inside_moolias(page: Page, base_url: str) -> None:
     _login(page, base_url)
     page.route("**/aliases/bulk", lambda route: route.fulfill(status=500, body="failed"))
 
@@ -61,9 +61,9 @@ def test_bulk_failure_is_rendered_inside_cowcloak(page: Page, base_url: str) -> 
     page.locator("[data-bulk-action-select]").select_option("disable")
     page.locator(".bulk-actions button").click()
 
-    dialog = page.locator('dialog[data-cowcloak-dialog="message"]')
+    dialog = page.locator('dialog[data-moolias-dialog="message"]')
     expect(dialog).to_be_visible(timeout=5000)
-    expect(dialog.locator('[data-cowcloak-dialog-confirm]')).to_be_visible()
+    expect(dialog.locator('[data-moolias-dialog-confirm]')).to_be_visible()
 
 
 def test_confirmation_fits_mobile_viewport(page: Page, base_url: str) -> None:
@@ -71,7 +71,7 @@ def test_confirmation_fits_mobile_viewport(page: Page, base_url: str) -> None:
     _login(page, base_url)
 
     _pool_item(page, UNUSED_POOL).locator('form[action$="/delete-reserved"] button').click()
-    dialog = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    dialog = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(dialog).to_be_visible()
 
     box = dialog.bounding_box()

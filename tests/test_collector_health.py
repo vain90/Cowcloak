@@ -1,5 +1,5 @@
-from cowcloak.collector_health import CollectorHealthStore, assess_collector_health
-from cowcloak.stats import StatsStore
+from moolias.collector_health import CollectorHealthStore, assess_collector_health
+from moolias.stats import StatsStore
 
 
 def history(*timestamps: int) -> list[dict[str, int]]:

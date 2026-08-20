@@ -1,7 +1,7 @@
 import os
 
-os.environ.setdefault("COWCLOAK_BASE_URL", "https://aliases.example.org")
-os.environ.setdefault("COWCLOAK_SESSION_SECRET", "x" * 64)
+os.environ.setdefault("MOOLIAS_BASE_URL", "https://aliases.example.org")
+os.environ.setdefault("MOOLIAS_SESSION_SECRET", "x" * 64)
 os.environ.setdefault("MAILCOW_URL", "https://mail.example.org")
 os.environ.setdefault("MAILCOW_API_KEY", "secret")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_ID", "client")
@@ -9,15 +9,15 @@ os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
 
 from fastapi.testclient import TestClient
 
-from cowcloak.config import Settings
-from cowcloak.main import create_app
+from moolias.config import Settings
+from moolias.main import create_app
 
 
 def settings() -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_COOKIE_SECURE=False,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_COOKIE_SECURE=False,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",

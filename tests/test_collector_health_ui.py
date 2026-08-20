@@ -1,17 +1,17 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from cowcloak.config import Settings
-from cowcloak.review_settings import get_collector_health
+from moolias.config import Settings
+from moolias.review_settings import get_collector_health
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def settings(*, enabled: bool) -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_USAGE_STATS=enabled,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_USAGE_STATS=enabled,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -39,10 +39,10 @@ def test_stale_poll_default_is_three_and_configurable():
     assert settings(enabled=True).usage_stale_polls == 3
 
     custom = Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_USAGE_STATS=True,
-        COWCLOAK_USAGE_STALE_POLLS=5,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_USAGE_STATS=True,
+        MOOLIAS_USAGE_STALE_POLLS=5,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -52,8 +52,8 @@ def test_stale_poll_default_is_three_and_configurable():
 
 
 def test_collector_health_assets_cover_german_and_english_ui():
-    script = (ROOT / "cowcloak/static/collector-health.js").read_text()
-    base = (ROOT / "cowcloak/templates/base.html").read_text()
+    script = (ROOT / "moolias/static/collector-health.js").read_text()
+    base = (ROOT / "moolias/templates/base.html").read_text()
 
     assert "Puffer niedrig" in script
     assert "mögliche Lücke" in script

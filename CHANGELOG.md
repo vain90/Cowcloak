@@ -1,14 +1,14 @@
 # Changelog
 
-All notable changes to Cowcloak are documented here.
+All notable changes to Moolias are documented here.
 
 ## 0.1.3 - 2026-08-20
 
 ### Added
 
-- optional usage-statistics subsystem gated by `COWCLOAK_USAGE_STATS`
-- four-level mailcow statistics policy using `cowcloak-stats-off`, `cowcloak-stats`, `cowcloak-stats-domain` and `cowcloak-stats-full`
-- mailbox statistics-mode overrides with domain inheritance and user self-service in the Cowcloak dashboard
+- optional usage-statistics subsystem gated by `MOOLIAS_USAGE_STATS`
+- four-level mailcow statistics policy using `moolias-stats-off`, `moolias-stats`, `moolias-stats-domain` and `moolias-stats-full`
+- mailbox statistics-mode overrides with domain inheritance and user self-service in the Moolias dashboard
 - versioned SQLite storage for alias counters, optional sender aggregates, sender-review state and event deduplication, created only when statistics are enabled
 - background collection of accepted incoming alias deliveries and authenticated outgoing alias sends from mailcow Rspamd history
 - inline received/sent usage counters and last-used timestamps for opted-in mailboxes
@@ -52,8 +52,8 @@ All notable changes to Cowcloak are documented here.
 
 ### Changed
 
-- mailboxes without the configured access tag now return to a clear Cowcloak access-denied screen instead of showing a raw JSON error after OAuth
-- active Cowcloak sessions are revalidated against the configured mailcow access tag on protected alias routes, so removing the tag revokes access on the next request
+- mailboxes without the configured access tag now return to a clear Moolias access-denied screen instead of showing a raw JSON error after OAuth
+- active Moolias sessions are revalidated against the configured mailcow access tag on protected alias routes, so removing the tag revokes access on the next request
 - improved the assigned-alias layout on small screens
 - reduced the visual weight and size of active/SOGo status badges on mobile
 - changed the mobile alias edit popover into a viewport-safe bottom sheet with its own scrolling area
@@ -73,7 +73,7 @@ All notable changes to Cowcloak are documented here.
 ### Changed
 
 - `latest` is reserved for stable releases while `edge` follows `main`
-- the updater selects `latest` or `edge` through `COWCLOAK_TAG` without requiring Compose edits between stable and beta updates
+- the updater selects `latest` or `edge` through `MOOLIAS_TAG` without requiring Compose edits between stable and beta updates
 - name-based aliases now use a two-character ASCII letter/digit suffix with ambiguous characters excluded
 - readable-random aliases now use exactly two short words of at most six characters plus a two-digit number
 - both readable word lists contain 200–250 unique short words
@@ -89,7 +89,7 @@ First public release.
 
 ### Highlights
 
-- mailcow OAuth2 login without a separate Cowcloak user database
+- mailcow OAuth2 login without a separate Moolias user database
 - mailbox-isolated alias management with server-side ownership checks
 - name + random suffix, readable random and custom alias creation
 - offline alias pool with individual assignment and deletion of unused entries
@@ -104,7 +104,7 @@ First public release.
 
 ### Notes
 
-- Alias data remains in mailcow; Cowcloak is stateless.
+- Alias data remains in mailcow; Moolias is stateless.
 - Existing private mailcow admin comments are not exposed or modified.
 - Main-mailbox sender blocking remains an administrator-side mail-server setting.
 - Test the complete OAuth flow on installed Apple web apps before relying on that mode for daily use.

@@ -62,21 +62,21 @@
   }) {
     return new Promise((resolve) => {
       const dialog = document.createElement('dialog');
-      dialog.className = `cowcloak-dialog cowcloak-dialog-${tone}`;
-      dialog.dataset.cowcloakDialog = showCancel ? 'confirm' : 'message';
+      dialog.className = `moolias-dialog moolias-dialog-${tone}`;
+      dialog.dataset.mooliasDialog = showCancel ? 'confirm' : 'message';
 
       const { head, close } = dialogHeading(title, text.close);
       const body = document.createElement('p');
-      body.className = 'cowcloak-dialog-message';
+      body.className = 'moolias-dialog-message';
       body.textContent = message;
 
       const actions = document.createElement('div');
-      actions.className = 'button-row cowcloak-dialog-actions';
+      actions.className = 'button-row moolias-dialog-actions';
 
       const confirm = document.createElement('button');
       confirm.className = `button ${tone === 'danger' ? 'danger' : 'primary'}`;
       confirm.type = 'button';
-      confirm.dataset.cowcloakDialogConfirm = '1';
+      confirm.dataset.mooliasDialogConfirm = '1';
       confirm.textContent = confirmLabel;
       actions.append(confirm);
 
@@ -85,7 +85,7 @@
         cancel = document.createElement('button');
         cancel.className = 'button';
         cancel.type = 'button';
-        cancel.dataset.cowcloakDialogCancel = '1';
+        cancel.dataset.mooliasDialogCancel = '1';
         cancel.textContent = cancelLabel;
         actions.append(cancel);
       }
@@ -149,7 +149,7 @@
     },
   };
 
-  window.CowcloakDialog = api;
+  window.MooliasDialog = api;
 
   // Existing call sites are bridged while they are migrated to the asynchronous API.
   // Native browser dialogs are never shown.
@@ -169,8 +169,8 @@
   document.addEventListener('submit', async (event) => {
     const form = event.target.closest?.('form[data-confirm]');
     if (!form) return;
-    if (form.dataset.cowcloakConfirmed === '1') {
-      delete form.dataset.cowcloakConfirmed;
+    if (form.dataset.mooliasConfirmed === '1') {
+      delete form.dataset.mooliasConfirmed;
       return;
     }
 
@@ -184,7 +184,7 @@
     });
     if (!accepted) return;
 
-    form.dataset.cowcloakConfirmed = '1';
+    form.dataset.mooliasConfirmed = '1';
     nativeConfirmBypass += 1;
     form.requestSubmit(submitter || undefined);
   }, true);

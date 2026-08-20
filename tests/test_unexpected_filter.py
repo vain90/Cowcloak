@@ -6,19 +6,19 @@ import re
 
 from fastapi.testclient import TestClient
 
-from cowcloak.aliases import AliasRecord
-from cowcloak.config import Settings
-from cowcloak.review_settings import AliasReviewSettingsStore
-from cowcloak.stats import SenderEvent
+from moolias.aliases import AliasRecord
+from moolias.config import Settings
+from moolias.review_settings import AliasReviewSettingsStore
+from moolias.stats import SenderEvent
 
-os.environ.setdefault("COWCLOAK_BASE_URL", "https://aliases.example.org")
-os.environ.setdefault("COWCLOAK_SESSION_SECRET", "x" * 64)
+os.environ.setdefault("MOOLIAS_BASE_URL", "https://aliases.example.org")
+os.environ.setdefault("MOOLIAS_SESSION_SECRET", "x" * 64)
 os.environ.setdefault("MAILCOW_URL", "https://mail.example.org")
 os.environ.setdefault("MAILCOW_API_KEY", "secret")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_ID", "client")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
 
-import cowcloak.main as main_module  # noqa: E402
+import moolias.main as main_module  # noqa: E402
 
 USER = "user@example.org"
 OTHER_USER = "other@example.org"
@@ -94,12 +94,12 @@ def _aliases() -> list[AliasRecord]:
 
 def _settings(tmp_path) -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_COOKIE_SECURE=False,
-        COWCLOAK_USAGE_STATS=True,
-        COWCLOAK_USAGE_TAG="cowcloak-stats",
-        COWCLOAK_USAGE_DB_PATH=str(tmp_path / "stats.sqlite3"),
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_COOKIE_SECURE=False,
+        MOOLIAS_USAGE_STATS=True,
+        MOOLIAS_USAGE_TAG="moolias-stats",
+        MOOLIAS_USAGE_DB_PATH=str(tmp_path / "stats.sqlite3"),
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -204,7 +204,7 @@ def test_unexpected_filter_count_search_and_pagination_are_server_side(
     monkeypatch,
     tmp_path,
 ):
-    client, app = _client(monkeypatch, tmp_path, mode_tag="cowcloak-stats-full")
+    client, app = _client(monkeypatch, tmp_path, mode_tag="moolias-stats-full")
     with client:
         _login(client)
         asyncio.run(_seed_sender_state(app.state.stats_store))
@@ -240,7 +240,7 @@ def test_unexpected_filter_count_search_and_pagination_are_server_side(
 
 
 def test_unexpected_filter_is_empty_without_sender_detail(monkeypatch, tmp_path):
-    client, app = _client(monkeypatch, tmp_path, mode_tag="cowcloak-stats")
+    client, app = _client(monkeypatch, tmp_path, mode_tag="moolias-stats")
     with client:
         _login(client)
         asyncio.run(_seed_sender_state(app.state.stats_store))

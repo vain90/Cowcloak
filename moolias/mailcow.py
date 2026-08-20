@@ -7,8 +7,8 @@ from urllib.parse import quote
 import httpx
 from fastapi import HTTPException, status
 
-from cowcloak.aliases import USED_RESERVED_COMMENT, AliasRecord
-from cowcloak.config import Settings
+from moolias.aliases import USED_RESERVED_COMMENT, AliasRecord
+from moolias.config import Settings
 
 
 class MailcowError(RuntimeError):
@@ -20,7 +20,7 @@ class MailcowAccessDenied(HTTPException):
         super().__init__(
             status_code=status.HTTP_303_SEE_OTHER,
             detail=(
-                "Mailbox is not enabled for Cowcloak "
+                "Mailbox is not enabled for Moolias "
                 f"(missing mailcow tag '{access_tag}')"
             ),
             headers={"Location": "/?error=access-denied"},
