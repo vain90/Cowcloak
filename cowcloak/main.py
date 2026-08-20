@@ -33,6 +33,7 @@ from cowcloak.i18n import (
     translations,
 )
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
+from cowcloak.review_settings import router as review_settings_router
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.senders import sender_match_token
 from cowcloak.stats import StatsStore
@@ -116,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Cowcloak", version=__version__, lifespan=lifespan)
     app.state.settings = settings
+    app.include_router(review_settings_router)
     app.add_middleware(AccessRevalidationMiddleware)
     app.add_middleware(
         SessionMiddleware,
