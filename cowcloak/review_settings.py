@@ -7,6 +7,11 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 
 from cowcloak.aliases import is_owned_alias, is_primary_mailbox_alias
+from cowcloak.collector_health import (
+    LOW_HEADROOM_PERCENT,
+    CollectorHealthStore,
+    assess_collector_health,
+)
 from cowcloak.security import require_user, validate_csrf
 
 router = APIRouter()
@@ -108,6 +113,35 @@ async def get_alias_review_settings(request: Request):
         return {"ignored_unexpected": []}
     ignored = await store.ignored_aliases(user)
     return {"ignored_unexpected": sorted(ignored)}
+
+
+@router.get("/aliases/collector-health")
+async def get_collector_health(request: Request):
+    require_user(request)
+    settings = request.app.state.settings
+    stats_store = getattr(request.app.state, "stats_store", None)
+    if not settings.usage_stats or stats_store is None:
+        return {"enabled": False, "state": "off"}
+
+    health = await CollectorHealthStore(stats_store.path).read()
+    view = assess_collector_health(
+        health,
+        poll_interval_seconds=settings.usage_poll_seconds,
+        stale_polls=settings.usage_stale_polls,
+    )
+    payload = view.as_dict()
+    payload.update(
+        {
+            "enabled": True,
+            "stale_polls": settings.usage_stale_polls,
+            "low_headroom_percent": LOW_HEADROOM_PERCENT,
+        }
+    )
+    if payload["poll_interval_seconds"] is None:
+        payload["poll_interval_seconds"] = settings.usage_poll_seconds
+    if payload["history_limit"] is None:
+        payload["history_limit"] = settings.usage_history_count
+    return payload
 
 
 @router.post("/aliases/{alias_id}/unexpected-monitoring")

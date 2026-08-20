@@ -4,10 +4,12 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from email.utils import parseaddr
 from typing import Any
 
 from cowcloak.aliases import AliasRecord, is_owned_alias, is_primary_mailbox_alias
+from cowcloak.collector_health import CollectorHealth, CollectorHealthStore
 from cowcloak.config import Settings
 from cowcloak.mailcow import MailcowClient
 from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
@@ -127,7 +129,10 @@ class UsageCollector:
         self.settings = settings
         self.mailcow = mailcow
         self.store = store
+        self.health_store = CollectorHealthStore(store.path)
         self._reported_conflicts: set[str] = set()
+        self._last_history: list[dict[str, Any]] | None = None
+        self._last_health_warning_signature: tuple[str | None, bool] | None = None
 
     def _resolve_inventory(
         self,
@@ -233,6 +238,7 @@ class UsageCollector:
         await self._mark_reserved_aliases_used(used_alias_ids)
 
     async def collect_once(self) -> int:
+        self._last_history = None
         tracking_started_at = await self.store.tracking_started_at()
         states = await self.mailbox_states()
         if not states:
@@ -257,6 +263,7 @@ class UsageCollector:
             return 0
 
         history = await self.mailcow.get_rspamd_history(self.settings.usage_history_count)
+        self._last_history = history
 
         alias_targets: dict[str, str] = {}
         alias_records: dict[str, AliasRecord] = {}
@@ -367,10 +374,65 @@ class UsageCollector:
             )
         return received + sent + senders
 
+    def _log_health_warning(self, health: CollectorHealth) -> None:
+        signature = (health.coverage_state, health.history_full)
+        if signature == self._last_health_warning_signature:
+            return
+        self._last_health_warning_signature = signature
+
+        if health.coverage_state == "gap":
+            LOGGER.warning(
+                "Cowcloak Rspamd history may have a gap: previous watermark %s is not "
+                "safely covered by the current window %s..%s",
+                health.previous_watermark,
+                health.oldest_event_at,
+                health.newest_event_at,
+            )
+        elif health.coverage_state == "low":
+            LOGGER.warning(
+                "Cowcloak Rspamd history headroom is low: %.1f%% (%d of %d entries older "
+                "than the previous watermark)",
+                health.headroom_percent or 0.0,
+                health.overlap_count or 0,
+                health.history_count or 0,
+            )
+        elif health.history_full:
+            LOGGER.warning(
+                "Cowcloak Rspamd history reached the configured limit of %d entries; this "
+                "is a warning signal, not proof that data was missed",
+                health.history_limit or self.settings.usage_history_count,
+            )
+
+    async def collect_with_health(self) -> int:
+        started_at = int(time.time())
+        started_monotonic = time.monotonic()
+        await self.health_store.record_attempt(
+            attempted_at=started_at,
+            poll_interval_seconds=self.settings.usage_poll_seconds,
+            history_limit=self.settings.usage_history_count,
+        )
+        try:
+            recorded = await self.collect_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            duration_ms = max(0, round((time.monotonic() - started_monotonic) * 1000))
+            await self.health_store.record_failure(duration_ms=duration_ms, error=exc)
+            raise
+
+        duration_ms = max(0, round((time.monotonic() - started_monotonic) * 1000))
+        health = await self.health_store.record_success(
+            finished_at=int(time.time()),
+            duration_ms=duration_ms,
+            history=self._last_history,
+        )
+        self._log_health_warning(health)
+        return recorded
+
     async def run_forever(self) -> None:
         while True:
             try:
-                await self.collect_once()
+                await self.collect_with_health()
             except asyncio.CancelledError:
                 raise
             except Exception:

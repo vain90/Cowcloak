@@ -8,7 +8,7 @@ from pathlib import Path
 
 from cowcloak.stats_mode import StatsMode, is_stats_mode_downgrade
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,11 +74,13 @@ class StatsStore:
             if version == 0:
                 self._create_schema_v1(connection)
                 version = 1
+            if version == 1:
+                self._migrate_v1_to_v2(connection)
+                version = 2
             if version != SCHEMA_VERSION:
                 raise RuntimeError(
                     f"No migration path for usage database schema {version} to {SCHEMA_VERSION}"
                 )
-            self._ensure_sender_schema(connection)
 
     @staticmethod
     def _create_schema_v1(connection: sqlite3.Connection) -> None:
@@ -115,10 +117,7 @@ class StatsStore:
         connection.execute("PRAGMA user_version = 1")
 
     @staticmethod
-    def _ensure_sender_schema(connection: sqlite3.Connection) -> None:
-        # Sender statistics are an additive extension to schema v1. Keeping the
-        # user_version unchanged lets the previous 0.1.3 beta ignore these tables
-        # if an image update has to roll back after initialization.
+    def _migrate_v1_to_v2(connection: sqlite3.Connection) -> None:
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS sender_mode_state (
@@ -159,8 +158,35 @@ class StatsStore:
                 expected INTEGER NOT NULL CHECK (expected IN (0, 1)),
                 PRIMARY KEY (mailbox, alias, sender_key)
             );
+
+            CREATE TABLE IF NOT EXISTS sender_alias_settings (
+                mailbox TEXT NOT NULL COLLATE NOCASE,
+                alias TEXT NOT NULL COLLATE NOCASE,
+                ignore_unexpected INTEGER NOT NULL DEFAULT 0
+                    CHECK (ignore_unexpected IN (0, 1)),
+                PRIMARY KEY (mailbox, alias)
+            );
+
+            CREATE TABLE IF NOT EXISTS collector_health (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_attempt_at INTEGER,
+                last_success_at INTEGER,
+                last_error TEXT,
+                last_duration_ms INTEGER,
+                poll_interval_seconds INTEGER,
+                history_limit INTEGER,
+                history_count INTEGER,
+                oldest_event_at INTEGER,
+                newest_event_at INTEGER,
+                previous_watermark INTEGER,
+                watermark INTEGER,
+                overlap_count INTEGER,
+                headroom_percent REAL,
+                coverage_state TEXT
+            );
             """
         )
+        connection.execute("PRAGMA user_version = 2")
 
     async def tracking_started_at(self) -> int:
         return await asyncio.to_thread(self._tracking_started_at)
