@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
 
@@ -37,6 +38,13 @@ class FakeMailcow:
 
     async def close(self) -> None:
         pass
+
+    async def get_mailbox(self, email: str):
+        return {
+            "username": email,
+            "domain": email.rsplit("@", 1)[-1],
+            "tags": [],
+        }
 
     async def get_alias(self, alias_id: int) -> AliasRecord:
         assert alias_id == self.alias.id
@@ -82,11 +90,24 @@ def alias_record(**overrides) -> AliasRecord:
     return AliasRecord(**values)
 
 
-def make_client(monkeypatch, fake: FakeMailcow) -> TestClient:
+@contextmanager
+def make_client(monkeypatch, fake: FakeMailcow):
+    async def fake_exchange_code(_settings, _code):
+        return {"email": "hidden@example.org"}
+
     monkeypatch.setattr(main_module, "MailcowClient", lambda _: fake)
-    monkeypatch.setattr(main_module, "require_user", lambda _: "hidden@example.org")
+    monkeypatch.setattr(main_module, "exchange_code", fake_exchange_code)
+    monkeypatch.setattr(main_module, "validate_oauth_state", lambda _request, _state: None)
     monkeypatch.setattr(main_module, "validate_csrf", lambda _request, _token: None)
-    return TestClient(main_module.create_app(settings()))
+
+    with TestClient(main_module.create_app(settings())) as client:
+        login = client.get(
+            "/oauth/callback?code=test&state=test",
+            follow_redirects=False,
+        )
+        assert login.status_code == 303
+        assert login.headers["location"] == "/aliases"
+        yield client
 
 
 def test_replace_alias_copies_purpose_and_sogo_then_disables_old_alias(monkeypatch):
