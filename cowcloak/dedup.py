@@ -97,7 +97,7 @@ class DedupStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            connection.executescript(
+            connection.execute(
                 f"""
                 CREATE TRIGGER IF NOT EXISTS processed_events_dedup_floor_guard
                 BEFORE INSERT ON processed_events
@@ -109,8 +109,11 @@ class DedupStore:
                 )
                 BEGIN
                     SELECT RAISE(IGNORE);
-                END;
-
+                END
+                """
+            )
+            connection.execute(
+                f"""
                 CREATE TRIGGER IF NOT EXISTS sender_processed_events_dedup_floor_guard
                 BEFORE INSERT ON sender_processed_events
                 WHEN EXISTS (
@@ -121,12 +124,12 @@ class DedupStore:
                 )
                 BEGIN
                     SELECT RAISE(IGNORE);
-                END;
+                END
                 """
             )
 
             existing_floor = self._meta_int(connection, DEDUP_FLOOR_KEY)
-            floor_at = max(cutoff_at, existing_floor or 0)
+            floor_at = max(cutoff_at, existing_floor if existing_floor is not None else 0)
             connection.execute(
                 """
                 INSERT INTO usage_meta (key, value)
