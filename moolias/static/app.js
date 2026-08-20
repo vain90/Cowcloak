@@ -612,7 +612,7 @@ async function refreshAliasResults() {
 
   try {
     const response = await fetch(url, {
-      headers: { 'X-Cowcloak-Partial': 'alias-results' },
+      headers: { 'X-Moolias-Partial': 'alias-results' },
       signal: searchController.signal,
     });
     if (!response.ok) return;

@@ -2,22 +2,22 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
-import cowcloak
-from cowcloak.aliases import RESERVED_COMMENT, AliasRecord
-from cowcloak.config import Settings
-from cowcloak.i18n import translations
-from cowcloak.stats_mode import StatsMode, StatsModeSource, StatsModeState
-from cowcloak.usage import mailbox_stats_state, mailbox_usage_enabled
+import moolias
+from moolias.aliases import RESERVED_COMMENT, AliasRecord
+from moolias.config import Settings
+from moolias.i18n import translations
+from moolias.stats_mode import StatsMode, StatsModeSource, StatsModeState
+from moolias.usage import mailbox_stats_state, mailbox_usage_enabled
 
-TEMPLATES = Jinja2Templates(directory=str(Path(cowcloak.__file__).resolve().parent / "templates"))
+TEMPLATES = Jinja2Templates(directory=str(Path(moolias.__file__).resolve().parent / "templates"))
 
 
 def settings(*, enabled: bool = True) -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_USAGE_STATS=enabled,
-        COWCLOAK_USAGE_TAG="cowcloak-stats",
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_USAGE_STATS=enabled,
+        MOOLIAS_USAGE_TAG="moolias-stats",
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -47,8 +47,8 @@ class FakeMailcow:
 
 async def test_mailbox_mode_is_visible_as_effective_state():
     mailcow = FakeMailcow(
-        mailbox_tags=["cowcloak-stats-domain"],
-        domain_tags=["cowcloak-stats-full"],
+        mailbox_tags=["moolias-stats-domain"],
+        domain_tags=["moolias-stats-full"],
     )
 
     state = await mailbox_stats_state(settings(), mailcow, "user@example.org")
@@ -59,7 +59,7 @@ async def test_mailbox_mode_is_visible_as_effective_state():
 
 
 async def test_stats_disabled_skips_mailcow_lookup():
-    mailcow = FakeMailcow(mailbox_tags=["cowcloak-stats-full"])
+    mailcow = FakeMailcow(mailbox_tags=["moolias-stats-full"])
 
     state = await mailbox_stats_state(settings(enabled=False), mailcow, "user@example.org")
 

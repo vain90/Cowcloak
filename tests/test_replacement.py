@@ -3,25 +3,25 @@ from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
 
-from cowcloak.aliases import AliasRecord
-from cowcloak.config import Settings
-from cowcloak.mailcow import MailcowError
+from moolias.aliases import AliasRecord
+from moolias.config import Settings
+from moolias.mailcow import MailcowError
 
-os.environ.setdefault("COWCLOAK_BASE_URL", "https://aliases.example.org")
-os.environ.setdefault("COWCLOAK_SESSION_SECRET", "x" * 64)
+os.environ.setdefault("MOOLIAS_BASE_URL", "https://aliases.example.org")
+os.environ.setdefault("MOOLIAS_SESSION_SECRET", "x" * 64)
 os.environ.setdefault("MAILCOW_URL", "https://mail.example.org")
 os.environ.setdefault("MAILCOW_API_KEY", "secret")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_ID", "client")
 os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
 
-import cowcloak.main as main_module  # noqa: E402
+import moolias.main as main_module  # noqa: E402
 
 
 def settings() -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_COOKIE_SECURE=False,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_COOKIE_SECURE=False,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",

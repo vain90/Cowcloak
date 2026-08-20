@@ -1,4 +1,4 @@
-from cowcloak.i18n import detect_language, translations
+from moolias.i18n import detect_language, translations
 
 
 def test_cookie_language_wins_over_browser_language():

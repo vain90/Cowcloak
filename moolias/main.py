@@ -12,9 +12,9 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from cowcloak import __version__
-from cowcloak.access import AccessRevalidationMiddleware
-from cowcloak.aliases import (
+from moolias import __version__
+from moolias.access import AccessRevalidationMiddleware
+from moolias.aliases import (
     RESERVED_COMMENT,
     is_mailbox_catch_all,
     is_owned_alias,
@@ -24,21 +24,21 @@ from cowcloak.aliases import (
     readable_local_part,
     validate_local_part,
 )
-from cowcloak.auth import OAuthError, authorization_url, exchange_code, validate_oauth_state
-from cowcloak.config import Settings, get_settings
-from cowcloak.i18n import (
+from moolias.auth import OAuthError, authorization_url, exchange_code, validate_oauth_state
+from moolias.config import Settings, get_settings
+from moolias.i18n import (
     LANGUAGE_COOKIE,
     SUPPORTED_LANGUAGES,
     detect_language,
     translations,
 )
-from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
-from cowcloak.review_settings import AliasReviewSettingsStore
-from cowcloak.review_settings import router as review_settings_router
-from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
-from cowcloak.senders import sender_match_token
-from cowcloak.stats import StatsStore
-from cowcloak.stats_mode import (
+from moolias.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
+from moolias.review_settings import AliasReviewSettingsStore
+from moolias.review_settings import router as review_settings_router
+from moolias.security import ensure_csrf_token, require_user, validate_csrf
+from moolias.senders import sender_match_token
+from moolias.stats import StatsStore
+from moolias.stats_mode import (
     StatsMode,
     StatsModeSource,
     is_stats_mode_downgrade,
@@ -46,7 +46,7 @@ from cowcloak.stats_mode import (
     resolve_stats_mode,
     selected_effective_mode,
 )
-from cowcloak.usage import UsageCollector, mailbox_stats_state
+from moolias.usage import UsageCollector, mailbox_stats_state
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
@@ -106,7 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 collector = UsageCollector(settings, mailcow, store)
                 collector_task = asyncio.create_task(
                     collector.run_forever(),
-                    name="cowcloak-usage-collector",
+                    name="moolias-usage-collector",
                 )
             yield
         finally:
@@ -116,14 +116,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await collector_task
             await mailcow.close()
 
-    app = FastAPI(title="Cowcloak", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Moolias", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.include_router(review_settings_router)
     app.add_middleware(AccessRevalidationMiddleware)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,
-        session_cookie="cowcloak_session",
+        session_cookie="moolias_session",
         same_site="lax",
         https_only=settings.cookie_secure,
         max_age=60 * 60 * 12,

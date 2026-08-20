@@ -1,6 +1,6 @@
 import sqlite3
 
-from cowcloak.stats import StatsStore
+from moolias.stats import StatsStore
 
 
 def create_schema_v1(path) -> None:

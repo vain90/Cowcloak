@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/vain90/Cowcloak/security/policy
+    url: https://github.com/vain90/Moolias/security/policy
     about: Do not report security vulnerabilities in a public issue. Follow the security policy instead.

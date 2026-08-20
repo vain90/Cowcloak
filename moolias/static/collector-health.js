@@ -53,9 +53,9 @@
       coverageUnknown: 'Die Überlappung konnte aus den gelieferten Zeitstempeln nicht bestimmt werden.',
       coverageGap: 'Der vorherige Watermark liegt nicht mehr sicher im aktuellen Historienfenster.',
       coverageExplanation:
-        'Der Historienpuffer ist der Anteil der aktuell geladenen Rspamd-History-Einträge, deren Zeitstempel älter als der Watermark des vorherigen erfolgreichen Polls ist. Cowcloak lädt die Historie adaptiv und zielt auf mindestens 10 % Überlappung. Der Wert beschreibt die Überlappung der History-Fenster, nicht CPU- oder Serverauslastung.',
+        'Der Historienpuffer ist der Anteil der aktuell geladenen Rspamd-History-Einträge, deren Zeitstempel älter als der Watermark des vorherigen erfolgreichen Polls ist. Moolias lädt die Historie adaptiv und zielt auf mindestens 10 % Überlappung. Der Wert beschreibt die Überlappung der History-Fenster, nicht CPU- oder Serverauslastung.',
       fullWarning:
-        'Cowcloak musste bis zum konfigurierten History-Maximum laden. Das ist ein Warnsignal für ein knappes Fenster, aber allein kein Beweis für verlorene Daten.',
+        'Moolias musste bis zum konfigurierten History-Maximum laden. Das ist ein Warnsignal für ein knappes Fenster, aber allein kein Beweis für verlorene Daten.',
     },
     en: {
       states: {
@@ -105,9 +105,9 @@
       coverageUnknown: 'Overlap could not be determined from the returned timestamps.',
       coverageGap: 'The previous watermark is no longer safely inside the current history window.',
       coverageExplanation:
-        'History headroom is the proportion of currently loaded Rspamd history entries whose timestamps are older than the watermark from the previous successful poll. Cowcloak loads history adaptively and targets at least 10% overlap. It measures overlap between history windows, not CPU or server utilization.',
+        'History headroom is the proportion of currently loaded Rspamd history entries whose timestamps are older than the watermark from the previous successful poll. Moolias loads history adaptively and targets at least 10% overlap. It measures overlap between history windows, not CPU or server utilization.',
       fullWarning:
-        'Cowcloak had to load up to the configured history maximum. This is a warning signal that the window may be tight, but it is not proof that data was missed.',
+        'Moolias had to load up to the configured history maximum. This is a warning signal that the window may be tight, but it is not proof that data was missed.',
     },
   }[language];
 

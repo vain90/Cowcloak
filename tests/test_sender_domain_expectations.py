@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from cowcloak.stats import SenderEvent, StatsStore
+from moolias.stats import SenderEvent, StatsStore
 
 MAILBOX = "user@example.org"
 ALIAS = "vendor-k7@example.org"

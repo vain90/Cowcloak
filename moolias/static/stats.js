@@ -151,7 +151,7 @@
         console.error("Could not save unexpected sender setting", error);
         checkbox.checked = !checkbox.checked;
         checkbox.disabled = false;
-        await window.CowcloakDialog.error(text.ignoreUnexpectedFailed);
+        await window.MooliasDialog.error(text.ignoreUnexpectedFailed);
       }
     });
 

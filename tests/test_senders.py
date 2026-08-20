@@ -1,4 +1,4 @@
-from cowcloak.senders import registered_domain_label, sender_match_token, sender_matches_alias
+from moolias.senders import registered_domain_label, sender_match_token, sender_matches_alias
 
 
 def test_service_name_matches_registered_sender_domain():

@@ -3,21 +3,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 SUPPORTED_LANGUAGES = ("de", "en")
-LANGUAGE_COOKIE = "cowcloak_lang"
+LANGUAGE_COOKIE = "moolias_lang"
 
 _TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
         "landing_eyebrow": "MAIL ALIASES, SELF-HOSTED",
         "landing_lead": "Create and manage aliases for your mailcow mailbox.",
         "sign_in": "Sign in with mailcow",
-        "aliases_title": "Aliases · Cowcloak",
+        "aliases_title": "Aliases · Moolias",
         "your_aliases": "Your aliases",
         "signed_in_as": "Signed in as {user}",
         "sign_out": "Sign out",
         "help_open": "Help",
-        "help_title": "How Cowcloak works",
+        "help_title": "How Moolias works",
         "help_intro": (
-            "Cowcloak helps keep your real mailbox address private by using a separate "
+            "Moolias helps keep your real mailbox address private by using a separate "
             "alias for each service."
         ),
         "help_aliases_title": "One service, one alias",
@@ -33,7 +33,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "help_offline_title": "Offline pool",
         "help_offline_body": (
             "Prepare a few aliases in advance so you can use a fresh address even when "
-            "Cowcloak is unavailable. Assign its purpose later."
+            "Moolias is unavailable. Assign its purpose later."
         ),
         "help_sogo_title": "Sending with aliases",
         "help_sogo_body": (
@@ -42,14 +42,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_storage_title": "mailcow stays the source of truth",
         "help_storage_body": (
-            "Cowcloak does not keep a second alias database. Alias addresses, purposes, "
+            "Moolias does not keep a second alias database. Alias addresses, purposes, "
             "status and SOGo visibility stay in mailcow."
         ),
         "catch_all_active": "Catch-all active",
         "catch_all_hint": (
             "Even addresses you never created on {domain} reach your mailbox. This weakens "
             "one-alias-per-service because unknown or guessed addresses cannot be identified "
-            "or disabled individually in Cowcloak. For clean separation, disable catch-all "
+            "or disabled individually in Moolias. For clean separation, disable catch-all "
             "and use explicit aliases."
         ),
         "create_alias": "Create alias",
@@ -87,7 +87,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "usage_mode_basic": "Standard",
         "usage_mode_domain": "Domains",
         "usage_mode_full": "Full",
-        "usage_mode_off_hint": "Cowcloak does not collect new statistics for this mailbox.",
+        "usage_mode_off_hint": "Moolias does not collect new statistics for this mailbox.",
         "usage_mode_basic_hint": "Counts accepted received and sent messages.",
         "usage_mode_domain_hint": (
             "Counts received and sent messages and stores sender domains for received mail."
@@ -165,14 +165,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "landing_eyebrow": "MAIL-ALIASE, SELBST GEHOSTET",
         "landing_lead": "Erstelle und verwalte Aliase für dein mailcow-Postfach.",
         "sign_in": "Mit mailcow anmelden",
-        "aliases_title": "Aliase · Cowcloak",
+        "aliases_title": "Aliase · Moolias",
         "your_aliases": "Deine Aliase",
         "signed_in_as": "Angemeldet als {user}",
         "sign_out": "Abmelden",
         "help_open": "Hilfe",
-        "help_title": "So funktioniert Cowcloak",
+        "help_title": "So funktioniert Moolias",
         "help_intro": (
-            "Cowcloak hilft dir, deine echte Postfachadresse privat zu halten. Dafür nutzt "
+            "Moolias hilft dir, deine echte Postfachadresse privat zu halten. Dafür nutzt "
             "du für jeden Dienst eine eigene Alias-Adresse."
         ),
         "help_aliases_title": "Ein Dienst, ein Alias",
@@ -187,7 +187,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_offline_title": "Offline-Vorrat",
         "help_offline_body": (
-            "Bereite einige Aliase vor, damit du auch ohne Cowcloak-Zugriff eine frische "
+            "Bereite einige Aliase vor, damit du auch ohne Moolias-Zugriff eine frische "
             "Adresse verwenden kannst. Den Zweck trägst du später ein."
         ),
         "help_sogo_title": "Mit Aliasen senden",
@@ -197,14 +197,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_storage_title": "mailcow bleibt die Datenquelle",
         "help_storage_body": (
-            "Cowcloak führt keine zweite Alias-Datenbank. Adresse, Zweck, Status und "
+            "Moolias führt keine zweite Alias-Datenbank. Adresse, Zweck, Status und "
             "SOGo-Sichtbarkeit bleiben direkt in mailcow gespeichert."
         ),
         "catch_all_active": "Catch-all aktiv",
         "catch_all_hint": (
             "Auch nicht angelegte Adressen auf {domain} landen in deinem Postfach. Dadurch "
             "wird das Prinzip eines eigenen Alias pro Dienst geschwächt, weil unbekannte oder "
-            "erratene Adressen nicht einzeln in Cowcloak erkannt und deaktiviert werden können. "
+            "erratene Adressen nicht einzeln in Moolias erkannt und deaktiviert werden können. "
             "Für eine saubere Trennung sollte Catch-all deaktiviert sein."
         ),
         "create_alias": "Alias erstellen",
@@ -244,7 +244,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "usage_mode_basic": "Standard",
         "usage_mode_domain": "Domains",
         "usage_mode_full": "Vollständig",
-        "usage_mode_off_hint": "Cowcloak erfasst für dieses Postfach keine neuen Statistikdaten.",
+        "usage_mode_off_hint": "Moolias erfasst für dieses Postfach keine neuen Statistikdaten.",
         "usage_mode_basic_hint": "Zählt akzeptierte empfangene und gesendete Nachrichten.",
         "usage_mode_domain_hint": (
             "Zählt Empfang und Versand und speichert bei eingehenden Nachrichten "

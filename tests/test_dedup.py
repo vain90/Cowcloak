@@ -1,13 +1,13 @@
 import sqlite3
 
-from cowcloak.dedup import (
+from moolias.dedup import (
     DEDUP_CLEANUP_INTERVAL_SECONDS,
     DedupStore,
     dedup_cleanup_due,
     dedup_prune_cutoff,
     dedup_safety_seconds,
 )
-from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
+from moolias.stats import SenderEvent, StatsStore, UsageEvent
 
 MAILBOX = "user@example.org"
 ALIAS = "shop@example.org"

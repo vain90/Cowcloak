@@ -8,15 +8,15 @@ from pathlib import Path
 
 from fastapi import Response
 
-import cowcloak.main as main_module
-from cowcloak.aliases import RESERVED_COMMENT, USED_RESERVED_COMMENT, AliasRecord
-from cowcloak.config import Settings
-from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
+import moolias.main as main_module
+from moolias.aliases import RESERVED_COMMENT, USED_RESERVED_COMMENT, AliasRecord
+from moolias.config import Settings
+from moolias.stats import SenderEvent, StatsStore, UsageEvent
 
 USER = "user@example.org"
 DOMAIN = "example.org"
-DB_PATH = Path(os.environ.get("COWCLOAK_E2E_DB", "/tmp/cowcloak-browser-e2e.sqlite3"))
-BASE_URL = os.environ.get("COWCLOAK_E2E_BASE_URL", "http://127.0.0.1:8765")
+DB_PATH = Path(os.environ.get("MOOLIAS_E2E_DB", "/tmp/moolias-browser-e2e.sqlite3"))
+BASE_URL = os.environ.get("MOOLIAS_E2E_BASE_URL", "http://127.0.0.1:8765")
 
 
 class FakeMailcow:
@@ -24,7 +24,7 @@ class FakeMailcow:
         self.reset()
 
     def reset(self) -> None:
-        self.mailbox_tags = ["cowcloak-stats-full"]
+        self.mailbox_tags = ["moolias-stats-full"]
         self.domain_tags: list[str] = []
         self.aliases = {
             1: AliasRecord(
@@ -222,15 +222,15 @@ main_module.exchange_code = fake_exchange_code
 main_module.validate_oauth_state = fake_validate_oauth_state
 
 SETTINGS = Settings(
-    COWCLOAK_BASE_URL=BASE_URL,
-    COWCLOAK_SESSION_SECRET="e2e-session-secret-" * 4,
-    COWCLOAK_COOKIE_SECURE=False,
-    COWCLOAK_TRUSTED_HOSTS="127.0.0.1,localhost",
-    COWCLOAK_USAGE_STATS=True,
-    COWCLOAK_USAGE_TAG="cowcloak-stats",
-    COWCLOAK_USAGE_DB_PATH=str(DB_PATH),
-    COWCLOAK_USAGE_POLL_SECONDS=60,
-    COWCLOAK_USAGE_HISTORY_COUNT=1000,
+    MOOLIAS_BASE_URL=BASE_URL,
+    MOOLIAS_SESSION_SECRET="e2e-session-secret-" * 4,
+    MOOLIAS_COOKIE_SECURE=False,
+    MOOLIAS_TRUSTED_HOSTS="127.0.0.1,localhost",
+    MOOLIAS_USAGE_STATS=True,
+    MOOLIAS_USAGE_TAG="moolias-stats",
+    MOOLIAS_USAGE_DB_PATH=str(DB_PATH),
+    MOOLIAS_USAGE_POLL_SECONDS=60,
+    MOOLIAS_USAGE_HISTORY_COUNT=1000,
     MAILCOW_URL="https://mail.example.org",
     MAILCOW_API_KEY="e2e-api-key",
     MAILCOW_OAUTH_CLIENT_ID="e2e-client",

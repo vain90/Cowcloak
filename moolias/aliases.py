@@ -6,10 +6,21 @@ import unicodedata
 from dataclasses import dataclass
 from importlib.resources import files
 
-RESERVED_COMMENT = "[cowcloak:reserved]"
-USED_RESERVED_COMMENT = "[cowcloak:reserved-used]"
+RESERVED_COMMENT = "[moolias:reserved]"
+USED_RESERVED_COMMENT = "[moolias:reserved-used]"
+_LEGACY_RESERVED_COMMENT = "[cowcloak:reserved]"
+_LEGACY_USED_RESERVED_COMMENT = "[cowcloak:reserved-used]"
 LEGACY_RESERVED_COMMENTS = frozenset(
-    {RESERVED_COMMENT, USED_RESERVED_COMMENT, "[reserved] Offline alias"}
+    {
+        RESERVED_COMMENT,
+        USED_RESERVED_COMMENT,
+        _LEGACY_RESERVED_COMMENT,
+        _LEGACY_USED_RESERVED_COMMENT,
+        "[reserved] Offline alias",
+    }
+)
+USED_RESERVED_COMMENTS = frozenset(
+    {USED_RESERVED_COMMENT, _LEGACY_USED_RESERVED_COMMENT}
 )
 _SUFFIX_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _LOCAL_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
@@ -50,7 +61,7 @@ class AliasRecord:
 
     @property
     def is_reserved_used(self) -> bool:
-        return self.private_comment == USED_RESERVED_COMMENT
+        return self.private_comment in USED_RESERVED_COMMENTS
 
     @property
     def description(self) -> str:
@@ -92,7 +103,7 @@ def named_local_part(name: str) -> str:
 
 
 def load_words(language: str) -> tuple[str, ...]:
-    path = files("cowcloak").joinpath("wordlists", f"{language}.txt")
+    path = files("moolias").joinpath("wordlists", f"{language}.txt")
     words = tuple(
         line.strip().lower()
         for line in path.read_text(encoding="utf-8").splitlines()

@@ -1,6 +1,6 @@
-# Contributing to Cowcloak
+# Contributing to Moolias
 
-Thanks for helping improve Cowcloak. Small, focused pull requests are easiest to review and maintain.
+Thanks for helping improve Moolias. Small, focused pull requests are easiest to review and maintain.
 
 ## Before you start
 
@@ -37,14 +37,14 @@ Never commit `.env`.
 3. Add or update tests for behavior changes where practical.
 4. Run `ruff check .` and `pytest -q` before submitting.
 5. Explain any mailcow API, OAuth, permission, or ownership implications in the pull request.
-6. Keep Cowcloak generic. Do not hard-code deployment-specific domains, mailbox names, IP addresses, or secrets.
+6. Keep Moolias generic. Do not hard-code deployment-specific domains, mailbox names, IP addresses, or secrets.
 
 Changes that affect alias ownership, OAuth, CSRF, sessions, the mailcow API key, private comments, or forwarding targets receive extra security review.
 
 ## Project principles
 
 - mailcow remains the source of truth for alias data.
-- Cowcloak does not maintain a second password database.
+- Moolias does not maintain a second password database.
 - A user may only manage aliases owned exclusively by their authenticated mailbox.
 - Private mailcow admin comments remain private.
 - Alias addresses are immutable after creation.

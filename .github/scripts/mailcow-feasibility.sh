@@ -5,7 +5,7 @@ MAILCOW_DIR="${MAILCOW_DIR:-/tmp/mailcow-dockerized}"
 REPORT_DIR="${REPORT_DIR:-/tmp/mailcow-feasibility}"
 MAILCOW_HOSTNAME="${MAILCOW_HOSTNAME:-mail.mailcow-ci.test}"
 MAILCOW_HTTP_PORT="${MAILCOW_HTTP_PORT:-8080}"
-MAILCOW_API_KEY="${MAILCOW_API_KEY:-cowcloak-ci-feasibility}"
+MAILCOW_API_KEY="${MAILCOW_API_KEY:-moolias-ci-feasibility}"
 
 mkdir -p "$REPORT_DIR"
 
@@ -99,7 +99,7 @@ set_conf() {
 }
 
 # Keep the disposable instance local to the runner and skip services that are
-# irrelevant to Cowcloak's API-contract tests.
+# irrelevant to Moolias's API-contract tests.
 set_conf HTTP_PORT "$MAILCOW_HTTP_PORT"
 set_conf HTTP_BIND 127.0.0.1
 set_conf HTTPS_PORT 8443

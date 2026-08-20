@@ -9,17 +9,17 @@ import time
 from email.utils import parseaddr
 from typing import Any
 
-from cowcloak.aliases import AliasRecord, is_owned_alias, is_primary_mailbox_alias
-from cowcloak.collector_health import (
+from moolias.aliases import AliasRecord, is_owned_alias, is_primary_mailbox_alias
+from moolias.collector_health import (
     LOW_HEADROOM_PERCENT,
     CollectorHealth,
     CollectorHealthStore,
 )
-from cowcloak.config import Settings
-from cowcloak.dedup import DedupStore, dedup_cleanup_due, dedup_prune_cutoff
-from cowcloak.mailcow import MailcowClient
-from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
-from cowcloak.stats_mode import (
+from moolias.config import Settings
+from moolias.dedup import DedupStore, dedup_cleanup_due, dedup_prune_cutoff
+from moolias.mailcow import MailcowClient
+from moolias.stats import SenderEvent, StatsStore, UsageEvent
+from moolias.stats_mode import (
     StatsMode,
     StatsModeState,
     normalise_tags,
@@ -197,7 +197,7 @@ class UsageCollector:
         for mailbox in sorted(conflicts - self._reported_conflicts):
             state = states[mailbox]
             LOGGER.warning(
-                "Conflicting Cowcloak statistics tags for %s on %s level; statistics disabled",
+                "Conflicting Moolias statistics tags for %s on %s level; statistics disabled",
                 mailbox,
                 state.conflict_source.value if state.conflict_source is not None else "unknown",
             )
@@ -444,7 +444,7 @@ class UsageCollector:
         await self._mark_reserved_aliases_used(used_reserved_alias_ids)
         if received or sent or senders:
             LOGGER.info(
-                "Recorded %d received, %d sent and %d sender-detail Cowcloak event(s)",
+                "Recorded %d received, %d sent and %d sender-detail Moolias event(s)",
                 received,
                 sent,
                 senders,
@@ -468,7 +468,7 @@ class UsageCollector:
         result = await self.dedup_store.prune(cutoff, pruned_at=now)
         if result.total:
             LOGGER.info(
-                "Pruned %d Cowcloak statistics deduplication hash(es) at floor %d "
+                "Pruned %d Moolias statistics deduplication hash(es) at floor %d "
                 "(%d usage, %d sender-detail)",
                 result.total,
                 result.floor_at,
@@ -477,7 +477,7 @@ class UsageCollector:
             )
         else:
             LOGGER.debug(
-                "Cowcloak statistics deduplication floor is %d; no old hashes to prune",
+                "Moolias statistics deduplication floor is %d; no old hashes to prune",
                 result.floor_at,
             )
 
@@ -489,7 +489,7 @@ class UsageCollector:
 
         if health.coverage_state == "gap":
             LOGGER.warning(
-                "Cowcloak Rspamd history may have a gap: previous watermark %s is not "
+                "Moolias Rspamd history may have a gap: previous watermark %s is not "
                 "safely covered by the current window %s..%s",
                 health.previous_watermark,
                 health.oldest_event_at,
@@ -497,7 +497,7 @@ class UsageCollector:
             )
         elif health.coverage_state == "low":
             LOGGER.warning(
-                "Cowcloak Rspamd history headroom is low: %.1f%% (%d of %d entries older "
+                "Moolias Rspamd history headroom is low: %.1f%% (%d of %d entries older "
                 "than the previous watermark)",
                 health.headroom_percent or 0.0,
                 health.overlap_count or 0,
@@ -505,7 +505,7 @@ class UsageCollector:
             )
         elif health.history_full:
             LOGGER.warning(
-                "Cowcloak Rspamd history needed the configured maximum of %d entries; this "
+                "Moolias Rspamd history needed the configured maximum of %d entries; this "
                 "is a warning signal, not proof that data was missed",
                 health.history_limit or self.settings.usage_history_count,
             )
@@ -539,7 +539,7 @@ class UsageCollector:
         except asyncio.CancelledError:
             raise
         except Exception:
-            LOGGER.exception("Cowcloak statistics deduplication cleanup failed")
+            LOGGER.exception("Moolias statistics deduplication cleanup failed")
         self._log_health_warning(health)
         return recorded
 
@@ -550,5 +550,5 @@ class UsageCollector:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                LOGGER.exception("Cowcloak usage statistics collection failed")
+                LOGGER.exception("Moolias usage statistics collection failed")
             await asyncio.sleep(self.settings.usage_poll_seconds)

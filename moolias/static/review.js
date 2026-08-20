@@ -99,7 +99,7 @@
 
   // Keep the existing key so sender-domain review and the replacement workflow
   // can preserve the aggregate review context across a reload.
-  const REOPEN_KEY = "cowcloak-unexpected-review-reopen";
+  const REOPEN_KEY = "moolias-unexpected-review-reopen";
   const ACTIONABLE_HEALTH_STATES = new Set(["low", "gap", "stale", "failed"]);
 
   let actionDialog = null;
@@ -147,7 +147,7 @@
     const response = await fetch(url, {
       headers: {
         Accept: "text/html",
-        "X-Cowcloak-Partial": "action-required",
+        "X-Moolias-Partial": "action-required",
       },
       credentials: "same-origin",
     });
@@ -364,7 +364,7 @@
       for (const row of selected) {
         const purpose = row.querySelector(".used-pool-purpose input");
         if (!purpose?.value.trim()) {
-          await window.CowcloakDialog.error(text.poolMissingPurpose);
+          await window.MooliasDialog.error(text.poolMissingPurpose);
           purpose?.focus();
           return;
         }
@@ -411,7 +411,7 @@
       }
 
       markForReopen();
-      if (failed) await window.CowcloakDialog.error(text.poolFailed);
+      if (failed) await window.MooliasDialog.error(text.poolFailed);
       window.location.reload();
     });
 
@@ -466,7 +466,7 @@
         console.error("Could not save unexpected sender setting", error);
         checkbox.checked = false;
         checkbox.disabled = false;
-        await window.CowcloakDialog.error(text.ignoreUnexpectedFailed);
+        await window.MooliasDialog.error(text.ignoreUnexpectedFailed);
       }
     });
     wrapper.append(label, hint);
@@ -613,7 +613,7 @@
         empty.textContent = text.empty;
         actionContent.append(empty);
       }
-      actionDialog.dispatchEvent(new CustomEvent("cowcloak:action-required-rendered"));
+      actionDialog.dispatchEvent(new CustomEvent("moolias:action-required-rendered"));
       return sections.length;
     } catch (error) {
       console.error("Could not render action required", error);
@@ -706,7 +706,7 @@
     );
   };
 
-  window.CowcloakActionRequired = {
+  window.MooliasActionRequired = {
     open: openActionDialog,
     summary: getSummary,
     markForReopen,
@@ -723,7 +723,7 @@
     } catch (error) {
       console.debug("sessionStorage is unavailable", error);
     }
-    document.dispatchEvent(new CustomEvent("cowcloak:action-required-ready"));
+    document.dispatchEvent(new CustomEvent("moolias:action-required-ready"));
   };
 
   if (document.readyState === "loading") {

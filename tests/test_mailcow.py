@@ -5,15 +5,15 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from cowcloak.config import Settings
-from cowcloak.mailcow import MailcowClient
+from moolias.config import Settings
+from moolias.mailcow import MailcowClient
 
 
 def settings(access_tag: str = "") -> Settings:
     return Settings(
-        COWCLOAK_BASE_URL="https://aliases.example.org",
-        COWCLOAK_SESSION_SECRET="x" * 64,
-        COWCLOAK_ACCESS_TAG=access_tag,
+        MOOLIAS_BASE_URL="https://aliases.example.org",
+        MOOLIAS_SESSION_SECRET="x" * 64,
+        MOOLIAS_ACCESS_TAG=access_tag,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -49,11 +49,11 @@ async def test_get_mailbox_allows_matching_mailbox_tag_without_domain_lookup():
             json={
                 "username": "hidden@example.org",
                 "domain": "example.org",
-                "tags": ["Cowcloak"],
+                "tags": ["Moolias"],
             },
         )
 
-    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    client = MailcowClient(settings("moolias"), transport=httpx.MockTransport(handler))
     mailbox = await client.get_mailbox("hidden@example.org")
     await client.close()
 
@@ -71,9 +71,9 @@ async def test_get_mailbox_allows_matching_domain_tag():
                 200,
                 json={"username": "hidden@example.org", "domain": "example.org", "tags": []},
             )
-        return httpx.Response(200, json={"domain_name": "example.org", "tags": ["cowcloak"]})
+        return httpx.Response(200, json={"domain_name": "example.org", "tags": ["moolias"]})
 
-    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    client = MailcowClient(settings("moolias"), transport=httpx.MockTransport(handler))
     mailbox = await client.get_mailbox("hidden@example.org")
     await client.close()
 
@@ -93,14 +93,14 @@ async def test_get_mailbox_redirects_when_mailbox_and_domain_lack_access_tag():
             )
         return httpx.Response(200, json={"domain_name": "example.org", "tags": []})
 
-    client = MailcowClient(settings("cowcloak"), transport=httpx.MockTransport(handler))
+    client = MailcowClient(settings("moolias"), transport=httpx.MockTransport(handler))
     with pytest.raises(HTTPException) as exc_info:
         await client.get_mailbox("hidden@example.org")
     await client.close()
 
     assert exc_info.value.status_code == 303
     assert exc_info.value.headers == {"Location": "/?error=access-denied"}
-    assert "cowcloak" in str(exc_info.value.detail)
+    assert "moolias" in str(exc_info.value.detail)
 
 
 async def test_create_alias_sets_public_purpose_sender_permission_and_sogo_visibility():
@@ -139,13 +139,13 @@ async def test_reserved_alias_uses_private_marker_and_stays_hidden_from_sogo():
     await client.create_alias(
         "pool-42@example.org",
         "hidden@example.org",
-        private_comment="[cowcloak:reserved]",
+        private_comment="[moolias:reserved]",
         sogo_visible=False,
     )
     await client.close()
 
     assert captured["json"]["public_comment"] == ""
-    assert captured["json"]["private_comment"] == "[cowcloak:reserved]"
+    assert captured["json"]["private_comment"] == "[moolias:reserved]"
     assert captured["json"]["sogo_visible"] == 0
 
 

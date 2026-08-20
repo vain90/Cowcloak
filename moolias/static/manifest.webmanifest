@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Cowcloak",
-  "short_name": "Cowcloak",
+  "name": "Moolias",
+  "short_name": "Moolias",
   "description": "Self-hosted privacy alias manager for mailcow",
   "start_url": "/",
   "scope": "/",

@@ -6,16 +6,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
 
-from cowcloak.aliases import is_owned_alias, is_primary_mailbox_alias
-from cowcloak.collector_health import (
+from moolias.aliases import is_owned_alias, is_primary_mailbox_alias
+from moolias.collector_health import (
     LOW_HEADROOM_PERCENT,
     CollectorHealthStore,
     assess_collector_health,
 )
-from cowcloak.mailcow import MailcowError
-from cowcloak.security import require_user, validate_csrf
-from cowcloak.stats_mode import StatsMode
-from cowcloak.usage import mailbox_stats_state
+from moolias.mailcow import MailcowError
+from moolias.security import require_user, validate_csrf
+from moolias.stats_mode import StatsMode
+from moolias.usage import mailbox_stats_state
 
 router = APIRouter()
 

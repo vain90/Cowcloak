@@ -26,7 +26,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/cowcloak
+          images: ghcr.io/${{ github.repository_owner }}/moolias
           tags: |
             type=edge,branch=main
             type=semver,pattern={{version}}

@@ -4,7 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from cowcloak.mailcow import MailcowAccessDenied, MailcowError
+from moolias.mailcow import MailcowAccessDenied, MailcowError
 
 
 def _accepts_html(request: Request) -> bool:

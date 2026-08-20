@@ -1,17 +1,17 @@
 services:
-  cowcloak:
-    image: ghcr.io/vain90/cowcloak:${COWCLOAK_TAG:-latest}
+  moolias:
+    image: ghcr.io/vain90/moolias:${MOOLIAS_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env
     ports:
-      - "${COWCLOAK_PORT:-8080}:8000"
+      - "${MOOLIAS_PORT:-8080}:8000"
     volumes:
-      - cowcloak-data:/data
+      - moolias-data:/data
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
 
 volumes:
-  cowcloak-data:
+  moolias-data:

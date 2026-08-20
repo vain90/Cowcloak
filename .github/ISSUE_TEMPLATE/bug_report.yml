@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in Cowcloak
+description: Report a reproducible problem in Moolias
 title: "[Bug]: "
 labels: []
 body:
@@ -31,7 +31,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Cowcloak version or commit
+      label: Moolias version or commit
       placeholder: v0.1.0 or 127d4c9
     validations:
       required: true

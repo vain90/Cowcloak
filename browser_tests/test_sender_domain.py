@@ -56,16 +56,16 @@ def test_full_mode_domain_approval_warns_and_can_be_overridden_per_address(
     expect(sender.locator('[data-expect-domain]')).to_be_visible()
 
     sender.locator('[data-expect-domain]').click()
-    confirmation = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    confirmation = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(confirmation).to_be_visible()
     expect(confirmation).to_contain_text("unexpected.example")
-    confirmation.locator('[data-cowcloak-dialog-cancel]').click()
+    confirmation.locator('[data-moolias-dialog-cancel]').click()
     expect(sender).to_have_class(re.compile(r"\bunexpected\b"))
 
     sender.locator('[data-expect-domain]').click()
-    confirmation = page.locator('dialog[data-cowcloak-dialog="confirm"]')
+    confirmation = page.locator('dialog[data-moolias-dialog="confirm"]')
     expect(confirmation).to_be_visible()
-    confirmation.locator('[data-cowcloak-dialog-confirm]').click()
+    confirmation.locator('[data-moolias-dialog-confirm]').click()
 
     _expect_alias_url(page, base_url)
     dialog = _open_amazon_senders(page)

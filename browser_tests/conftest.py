@@ -40,21 +40,21 @@ def _wait_for_server(url: str, process: subprocess.Popen[str]) -> None:
 def base_url(tmp_path_factory) -> str:
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
-    database = tmp_path_factory.mktemp("cowcloak-e2e") / "stats.sqlite3"
+    database = tmp_path_factory.mktemp("moolias-e2e") / "stats.sqlite3"
     env = os.environ.copy()
     env.update(
         {
-            "COWCLOAK_E2E_BASE_URL": url,
-            "COWCLOAK_E2E_DB": str(database),
-            "COWCLOAK_BASE_URL": url,
-            "COWCLOAK_SESSION_SECRET": "e2e-session-secret-" * 4,
-            "COWCLOAK_COOKIE_SECURE": "false",
-            "COWCLOAK_TRUSTED_HOSTS": "127.0.0.1,localhost",
-            "COWCLOAK_USAGE_STATS": "true",
-            "COWCLOAK_USAGE_TAG": "cowcloak-stats",
-            "COWCLOAK_USAGE_DB_PATH": str(database),
-            "COWCLOAK_USAGE_POLL_SECONDS": "60",
-            "COWCLOAK_USAGE_HISTORY_COUNT": "1000",
+            "MOOLIAS_E2E_BASE_URL": url,
+            "MOOLIAS_E2E_DB": str(database),
+            "MOOLIAS_BASE_URL": url,
+            "MOOLIAS_SESSION_SECRET": "e2e-session-secret-" * 4,
+            "MOOLIAS_COOKIE_SECURE": "false",
+            "MOOLIAS_TRUSTED_HOSTS": "127.0.0.1,localhost",
+            "MOOLIAS_USAGE_STATS": "true",
+            "MOOLIAS_USAGE_TAG": "moolias-stats",
+            "MOOLIAS_USAGE_DB_PATH": str(database),
+            "MOOLIAS_USAGE_POLL_SECONDS": "60",
+            "MOOLIAS_USAGE_HISTORY_COUNT": "1000",
             "MAILCOW_URL": "https://mail.example.org",
             "MAILCOW_API_KEY": "e2e-api-key",
             "MAILCOW_OAUTH_CLIENT_ID": "e2e-client",
