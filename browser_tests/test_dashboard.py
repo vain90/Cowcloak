@@ -135,6 +135,53 @@ def test_sender_dialog_and_review_submission_reopen_with_fresh_state(
     expect(page.locator("[data-unexpected-filter] span")).to_have_text("0", timeout=5000)
 
 
+def test_unexpected_review_can_replace_alias_and_reopen_with_fresh_state(
+    page: Page,
+    base_url: str,
+) -> None:
+    _login(page, base_url)
+
+    review_all = page.locator("[data-unexpected-review-all]")
+    expect(review_all).to_be_visible(timeout=5000)
+    review_all.click()
+
+    review_dialog = page.locator("dialog[data-unexpected-review-dialog]")
+    expect(review_dialog).to_be_visible()
+    amazon_review = review_dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
+    replace_button = amazon_review.locator('[data-review-replace-alias]')
+    expect(replace_button).to_be_visible()
+    replace_button.click()
+
+    replacement_dialog = page.locator("dialog.assign-dialog[open]").filter(
+        has=page.locator('input[name="replacement-mode"]')
+    )
+    expect(replacement_dialog).to_be_visible()
+    replacement_dialog.locator('label.mode-option:has(input[value="custom"])').click()
+    replacement_dialog.locator('.address-input input').fill("amazon-safe")
+    replacement_dialog.locator(".button.primary").click()
+
+    result_dialog = page.locator("dialog.assign-dialog-single[open]").filter(
+        has_text="Alias replaced"
+    )
+    expect(result_dialog).to_be_visible(timeout=5000)
+    expect(result_dialog).to_contain_text("amazon-safe@example.org")
+    result_dialog.locator(".dialog-close").click()
+
+    expect(review_dialog).to_be_visible(timeout=5000)
+    expect(review_dialog.locator(".unexpected-review-list .empty")).to_be_visible()
+    review_dialog.locator(".dialog-close").click()
+    expect(page.locator("[data-unexpected-filter] span")).to_have_text("0", timeout=5000)
+
+    old_alias = _alias_row(page, AMAZON)
+    expect(old_alias).to_have_count(1)
+    expect(old_alias.locator("[data-alias-select]")).to_have_attribute("data-active", "0")
+
+    new_alias = _alias_row(page, "amazon-safe@example.org")
+    expect(new_alias).to_have_count(1)
+    expect(new_alias.locator(".alias-info strong")).to_have_text("Amazon")
+    expect(new_alias.locator("[data-alias-select]")).to_have_attribute("data-sogo", "1")
+
+
 def test_per_alias_unexpected_review_can_be_disabled(page: Page, base_url: str) -> None:
     _login(page, base_url)
 
