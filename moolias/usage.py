@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import time
+from dataclasses import replace
 from email.utils import parseaddr
 from typing import Any
 
@@ -14,9 +15,17 @@ from moolias.collector_health import (
     LOW_HEADROOM_PERCENT,
     CollectorHealth,
     CollectorHealthStore,
+    assess_collector_health,
 )
 from moolias.config import Settings
 from moolias.dedup import DedupStore, dedup_cleanup_due, dedup_prune_cutoff
+from moolias.history_probe import (
+    HISTORY_HEAD_PROBE_SIZE,
+    HISTORY_PROBE_COVERAGE_STATE,
+    HistoryProbeStore,
+    UnchangedHistory,
+    history_probe_fingerprints,
+)
 from moolias.mailcow import MailcowClient
 from moolias.stats import SenderEvent, StatsStore, UsageEvent
 from moolias.stats_mode import (
@@ -137,6 +146,7 @@ class UsageCollector:
         self.mailcow = mailcow
         self.store = store
         self.health_store = CollectorHealthStore(store.path)
+        self.history_probe_store = HistoryProbeStore(store.path)
         self.dedup_store = DedupStore(store.path)
         self._reported_conflicts: set[str] = set()
         self._last_history: list[dict[str, Any]] | None = None
@@ -283,11 +293,38 @@ class UsageCollector:
         return (overlap_count / len(history)) * 100.0 >= LOW_HEADROOM_PERCENT
 
     async def _adaptive_rspamd_history(self, tracking_started_at: int) -> list[dict[str, Any]]:
+        previous_health = await self.health_store.read()
+        previous_view = assess_collector_health(
+            previous_health,
+            poll_interval_seconds=self.settings.usage_poll_seconds,
+            stale_polls=self.settings.usage_stale_polls,
+        )
+        stored_probe = await self.history_probe_store.read()
+        probe_safe = (
+            previous_view.state == "healthy"
+            and previous_health.coverage_state in {"healthy", HISTORY_PROBE_COVERAGE_STATE}
+            and previous_health.watermark is not None
+            and stored_probe is not None
+        )
+
+        if probe_safe:
+            probe = await self.mailcow.get_rspamd_history(HISTORY_HEAD_PROBE_SIZE)
+            current_probe = history_probe_fingerprints(probe)
+            if current_probe is not None and current_probe == stored_probe:
+                LOGGER.debug(
+                    "Checked %d Rspamd history head entries; history is unchanged",
+                    HISTORY_HEAD_PROBE_SIZE,
+                )
+                return UnchangedHistory()
+
+            # Once the head changed, discard the old comparison state before entering
+            # the authoritative adaptive path. A failed slow path can then never reuse it.
+            await self.history_probe_store.invalidate()
+
         range_reader = getattr(self.mailcow, "get_rspamd_history_range", None)
         if range_reader is None:
             return await self.mailcow.get_rspamd_history(self.settings.usage_history_count)
 
-        previous_health = await self.health_store.read()
         boundary = previous_health.watermark or tracking_started_at
         maximum = self.settings.usage_history_count
 
@@ -529,18 +566,38 @@ class UsageCollector:
 
         duration_ms = max(0, round((time.monotonic() - started_monotonic) * 1000))
         finished_at = int(time.time())
-        health = await self.health_store.record_success(
-            finished_at=finished_at,
-            duration_ms=duration_ms,
-            history=self._last_history,
+        try:
+            if isinstance(self._last_history, UnchangedHistory):
+                await self.history_probe_store.record_unchanged_success(
+                    finished_at=finished_at,
+                    duration_ms=duration_ms,
+                )
+                health = await self.health_store.read()
+            else:
+                health = await self.health_store.record_success(
+                    finished_at=finished_at,
+                    duration_ms=duration_ms,
+                    history=self._last_history,
+                )
+                await self.history_probe_store.record_full_history(self._last_history)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await self.health_store.record_failure(duration_ms=duration_ms, error=exc)
+            raise
+
+        safety_health = (
+            replace(health, coverage_state="healthy")
+            if health.coverage_state == HISTORY_PROBE_COVERAGE_STATE
+            else health
         )
         try:
-            await self._prune_deduplication(health, now=finished_at)
+            await self._prune_deduplication(safety_health, now=finished_at)
         except asyncio.CancelledError:
             raise
         except Exception:
             LOGGER.exception("Moolias statistics deduplication cleanup failed")
-        self._log_health_warning(health)
+        self._log_health_warning(safety_health)
         return recorded
 
     async def run_forever(self) -> None:
