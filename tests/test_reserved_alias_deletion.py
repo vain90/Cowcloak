@@ -10,7 +10,7 @@ os.environ.setdefault("MAILCOW_OAUTH_CLIENT_SECRET", "oauth-secret")
 from fastapi.testclient import TestClient
 
 import cowcloak.main as main_module
-from cowcloak.aliases import RESERVED_COMMENT, AliasRecord
+from cowcloak.aliases import RESERVED_COMMENT, USED_RESERVED_COMMENT, AliasRecord
 from cowcloak.config import Settings
 from cowcloak.stats import AliasUsage
 
@@ -55,6 +55,9 @@ class FakeMailcow:
     async def get_alias(self, alias_id: int) -> AliasRecord:
         assert alias_id == self.alias.id
         return self.alias
+
+    async def list_aliases(self) -> list[AliasRecord]:
+        return [self.alias]
 
     async def delete_alias(self, alias_id: int) -> None:
         self.deleted.append(alias_id)
@@ -133,6 +136,31 @@ def test_sent_offline_alias_cannot_be_deleted(monkeypatch):
     assert mailcow.deleted == []
 
 
+def test_used_marker_blocks_deletion_without_usage_counters(monkeypatch):
+    client, mailcow = make_client(monkeypatch, None)
+    mailcow.alias = AliasRecord(
+        id=42,
+        address="feder-hafen-27@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment=USED_RESERVED_COMMENT,
+        public_comment="",
+        sogo_visible=False,
+    )
+    try:
+        response = client.post(
+            "/aliases/42/delete-reserved",
+            data={"csrf_token": "test"},
+            follow_redirects=False,
+        )
+    finally:
+        client.__exit__(None, None, None)
+
+    assert response.status_code == 409
+    assert mailcow.deleted == []
+
+
 def test_unused_offline_alias_can_still_be_deleted(monkeypatch):
     client, mailcow = make_client(
         monkeypatch,
@@ -150,3 +178,52 @@ def test_unused_offline_alias_can_still_be_deleted(monkeypatch):
     assert response.status_code == 303
     assert response.headers["location"] == "/aliases#pool"
     assert mailcow.deleted == [42]
+
+
+def test_pool_export_excludes_alias_with_used_marker(monkeypatch):
+    client, mailcow = make_client(monkeypatch, None)
+    mailcow.alias = AliasRecord(
+        id=42,
+        address="feder-hafen-27@example.org",
+        goto="hidden@example.org",
+        domain="example.org",
+        active=True,
+        private_comment=USED_RESERVED_COMMENT,
+        public_comment="",
+        sogo_visible=False,
+    )
+    try:
+        response = client.get("/aliases/pool.txt")
+    finally:
+        client.__exit__(None, None, None)
+
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_pool_export_excludes_alias_with_recorded_usage(monkeypatch):
+    client, _ = make_client(
+        monkeypatch,
+        AliasUsage(received_count=0, sent_count=1),
+    )
+    try:
+        response = client.get("/aliases/pool.txt")
+    finally:
+        client.__exit__(None, None, None)
+
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_pool_export_keeps_unused_alias(monkeypatch):
+    client, _ = make_client(
+        monkeypatch,
+        AliasUsage(received_count=0, sent_count=0),
+    )
+    try:
+        response = client.get("/aliases/pool.txt")
+    finally:
+        client.__exit__(None, None, None)
+
+    assert response.status_code == 200
+    assert response.text == "feder-hafen-27@example.org\n"
