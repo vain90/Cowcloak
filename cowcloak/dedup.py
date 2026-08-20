@@ -8,6 +8,7 @@ from pathlib import Path
 
 DEDUP_CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60
 DEDUP_MIN_SAFETY_SECONDS = 60 * 60
+DEDUP_PRUNE_BATCH_SIZE = 50_000
 DEDUP_FLOOR_KEY = "deduplication_floor_at"
 DEDUP_LAST_PRUNED_KEY = "deduplication_last_pruned_at"
 
@@ -53,8 +54,16 @@ def dedup_cleanup_due(*, last_pruned_at: int | None, now: int) -> bool:
 
 
 class DedupStore:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        batch_size: int = DEDUP_PRUNE_BATCH_SIZE,
+    ) -> None:
+        if batch_size < 1:
+            raise ValueError("Deduplication prune batch size must be positive")
         self.path = Path(path)
+        self.batch_size = int(batch_size)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -140,12 +149,30 @@ class DedupStore:
             )
 
             processed = connection.execute(
-                "DELETE FROM processed_events WHERE event_at <= ?",
-                (floor_at,),
+                """
+                DELETE FROM processed_events
+                WHERE rowid IN (
+                    SELECT rowid
+                    FROM processed_events
+                    WHERE event_at <= ?
+                    ORDER BY event_at, rowid
+                    LIMIT ?
+                )
+                """,
+                (floor_at, self.batch_size),
             ).rowcount
             sender_processed = connection.execute(
-                "DELETE FROM sender_processed_events WHERE event_at <= ?",
-                (floor_at,),
+                """
+                DELETE FROM sender_processed_events
+                WHERE rowid IN (
+                    SELECT rowid
+                    FROM sender_processed_events
+                    WHERE event_at <= ?
+                    ORDER BY event_at, rowid
+                    LIMIT ?
+                )
+                """,
+                (floor_at, self.batch_size),
             ).rowcount
 
             connection.execute(
