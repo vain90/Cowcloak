@@ -7,7 +7,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import HTTPException, status
 
-from cowcloak.aliases import AliasRecord
+from cowcloak.aliases import USED_RESERVED_COMMENT, AliasRecord
 from cowcloak.config import Settings
 
 
@@ -243,6 +243,17 @@ class MailcowClient:
                     "public_comment": public_comment,
                     "sogo_visible": 1 if sogo_visible else 0,
                 },
+            },
+        )
+        self._ensure_success(payload)
+
+    async def mark_reserved_alias_used(self, alias_id: int) -> None:
+        payload = await self._request(
+            "POST",
+            "/api/v1/edit/alias",
+            json={
+                "items": [str(alias_id)],
+                "attr": {"private_comment": USED_RESERVED_COMMENT},
             },
         )
         self._ensure_success(payload)

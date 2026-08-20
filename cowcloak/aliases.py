@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from importlib.resources import files
 
 RESERVED_COMMENT = "[cowcloak:reserved]"
-LEGACY_RESERVED_COMMENTS = frozenset({RESERVED_COMMENT, "[reserved] Offline alias"})
+USED_RESERVED_COMMENT = "[cowcloak:reserved-used]"
+LEGACY_RESERVED_COMMENTS = frozenset(
+    {RESERVED_COMMENT, USED_RESERVED_COMMENT, "[reserved] Offline alias"}
+)
 _SUFFIX_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 _LOCAL_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 
@@ -44,6 +47,10 @@ class AliasRecord:
     @property
     def is_reserved(self) -> bool:
         return self.private_comment in LEGACY_RESERVED_COMMENTS
+
+    @property
+    def is_reserved_used(self) -> bool:
+        return self.private_comment == USED_RESERVED_COMMENT
 
     @property
     def description(self) -> str:

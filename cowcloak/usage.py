@@ -7,7 +7,7 @@ import logging
 from email.utils import parseaddr
 from typing import Any
 
-from cowcloak.aliases import is_owned_alias, is_primary_mailbox_alias
+from cowcloak.aliases import AliasRecord, is_owned_alias, is_primary_mailbox_alias
 from cowcloak.config import Settings
 from cowcloak.mailcow import MailcowClient
 from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
@@ -197,11 +197,49 @@ class UsageCollector:
             if state.enabled and not state.conflict
         }
 
+    async def _mark_reserved_aliases_used(self, alias_ids: set[int]) -> None:
+        for alias_id in sorted(alias_ids):
+            current = await self.mailcow.get_alias(alias_id)
+            if current.is_reserved and not current.is_reserved_used:
+                await self.mailcow.mark_reserved_alias_used(alias_id)
+
+    async def _migrate_stored_reserved_usage(
+        self,
+        aliases: list[AliasRecord],
+        states: dict[str, StatsModeState],
+    ) -> None:
+        candidates: dict[str, list[AliasRecord]] = {}
+        for alias in aliases:
+            target = alias.goto.strip().lower()
+            if (
+                target in states
+                and alias.is_reserved
+                and not alias.is_reserved_used
+                and is_owned_alias(alias, target)
+            ):
+                candidates.setdefault(target, []).append(alias)
+
+        used_alias_ids: set[int] = set()
+        for mailbox, reserved_aliases in candidates.items():
+            stored = await self.store.alias_usage(
+                mailbox,
+                [alias.address for alias in reserved_aliases],
+            )
+            for alias in reserved_aliases:
+                usage = stored.get(alias.address.lower())
+                if usage is not None and (usage.received_count > 0 or usage.sent_count > 0):
+                    used_alias_ids.add(alias.id)
+
+        await self._mark_reserved_aliases_used(used_alias_ids)
+
     async def collect_once(self) -> int:
         tracking_started_at = await self.store.tracking_started_at()
         states = await self.mailbox_states()
         if not states:
             return 0
+
+        aliases = await self.mailcow.list_aliases()
+        await self._migrate_stored_reserved_usage(aliases, states)
 
         mode_starts = await self.store.sync_sender_modes(
             {
@@ -218,12 +256,10 @@ class UsageCollector:
         if not eligible:
             return 0
 
-        aliases, history = await asyncio.gather(
-            self.mailcow.list_aliases(),
-            self.mailcow.get_rspamd_history(self.settings.usage_history_count),
-        )
+        history = await self.mailcow.get_rspamd_history(self.settings.usage_history_count)
 
         alias_targets: dict[str, str] = {}
+        alias_records: dict[str, AliasRecord] = {}
         for alias in aliases:
             target = alias.goto.strip().lower()
             address = alias.address.strip().lower()
@@ -233,10 +269,12 @@ class UsageCollector:
                 continue
             if is_owned_alias(alias, target):
                 alias_targets[address] = target
+                alias_records[address] = alias
 
         received_events: list[UsageEvent] = []
         sent_events: list[UsageEvent] = []
         sender_events: list[SenderEvent] = []
+        used_reserved_alias_ids: set[int] = set()
 
         for item in history:
             action = str(item.get("action") or "").strip().lower()
@@ -263,6 +301,9 @@ class UsageCollector:
                         event_at=event_at,
                     )
                 )
+                alias_record = alias_records[alias]
+                if alias_record.is_reserved and not alias_record.is_reserved_used:
+                    used_reserved_alias_ids.add(alias_record.id)
 
                 mode = states[mailbox].effective
                 if (
@@ -309,10 +350,14 @@ class UsageCollector:
                         event_at=event_at,
                     )
                 )
+                alias_record = alias_records[sent_alias]
+                if alias_record.is_reserved and not alias_record.is_reserved_used:
+                    used_reserved_alias_ids.add(alias_record.id)
 
         received = await self.store.record_received(received_events)
         sent = await self.store.record_sent(sent_events)
         senders = await self.store.record_senders(sender_events)
+        await self._mark_reserved_aliases_used(used_reserved_alias_ids)
         if received or sent or senders:
             LOGGER.info(
                 "Recorded %d received, %d sent and %d sender-detail Cowcloak event(s)",
