@@ -49,6 +49,25 @@ Cowcloak treats less than 10% overlap as low headroom. Exactly 10% is healthy. I
 
 If Cowcloak has to load exactly `COWCLOAK_USAGE_HISTORY_COUNT` entries, the dashboard also exposes that the configured maximum was reached. With adaptive loading this means the collector genuinely needed to go all the way to the configured ceiling. Reaching the maximum is a warning signal that the window may be tight, but it is not by itself proof that any events were missed.
 
+## Deduplication retention
+
+Cowcloak stores SHA-256 event hashes in `processed_events` and `sender_processed_events` so repeated Rspamd history scans do not increment statistics more than once. These technical hashes are pruned over time; aggregate usage counters and sender aggregates are not retention targets.
+
+Rspamd history is count-based rather than time-based, so Cowcloak does not use an unsafe fixed rule such as "delete hashes older than seven days". At low mail volume an entry that old could still be inside the configured history window.
+
+Instead, cleanup advances only after a **healthy** comparison between two consecutive successful history windows. The previous successful watermark is then old enough to serve as a known processed boundary. Cowcloak keeps an additional time safety margin behind that boundary:
+
+```text
+safety margin = max(1 hour, 2 × stale threshold)
+prune floor   = previous successful watermark - safety margin
+```
+
+The stale threshold is `COWCLOAK_USAGE_POLL_SECONDS × COWCLOAK_USAGE_STALE_POLLS`. Cleanup is skipped while collector coverage is `starting`, `low`, `gap`, or otherwise not healthy.
+
+The prune floor is stored persistently in the statistics database. The same transaction that advances the floor removes deduplication rows at or below it. Persistent SQLite insert guards then reject any later replayed Rspamd event at or below that floor even though its original hash has already been deleted. This keeps cleanup safe across application restarts and prevents an old history entry from being counted a second time.
+
+Cleanup is checked only periodically, at most once every six hours after a safe watermark is available. It uses the existing `event_at` indexes and does not run `VACUUM` in the collector hot path. SQLite can reuse freed pages for later writes; administrators may perform offline database maintenance separately if shrinking the physical file is ever required.
+
 ## Stale threshold
 
 `COWCLOAK_USAGE_STALE_POLLS` controls how many expected collector intervals may pass without a successful collection before the state becomes stale.
