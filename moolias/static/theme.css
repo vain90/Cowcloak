@@ -1,0 +1,213 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101418;
+  --panel: #171c21;
+  --panel-2: #1d2329;
+  --text: #e7edf3;
+  --muted: #9aa6b2;
+  --line: #2a333c;
+  --line-strong: #3a4651;
+  --accent: #58b98b;
+  --accent-strong: #7fcea8;
+  --accent-soft: #173326;
+  --danger: #ff7b72;
+  --danger-soft: #3a1d1d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .28), 0 1px 4px rgba(0, 0, 0, .24);
+}
+
+.theme-control {
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.theme-select {
+  width: auto;
+  min-width: 78px;
+  padding: 4px 24px 4px 7px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] code,
+:root[data-theme="dark"] .count,
+:root[data-theme="dark"] .mode-option code,
+:root[data-theme="dark"] .alias-main code,
+:root[data-theme="dark"] .unexpected-review-identity code,
+:root[data-theme="dark"] .sender-review-settings > code,
+:root[data-theme="dark"] .sender-stats-identity code,
+:root[data-theme="dark"] .sender-message-count,
+:root[data-theme="dark"] .usage-count,
+:root[data-theme="dark"] .collector-health-details > summary,
+:root[data-theme="dark"] .collector-health-grid dd {
+  color: #c5d0da;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] .button,
+:root[data-theme="dark"] .mode-option-body,
+:root[data-theme="dark"] .filter-pill,
+:root[data-theme="dark"] .page-link,
+:root[data-theme="dark"] .edit-panel,
+:root[data-theme="dark"] .assign-dialog,
+:root[data-theme="dark"] .help-dialog,
+:root[data-theme="dark"] .help-trigger,
+:root[data-theme="dark"] .action-required-section {
+  background: var(--panel);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .button:hover,
+:root[data-theme="dark"] .help-trigger:hover,
+:root[data-theme="dark"] .alias-row:hover {
+  background: #20272e;
+}
+
+:root[data-theme="dark"] .search-clear {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .search-clear:hover,
+:root[data-theme="dark"] .dialog-close,
+:root[data-theme="dark"] .help-dialog .dialog-close,
+:root[data-theme="dark"] .filter-pill span,
+:root[data-theme="dark"] .status.off,
+:root[data-theme="dark"] .status.sogo-off,
+:root[data-theme="dark"] .sender-stats-count,
+:root[data-theme="dark"] .sender-review-muted,
+:root[data-theme="dark"] .collector-health-badge.state-starting,
+:root[data-theme="dark"] .collector-health-badge.state-unavailable {
+  background: #252d35;
+  color: #b3bec8;
+}
+
+:root[data-theme="dark"] .dialog-close:hover,
+:root[data-theme="dark"] .help-dialog .dialog-close:hover {
+  background: #303a44;
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .mode-option:hover .mode-option-body {
+  border-color: #52606d;
+}
+
+:root[data-theme="dark"] .mode-option > input:checked + .mode-option-body {
+  border-color: #4c9d77;
+  background: #18271f;
+}
+
+:root[data-theme="dark"] .filter-pill.current span {
+  background: #214533;
+}
+
+:root[data-theme="dark"] .warning-card,
+:root[data-theme="dark"] .pool-item-used,
+:root[data-theme="dark"] .pool-assignment-usage,
+:root[data-theme="dark"] .unexpected-review-trigger,
+:root[data-theme="dark"] .unexpected-review-all-button.has-action-required,
+:root[data-theme="dark"] .unexpected-review-alias,
+:root[data-theme="dark"] .action-required-health-warning.state-gap,
+:root[data-theme="dark"] .action-required-health-warning.state-failed,
+:root[data-theme="dark"] .sender-stats-row.unexpected,
+:root[data-theme="dark"] [data-review-pool-dialog] .sender-stats-row.unexpected,
+:root[data-theme="dark"] .unexpected-filter-pill.has-unexpected {
+  border-color: #7a3d39;
+  background: #2b1b1b;
+}
+
+:root[data-theme="dark"] .warning-card p {
+  color: #f4aaa4;
+}
+
+:root[data-theme="dark"] .sender-stats-alert,
+:root[data-theme="dark"] .unexpected-filter-pill.has-unexpected > span {
+  background: #3b2020;
+  color: #ff9b94;
+}
+
+:root[data-theme="dark"] .sender-stats-row.expected {
+  border-color: #285741;
+  background: #15271e;
+}
+
+:root[data-theme="dark"] .sender-stats-row.expected .sender-review-state,
+:root[data-theme="dark"] .collector-health-badge.state-healthy {
+  color: #78d6a5;
+}
+
+:root[data-theme="dark"] .collector-health-badge.state-healthy {
+  background: #163424;
+}
+
+:root[data-theme="dark"] .usage-mode-badge.mode-off {
+  color: #b3bec8;
+  background: #252d35;
+}
+
+:root[data-theme="dark"] .usage-mode-badge.mode-domain {
+  color: #8ab4ff;
+  background: #182a45;
+}
+
+:root[data-theme="dark"] .usage-mode-badge.mode-full {
+  color: #b8a4ff;
+  background: #292242;
+}
+
+:root[data-theme="dark"] .action-required-health-warning,
+:root[data-theme="dark"] .collector-health-badge.state-low,
+:root[data-theme="dark"] .collector-health-badge.state-stale,
+:root[data-theme="dark"] .collector-health-warning {
+  border-color: #725b26;
+  background: #302812;
+  color: #f4c96b;
+}
+
+:root[data-theme="dark"] .collector-health-badge.state-gap,
+:root[data-theme="dark"] .collector-health-badge.state-failed {
+  color: #ff9b94;
+  background: #3b2020;
+  border-color: #7a3d39;
+}
+
+:root[data-theme="dark"] .collector-health-grid dt,
+:root[data-theme="dark"] .usage-separator,
+:root[data-theme="dark"] .sender-review-state,
+:root[data-theme="dark"] .sender-stats-trigger,
+:root[data-theme="dark"] .sender-stats > summary {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .sender-stats-trigger.has-unexpected,
+:root[data-theme="dark"] .sender-stats-row.unexpected .sender-review-state,
+:root[data-theme="dark"] .unexpected-review-trigger,
+:root[data-theme="dark"] .unexpected-review-all-button.has-action-required,
+:root[data-theme="dark"] .unexpected-filter-pill.has-unexpected {
+  color: #ff9b94;
+}
+
+:root[data-theme="dark"] .used-pool-row {
+  border-color: #7a3d39;
+  background: #251b1b;
+}
+
+:root[data-theme="dark"] .used-pool-row.skipped {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+:root[data-theme="dark"] .moolias-dialog::backdrop,
+:root[data-theme="dark"] .assign-dialog::backdrop,
+:root[data-theme="dark"] .help-dialog::backdrop {
+  background: rgba(0, 0, 0, .56);
+}
+
+@media (max-width: 760px) {
+  .theme-select {
+    min-width: 72px;
+    padding-left: 6px;
+    font-size: 11px;
+  }
+}
