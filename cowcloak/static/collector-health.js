@@ -23,6 +23,7 @@
         return `vor ${hours} h`;
       },
       headroom: (percent) => `Historienpuffer ${percent} %`,
+      headroomPending: 'Historienpuffer wird ermittelt',
       gapHeadroom: 'Historienpuffer nicht abgedeckt',
       limitReached: 'Limit erreicht',
       details: 'Collector-Details',
@@ -44,7 +45,7 @@
       ms: (value) => `${value} ms`,
       seconds: (value) => `${value} s`,
       stalePolls: (polls, seconds) => `${polls} Polls (${seconds} s)`,
-      historyCount: (count, limit) => `${count} von ${limit} Einträgen`,
+      historyCount: (count, limit) => `${count} Einträge geladen · Maximum ${limit}`,
       coverageValue: (percent, overlap, count) =>
         `${percent} % (${overlap} von ${count} Einträgen liegen vor dem vorherigen Watermark)`,
       coverageInitial: 'Noch keine zwei erfolgreichen Historienfenster zum Vergleichen.',
@@ -52,9 +53,9 @@
       coverageUnknown: 'Die Überlappung konnte aus den gelieferten Zeitstempeln nicht bestimmt werden.',
       coverageGap: 'Der vorherige Watermark liegt nicht mehr sicher im aktuellen Historienfenster.',
       coverageExplanation:
-        'Der Historienpuffer ist der Anteil der aktuell gelieferten Rspamd-History-Einträge, deren Zeitstempel älter als der Watermark des vorherigen erfolgreichen Polls ist. Er beschreibt die Überlappung der History-Fenster, nicht CPU- oder Serverauslastung.',
+        'Der Historienpuffer ist der Anteil der aktuell geladenen Rspamd-History-Einträge, deren Zeitstempel älter als der Watermark des vorherigen erfolgreichen Polls ist. Cowcloak lädt die Historie adaptiv und zielt auf mindestens 10 % Überlappung. Der Wert beschreibt die Überlappung der History-Fenster, nicht CPU- oder Serverauslastung.',
       fullWarning:
-        'Rspamd hat genau das konfigurierte History-Limit geliefert. Das ist ein Warnsignal für ein knappes Fenster, aber allein kein Beweis für verlorene Daten.',
+        'Cowcloak musste bis zum konfigurierten History-Maximum laden. Das ist ein Warnsignal für ein knappes Fenster, aber allein kein Beweis für verlorene Daten.',
     },
     en: {
       states: {
@@ -74,6 +75,7 @@
         return `${hours} h ago`;
       },
       headroom: (percent) => `history headroom ${percent} %`,
+      headroomPending: 'history headroom is being established',
       gapHeadroom: 'history watermark not covered',
       limitReached: 'limit reached',
       details: 'Collector details',
@@ -95,7 +97,7 @@
       ms: (value) => `${value} ms`,
       seconds: (value) => `${value} s`,
       stalePolls: (polls, seconds) => `${polls} polls (${seconds} s)`,
-      historyCount: (count, limit) => `${count} of ${limit} entries`,
+      historyCount: (count, limit) => `${count} entries loaded · maximum ${limit}`,
       coverageValue: (percent, overlap, count) =>
         `${percent} % (${overlap} of ${count} entries are older than the previous watermark)`,
       coverageInitial: 'Two successful history windows are not available for comparison yet.',
@@ -103,14 +105,14 @@
       coverageUnknown: 'Overlap could not be determined from the returned timestamps.',
       coverageGap: 'The previous watermark is no longer safely inside the current history window.',
       coverageExplanation:
-        'History headroom is the proportion of entries in the current Rspamd history response whose timestamps are older than the watermark from the previous successful poll. It measures overlap between history windows, not CPU or server utilization.',
+        'History headroom is the proportion of currently loaded Rspamd history entries whose timestamps are older than the watermark from the previous successful poll. Cowcloak loads history adaptively and targets at least 10% overlap. It measures overlap between history windows, not CPU or server utilization.',
       fullWarning:
-        'Rspamd returned exactly the configured history limit. This is a warning signal that the window may be tight, but it is not proof that data was missed.',
+        'Cowcloak had to load up to the configured history maximum. This is a warning signal that the window may be tight, but it is not proof that data was missed.',
     },
   }[language];
 
   const timestamp = (seconds) => {
-    if (!Number.isFinite(Number(seconds))) return text.none;
+    if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return text.none;
     return new Intl.DateTimeFormat(document.documentElement.lang || undefined, {
       dateStyle: 'short',
       timeStyle: 'medium',
@@ -118,8 +120,10 @@
   };
 
   const percentage = (value) => {
-    if (!Number.isFinite(Number(value))) return null;
-    const rounded = Math.round(Number(value) * 10) / 10;
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    const rounded = Math.round(numeric * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
   };
 
@@ -144,7 +148,9 @@
     }
 
     const headroom = percentage(payload.headroom_percent);
-    if (headroom !== null && ['healthy', 'low'].includes(payload.state)) {
+    if (payload.coverage_state === 'initial') {
+      parts.push(text.headroomPending);
+    } else if (headroom !== null && ['healthy', 'low'].includes(payload.state)) {
       parts.push(text.headroom(headroom));
     } else if (payload.state === 'gap') {
       parts.push(text.gapHeadroom);
@@ -165,7 +171,9 @@
     addDetail(
       list,
       text.duration,
-      Number.isFinite(Number(payload.last_duration_ms)) ? text.ms(payload.last_duration_ms) : text.none,
+      payload.last_duration_ms === null || payload.last_duration_ms === undefined
+        ? text.none
+        : text.ms(payload.last_duration_ms),
     );
     addDetail(list, text.pollInterval, text.seconds(payload.poll_interval_seconds));
     addDetail(
