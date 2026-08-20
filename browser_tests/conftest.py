@@ -42,8 +42,25 @@ def base_url(tmp_path_factory) -> str:
     url = f"http://127.0.0.1:{port}"
     database = tmp_path_factory.mktemp("cowcloak-e2e") / "stats.sqlite3"
     env = os.environ.copy()
-    env["COWCLOAK_E2E_BASE_URL"] = url
-    env["COWCLOAK_E2E_DB"] = str(database)
+    env.update(
+        {
+            "COWCLOAK_E2E_BASE_URL": url,
+            "COWCLOAK_E2E_DB": str(database),
+            "COWCLOAK_BASE_URL": url,
+            "COWCLOAK_SESSION_SECRET": "e2e-session-secret-" * 4,
+            "COWCLOAK_COOKIE_SECURE": "false",
+            "COWCLOAK_TRUSTED_HOSTS": "127.0.0.1,localhost",
+            "COWCLOAK_USAGE_STATS": "true",
+            "COWCLOAK_USAGE_TAG": "cowcloak-stats",
+            "COWCLOAK_USAGE_DB_PATH": str(database),
+            "COWCLOAK_USAGE_POLL_SECONDS": "60",
+            "COWCLOAK_USAGE_HISTORY_COUNT": "1000",
+            "MAILCOW_URL": "https://mail.example.org",
+            "MAILCOW_API_KEY": "e2e-api-key",
+            "MAILCOW_OAUTH_CLIENT_ID": "e2e-client",
+            "MAILCOW_OAUTH_CLIENT_SECRET": "e2e-secret",
+        }
+    )
     env["PYTHONPATH"] = os.pathsep.join(
         part for part in (str(ROOT), env.get("PYTHONPATH", "")) if part
     )
