@@ -1,0 +1,45 @@
+name: Mailcow integration
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    paths:
+      - "integration_tests/**"
+      - ".github/scripts/mailcow-feasibility.sh"
+      - ".github/workflows/mailcow-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-mailcow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      MAILCOW_DIR: /tmp/mailcow-dockerized
+      REPORT_DIR: /tmp/mailcow-integration
+      MAILCOW_HOSTNAME: mail.mailcow-ci.test
+      MAILCOW_HTTP_PORT: "8080"
+      MAILCOW_API_KEY: moolias-ci-integration
+      MAILCOW_READY_COMMAND: pytest -q integration_tests
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e '.[dev]'
+      - name: Run Moolias against disposable Mailcow
+        run: bash .github/scripts/mailcow-feasibility.sh
+      - name: Upload Mailcow integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mailcow-integration-diagnostics
+          path: /tmp/mailcow-integration
+          if-no-files-found: ignore
+          retention-days: 7
