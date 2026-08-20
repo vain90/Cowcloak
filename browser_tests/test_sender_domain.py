@@ -43,6 +43,11 @@ def _sender_row(dialog, sender: str):
     return dialog.locator(".sender-stats-row").filter(has_text=sender)
 
 
+def _expect_alias_url(page: Page, base_url: str) -> None:
+    pattern = re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$")
+    expect(page).to_have_url(pattern, timeout=5000)
+
+
 def test_full_mode_domain_approval_warns_and_can_be_overridden_per_address(
     page: Page,
     base_url: str,
@@ -66,16 +71,17 @@ def test_full_mode_domain_approval_warns_and_can_be_overridden_per_address(
     expect(confirmation).to_be_visible()
     confirmation.locator('[data-cowcloak-dialog-confirm]').click()
 
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"), timeout=5000)
+    _expect_alias_url(page, base_url)
     dialog = _open_amazon_senders(page)
     sender = _sender_row(dialog, UNEXPECTED_SENDER)
     expect(sender).to_have_class(re.compile(r"\bexpected\b"))
     expect(sender.locator('[data-specific-unexpected]')).to_be_visible()
 
     sender.locator('[data-specific-unexpected]').click()
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"), timeout=5000)
+    _expect_alias_url(page, base_url)
 
     dialog = _open_amazon_senders(page)
     sender = _sender_row(dialog, UNEXPECTED_SENDER)
     expect(sender).to_have_class(re.compile(r"\bunexpected\b"))
-    expect(sender.locator('[data-expect-domain]')).to_be_visible()
+    expect(sender.locator('[data-specific-unexpected]')).to_be_visible()
+    expect(sender.locator('[data-expect-domain]')).to_have_count(0)
