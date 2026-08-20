@@ -276,14 +276,18 @@ class StatsStore:
                             SELECT
                                 s.alias,
                                 s.sender_domain,
-                                MIN(e.expected) AS min_expected,
-                                MAX(e.expected) AS max_expected,
-                                COUNT(e.expected) AS reviewed_count
+                                MIN(COALESCE(exact_e.expected, domain_e.expected)) AS min_expected,
+                                MAX(COALESCE(exact_e.expected, domain_e.expected)) AS max_expected,
+                                COUNT(COALESCE(exact_e.expected, domain_e.expected)) AS reviewed_count
                             FROM sender_usage AS s
-                            LEFT JOIN sender_expectations AS e
-                                ON e.mailbox = s.mailbox
-                                AND e.alias = s.alias
-                                AND e.sender_key = s.sender_key
+                            LEFT JOIN sender_expectations AS exact_e
+                                ON exact_e.mailbox = s.mailbox
+                                AND exact_e.alias = s.alias
+                                AND exact_e.sender_key = s.sender_key
+                            LEFT JOIN sender_expectations AS domain_e
+                                ON domain_e.mailbox = s.mailbox
+                                AND domain_e.alias = s.alias
+                                AND domain_e.sender_key = s.sender_domain
                             WHERE s.mailbox = ?
                             GROUP BY s.alias, s.sender_domain
                             """,
@@ -517,14 +521,37 @@ class StatsStore:
         sender_key: str,
         expected: bool | None,
     ) -> None:
+        mailbox = mailbox.lower()
+        alias = alias.lower()
+        sender_key = sender_key.lower()
         with self._connect() as connection:
             if expected is None:
+                exact = connection.execute(
+                    """
+                    SELECT 1
+                    FROM sender_expectations
+                    WHERE mailbox = ? AND alias = ? AND sender_key = ?
+                    """,
+                    (mailbox, alias, sender_key),
+                ).fetchone()
+                if exact is not None:
+                    connection.execute(
+                        """
+                        DELETE FROM sender_expectations
+                        WHERE mailbox = ? AND alias = ? AND sender_key = ?
+                        """,
+                        (mailbox, alias, sender_key),
+                    )
+                    return
+
+                if "@" in sender_key:
+                    sender_key = sender_key.rsplit("@", 1)[1]
                 connection.execute(
                     """
                     DELETE FROM sender_expectations
                     WHERE mailbox = ? AND alias = ? AND sender_key = ?
                     """,
-                    (mailbox.lower(), alias.lower(), sender_key.lower()),
+                    (mailbox, alias, sender_key),
                 )
                 return
             connection.execute(
@@ -534,12 +561,7 @@ class StatsStore:
                 ON CONFLICT(mailbox, alias, sender_key) DO UPDATE SET
                     expected = excluded.expected
                 """,
-                (
-                    mailbox.lower(),
-                    alias.lower(),
-                    sender_key.lower(),
-                    1 if expected else 0,
-                ),
+                (mailbox, alias, sender_key, 1 if expected else 0),
             )
 
     async def alias_usage(self, mailbox: str, aliases: list[str]) -> dict[str, AliasUsage]:
@@ -567,7 +589,9 @@ class StatsStore:
                     int(row["last_received_at"]) if row["last_received_at"] is not None else None
                 ),
                 last_sent_at=(
-                    int(row["last_sent_at"]) if row["last_sent_at"] is not None else None
+                    int(row["last_sent_at"])
+                    if row["last_sent_at"] is not None
+                    else None
                 ),
             )
             for row in rows
@@ -599,12 +623,17 @@ class StatsStore:
                     s.sender_address,
                     s.received_count,
                     s.last_received_at,
-                    e.expected AS manual_expected
+                    exact_e.expected AS exact_expected,
+                    domain_e.expected AS domain_expected
                 FROM sender_usage AS s
-                LEFT JOIN sender_expectations AS e
-                    ON e.mailbox = s.mailbox
-                    AND e.alias = s.alias
-                    AND e.sender_key = s.sender_key
+                LEFT JOIN sender_expectations AS exact_e
+                    ON exact_e.mailbox = s.mailbox
+                    AND exact_e.alias = s.alias
+                    AND exact_e.sender_key = s.sender_key
+                LEFT JOIN sender_expectations AS domain_e
+                    ON domain_e.mailbox = s.mailbox
+                    AND domain_e.alias = s.alias
+                    AND domain_e.sender_key = s.sender_domain
                 WHERE s.mailbox = ? AND s.alias IN ({placeholders})
                 ORDER BY s.alias, s.last_received_at DESC, s.sender_key
                 """,
@@ -614,7 +643,9 @@ class StatsStore:
         result: dict[str, list[SenderUsage]] = {}
         for row in rows:
             alias = str(row["alias"]).lower()
-            manual_expected = row["manual_expected"]
+            exact_expected = row["exact_expected"]
+            domain_expected = row["domain_expected"]
+            manual_expected = exact_expected if exact_expected is not None else domain_expected
             result.setdefault(alias, []).append(
                 SenderUsage(
                     sender_key=str(row["sender_key"]).lower(),
