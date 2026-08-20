@@ -23,6 +23,15 @@ def test_multilabel_public_suffix_uses_registered_domain_label():
     )
 
 
+def test_private_suffix_tenants_do_not_create_brand_trust():
+    assert registered_domain_label("attacker.github.io") == "attacker"
+    assert not sender_matches_alias(
+        "github-m4@example.org",
+        "GitHub",
+        "github.github.io",
+    )
+
+
 def test_hyphenated_or_embedded_brand_domains_do_not_auto_match():
     alias = "vodafone-k7@example.org"
     description = "Vodafone - MeinVodafone"
