@@ -278,7 +278,10 @@ class StatsStore:
                                 s.sender_domain,
                                 MIN(COALESCE(exact_e.expected, domain_e.expected)) AS min_expected,
                                 MAX(COALESCE(exact_e.expected, domain_e.expected)) AS max_expected,
-                                COUNT(COALESCE(exact_e.expected, domain_e.expected)) AS reviewed_count
+                                COUNT(
+                                    COALESCE(exact_e.expected, domain_e.expected)
+                                ) AS reviewed_count,
+                                COUNT(*) AS sender_count
                             FROM sender_usage AS s
                             LEFT JOIN sender_expectations AS exact_e
                                 ON exact_e.mailbox = s.mailbox
@@ -333,7 +336,7 @@ class StatsStore:
                         )
 
                         for item in expectation_rows:
-                            if int(item["reviewed_count"]) == 0:
+                            if int(item["reviewed_count"]) != int(item["sender_count"]):
                                 continue
                             if item["min_expected"] != item["max_expected"]:
                                 continue
