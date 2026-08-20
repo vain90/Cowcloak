@@ -92,6 +92,9 @@ jobs:
           set_conf SKIP_OLEFY y
           set_conf SKIP_FTS y
           set_conf USE_WATCHDOG n
+          # GitHub-hosted runners do not provide reliable ICMP/raw DNS egress.
+          # Mailcow explicitly supports skipping only this external Unbound probe.
+          set_conf SKIP_UNBOUND_HEALTHCHECK y
           set_conf API_KEY "$MAILCOW_API_KEY"
           set_conf API_ALLOW_FROM "127.0.0.1,172.22.1.1"
 
@@ -104,6 +107,7 @@ jobs:
             echo "SKIP_CLAMD=$(grep '^SKIP_CLAMD=' mailcow.conf | cut -d= -f2-)"
             echo "SKIP_OLEFY=$(grep '^SKIP_OLEFY=' mailcow.conf | cut -d= -f2-)"
             echo "SKIP_FTS=$(grep '^SKIP_FTS=' mailcow.conf | cut -d= -f2-)"
+            echo "SKIP_UNBOUND_HEALTHCHECK=$(grep '^SKIP_UNBOUND_HEALTHCHECK=' mailcow.conf | cut -d= -f2-)"
             echo "ENABLE_IPV6=$(grep '^ENABLE_IPV6=' mailcow.conf | cut -d= -f2-)"
           } | tee "$REPORT_DIR/mailcow-config-summary.txt"
 
@@ -184,12 +188,19 @@ jobs:
             docker system df
           } | tee "$REPORT_DIR/resources-final.txt"
 
-      - name: Capture Mailcow logs on failure
+      - name: Capture Mailcow diagnostics on failure
         if: failure()
         shell: bash
         run: |
           set +e
           cd "$MAILCOW_DIR" 2>/dev/null || exit 0
+          {
+            echo "=== Unbound inspect ==="
+            docker inspect mailcowdockerized-unbound-mailcow-1 --format '{{json .State.Health}}'
+            echo
+            echo "=== Unbound logs ==="
+            docker compose logs --no-color --tail=200 unbound-mailcow
+          } | tee "$REPORT_DIR/unbound-failure.txt"
           docker compose logs --no-color --tail=300 > "$REPORT_DIR/mailcow.log" 2>&1
 
       - name: Upload failure diagnostics
