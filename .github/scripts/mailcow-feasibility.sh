@@ -6,6 +6,7 @@ REPORT_DIR="${REPORT_DIR:-/tmp/mailcow-feasibility}"
 MAILCOW_HOSTNAME="${MAILCOW_HOSTNAME:-mail.mailcow-ci.test}"
 MAILCOW_HTTP_PORT="${MAILCOW_HTTP_PORT:-8080}"
 MAILCOW_API_KEY="${MAILCOW_API_KEY:-moolias-ci-feasibility}"
+MOOLIAS_WORKSPACE="${MOOLIAS_WORKSPACE:-${GITHUB_WORKSPACE:-$PWD}}"
 
 mkdir -p "$REPORT_DIR"
 
@@ -194,6 +195,19 @@ done
 if [[ "$api_ready" != true ]]; then
   echo "Mailcow API did not become ready within 2 minutes." >&2
   exit 1
+fi
+
+export MAILCOW_URL="http://${MAILCOW_HOSTNAME}:${MAILCOW_HTTP_PORT}"
+export MAILCOW_API_KEY
+export NO_PROXY="${NO_PROXY:+${NO_PROXY},}${MAILCOW_HOSTNAME},127.0.0.1,localhost"
+export no_proxy="$NO_PROXY"
+
+if [[ -n "${MAILCOW_READY_COMMAND:-}" ]]; then
+  echo "Running command against ready Mailcow: $MAILCOW_READY_COMMAND"
+  (
+    cd "$MOOLIAS_WORKSPACE"
+    bash -c "$MAILCOW_READY_COMMAND"
+  )
 fi
 
 record_resources "$REPORT_DIR/resources-success.txt"
