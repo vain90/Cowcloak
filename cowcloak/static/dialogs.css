@@ -1,0 +1,62 @@
+.cowcloak-dialog {
+  width: min(520px, calc(100% - 28px));
+  max-height: min(78vh, 620px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 70px rgba(16, 24, 40, .2);
+}
+
+.cowcloak-dialog::backdrop {
+  background: rgba(16, 24, 40, .3);
+  backdrop-filter: blur(2px);
+}
+
+.cowcloak-dialog-warning,
+.cowcloak-dialog-danger {
+  border-color: #fecdca;
+}
+
+.cowcloak-dialog-message {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.cowcloak-dialog-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.cowcloak-dialog-danger .button.primary,
+.cowcloak-dialog-danger .button.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.cowcloak-dialog-danger .button.primary:hover,
+.cowcloak-dialog-danger .button.danger:hover {
+  border-color: #912018;
+  background: #912018;
+}
+
+@media (max-width: 540px) {
+  .cowcloak-dialog {
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 24px);
+    padding: 16px;
+  }
+
+  .cowcloak-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .cowcloak-dialog-actions .button {
+    width: 100%;
+  }
+}
