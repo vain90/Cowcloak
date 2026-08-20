@@ -109,13 +109,19 @@
     <div class="pool-list">
       {% for alias in reserved %}
       {% set pool_stats = usage_stats.get(alias.address|lower) if usage_stats_visible else none %}
+      {% set pool_used = pool_stats and (pool_stats.received_count or pool_stats.sent_count) %}
       {% set pool_senders = sender_stats.get(alias.address|lower, []) if stats_state and stats_state.sender_detail_enabled else [] %}
-      <div class="pool-item {% if pool_stats and pool_stats.received_count %}pool-item-used{% endif %}">
+      <div class="pool-item {% if pool_used %}pool-item-used{% endif %}">
         <div class="alias-info">
           <code data-pool-address>{{ alias.address }}</code>
-          {% if pool_stats and pool_stats.received_count %}
+          {% if pool_used %}
           <div class="usage-summary">
+            {% if pool_stats.received_count %}
             <span class="sender-stats-alert">{{ pool_stats.received_count }} {{ t.usage_received }}</span>
+            {% endif %}
+            {% if pool_stats.sent_count %}
+            <span class="sender-stats-alert">{{ pool_stats.sent_count }} {{ t.usage_sent }}</span>
+            {% endif %}
             {% if pool_stats.last_used_at %}
             <span>
               {{ t.usage_last_used }}
@@ -152,6 +158,7 @@
           <button class="button compact" type="button" data-copy="{{ alias.address }}">
             {{ t["copy"] }}
           </button>
+          {% if not pool_used %}
           <form
             method="post"
             action="/aliases/{{ alias.id }}/delete-reserved"
@@ -160,6 +167,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="button compact danger" type="submit">{{ t.delete }}</button>
           </form>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -521,6 +529,7 @@
 
 {% for alias in reserved %}
 {% set pool_stats = usage_stats.get(alias.address|lower) if usage_stats_visible else none %}
+{% set pool_used = pool_stats and (pool_stats.received_count or pool_stats.sent_count) %}
 {% set pool_senders = sender_stats.get(alias.address|lower, []) if stats_state and stats_state.sender_detail_enabled else [] %}
 <dialog class="assign-dialog assign-dialog-single" data-assign-dialog="{{ alias.id }}">
   <div class="dialog-head">
@@ -539,10 +548,15 @@
   <form method="post" action="/aliases/{{ alias.id }}/description" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <code class="assign-address">{{ alias.address }}</code>
-    {% if pool_stats and pool_stats.received_count %}
+    {% if pool_used %}
     <div class="pool-assignment-usage">
       <div class="usage-summary">
+        {% if pool_stats.received_count %}
         <span class="sender-stats-alert">{{ pool_stats.received_count }} {{ t.usage_received }}</span>
+        {% endif %}
+        {% if pool_stats.sent_count %}
+        <span class="sender-stats-alert">{{ pool_stats.sent_count }} {{ t.usage_sent }}</span>
+        {% endif %}
         {% if pool_stats.last_used_at %}
         <span>
           {{ t.usage_last_used }}

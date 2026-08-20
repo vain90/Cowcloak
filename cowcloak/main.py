@@ -887,12 +887,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         csrf_token: str = Form(...),
     ):
         validate_csrf(request, csrf_token)
-        _, alias = await owned_alias(request, alias_id)
+        user, alias = await owned_alias(request, alias_id)
         if not alias.is_reserved:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Only unused offline aliases can be deleted",
             )
+
+        stats_store = request.app.state.stats_store
+        if stats_store is not None:
+            stored_usage = await stats_store.alias_usage(user, [alias.address])
+            usage = stored_usage.get(alias.address.lower())
+            if usage is not None and (usage.received_count > 0 or usage.sent_count > 0):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Used offline aliases must be assigned before they can be deleted",
+                )
+
         try:
             await client(request).delete_alias(alias_id)
         except MailcowError as exc:
