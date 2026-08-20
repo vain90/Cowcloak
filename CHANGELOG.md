@@ -2,27 +2,47 @@
 
 All notable changes to Cowcloak are documented here.
 
-## 0.1.3 - Unreleased
+## 0.1.3 - 2026-08-20
 
 ### Added
 
 - optional usage-statistics subsystem gated by `COWCLOAK_USAGE_STATS`
 - four-level mailcow statistics policy using `cowcloak-stats-off`, `cowcloak-stats`, `cowcloak-stats-domain` and `cowcloak-stats-full`
 - mailbox statistics-mode overrides with domain inheritance and user self-service in the Cowcloak dashboard
-- versioned SQLite storage for alias counters and deduplication, created only when statistics are enabled
-- background collection of accepted incoming alias deliveries from mailcow Rspamd history
-- background collection of accepted authenticated outgoing alias sends from mailcow Rspamd history
-- inline received/sent usage counters and last-used timestamps in the alias dashboard for opted-in mailboxes
+- versioned SQLite storage for alias counters, optional sender aggregates, sender-review state and event deduplication, created only when statistics are enabled
+- background collection of accepted incoming alias deliveries and authenticated outgoing alias sends from mailcow Rspamd history
+- inline received/sent usage counters and last-used timestamps for opted-in mailboxes
 - optional sender-domain or full sender-address aggregation for incoming alias mail
-- sender review UI that shows every recorded sender and lets mailbox users mark entries expected or unexpected
-- conservative automatic expected-sender recognition based on meaningful alias-purpose/local-part words matching sender-domain labels
+- sender review with manual expected/unexpected decisions and conservative automatic recognition from meaningful alias-purpose/local-part words
+- `Unexpected` / `Nicht erwartet` review filter with a global count across assigned aliases
+- aggregate `Review all` / `Alle prüfen` workflow for aliases that need sender review, including an automatic once-per-login prompt when review is pending
+- per-alias option to disable unexpected-sender review while retaining sender statistics
+- sender-detail dialogs for assigned aliases and used offline-pool aliases
+- usage detection for reserved offline aliases before assignment, including accepted incoming and authenticated outgoing messages
+- once-per-login assignment prompt for used offline-pool aliases
+- persistent mailcow lifecycle marker for reserved aliases that have ever been used, independent of retained statistics data
 - persistent Docker data volume for deployments that enable statistics
 
 ### Changed
 
-- Cowcloak remains stateless by default; local persistent state is used only when optional statistics are enabled
-- mailbox statistics tags override domain defaults; conflicting mode tags on the same level disable statistics for safety
-- changing statistics mode resets sender-detail aggregates and sender-review decisions so more detailed data cannot survive a privacy downgrade
+- reserved offline aliases that have been used must be assigned before they can enter the normal alias lifecycle; they can no longer be deleted or exported/copied as unused pool addresses
+- the offline pool treats both received and sent messages as usage and keeps action buttons aligned when deletion is unavailable
+- `FULL -> DOMAIN` privacy downgrades collapse full sender addresses to domain aggregates while preserving allowed counts, latest timestamps and consistent manual review decisions
+- downgrades to `BASIC` remove sender-detail aggregates and review decisions; switching to `OFF` additionally removes stored usage counters while the non-statistical used-reserved lifecycle marker remains in mailcow
+- statistics-mode changes prevent retroactive collection of older sender detail and stale collector writes after a privacy downgrade
+- mailbox statistics tags override domain defaults; conflicting mode tags on the same level pause statistics for safety without unnecessarily destroying stored state
+- live search preserves the dynamically added unexpected-sender workflow
+- expired or missing browser sessions on protected pages redirect to login, while API/fetch requests continue to receive a JSON `401`
+- offline sender details use the same unexpected visual treatment as assigned aliases while review actions remain unavailable until assignment
+
+### Fixed
+
+- mailcow mailbox statistics-tag removal now uses the API's required POST method instead of returning `405 Method Not Allowed`
+- `FULL -> DOMAIN` no longer loses sender-domain history
+- the unexpected-sender filter no longer disappears after live-search refreshes
+- offline-pool sender dialogs remain functional while the unexpected filter is active
+- used offline aliases cannot regain a delete path after statistics are switched off
+- used offline aliases are excluded from `pool.txt` and `Copy all` even before their persistent lifecycle marker has been written
 
 ## 0.1.2 - 2026-08-19
 
