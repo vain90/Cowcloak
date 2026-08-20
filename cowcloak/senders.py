@@ -50,17 +50,30 @@ def _ascii(value: str) -> str:
     )
 
 
-def _tokens(value: str) -> set[str]:
-    return {
+def _significant_tokens(value: str) -> list[str]:
+    return [
         token
         for token in _TOKEN_RE.findall(_ascii(value))
         if len(token) >= 4 and not token.isdigit() and token not in _STOPWORDS
-    }
+    ]
+
+
+def _tokens(value: str) -> set[str]:
+    return set(_significant_tokens(value))
+
+
+def _identity_candidates(value: str) -> set[str]:
+    tokens = _significant_tokens(value)
+    candidates = set(tokens)
+    for first, second in zip(tokens, tokens[1:], strict=False):
+        candidates.add(f"{first}-{second}")
+        candidates.add(f"{first}{second}")
+    return candidates
 
 
 def alias_identity_tokens(alias_address: str, description: str) -> set[str]:
     local_part = alias_address.split("@", 1)[0]
-    return _tokens(local_part) | _tokens(description)
+    return _identity_candidates(local_part) | _identity_candidates(description)
 
 
 def _canonical_domain(sender_domain: str) -> str | None:
