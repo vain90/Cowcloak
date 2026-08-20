@@ -10,6 +10,28 @@
   color: #912018;
 }
 
+.unexpected-review-internal-trigger {
+  display: none !important;
+}
+
+.unexpected-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 12px 0 7px;
+}
+
+.unexpected-review-all-button {
+  border-color: #fda29b;
+  background: #fff7f6;
+  color: #b42318;
+}
+
+.unexpected-review-all-button:hover,
+.unexpected-review-all-button:focus-visible {
+  border-color: #f97066;
+  color: #912018;
+}
+
 .unexpected-review-dialog {
   width: min(920px, calc(100vw - 32px));
   max-height: min(860px, calc(100vh - 32px));
@@ -74,7 +96,25 @@
   font-weight: 700;
 }
 
+[data-review-pool-dialog] .sender-stats-list {
+  margin-top: 4px;
+  padding-left: 0;
+}
+
+[data-review-pool-dialog] .sender-stats-row.unexpected {
+  border-color: #fecdca;
+  background: #fef3f2;
+}
+
 @media (max-width: 760px) {
+  .unexpected-review-actions {
+    justify-content: stretch;
+  }
+
+  .unexpected-review-all-button {
+    width: 100%;
+  }
+
   .unexpected-review-dialog {
     width: calc(100vw - 18px);
     max-height: calc(100vh - 18px);
