@@ -4,12 +4,17 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import time
 from email.utils import parseaddr
 from typing import Any
 
 from cowcloak.aliases import AliasRecord, is_owned_alias, is_primary_mailbox_alias
-from cowcloak.collector_health import CollectorHealth, CollectorHealthStore
+from cowcloak.collector_health import (
+    LOW_HEADROOM_PERCENT,
+    CollectorHealth,
+    CollectorHealthStore,
+)
 from cowcloak.config import Settings
 from cowcloak.mailcow import MailcowClient
 from cowcloak.stats import SenderEvent, StatsStore, UsageEvent
@@ -21,6 +26,7 @@ from cowcloak.stats_mode import (
 )
 
 LOGGER = logging.getLogger(__name__)
+HISTORY_PROBE_SIZES = (10, 25, 50, 100, 250, 500)
 
 # These Rspamd actions still represent accepted mail. Reject/soft reject/greylist
 # entries are deliberately excluded because the message was not accepted.
@@ -237,6 +243,75 @@ class UsageCollector:
 
         await self._mark_reserved_aliases_used(used_alias_ids)
 
+    def _history_request_sizes(self) -> list[int]:
+        maximum = self.settings.usage_history_count
+        sizes = [size for size in HISTORY_PROBE_SIZES if size < maximum]
+        sizes.append(maximum)
+        return sizes
+
+    @staticmethod
+    def _history_probe_index(count: int) -> int:
+        required_overlap = max(
+            1,
+            math.ceil(count * LOW_HEADROOM_PERCENT / 100.0),
+        )
+        return count - required_overlap
+
+    @staticmethod
+    def _history_has_target_headroom(
+        history: list[dict[str, Any]],
+        boundary: int,
+    ) -> bool:
+        timestamps = [
+            timestamp
+            for item in history
+            if (timestamp := _event_timestamp(item)) is not None
+        ]
+        if not timestamps:
+            return False
+
+        oldest = min(timestamps)
+        newest = max(timestamps)
+        if newest < boundary:
+            return True
+        if not (oldest <= boundary <= newest):
+            return False
+
+        overlap_count = sum(timestamp < boundary for timestamp in timestamps)
+        return (overlap_count / len(history)) * 100.0 >= LOW_HEADROOM_PERCENT
+
+    async def _adaptive_rspamd_history(self, tracking_started_at: int) -> list[dict[str, Any]]:
+        range_reader = getattr(self.mailcow, "get_rspamd_history_range", None)
+        if range_reader is None:
+            return await self.mailcow.get_rspamd_history(self.settings.usage_history_count)
+
+        previous_health = await self.health_store.read()
+        boundary = previous_health.watermark or tracking_started_at
+        maximum = self.settings.usage_history_count
+
+        for count in self._history_request_sizes():
+            if count == maximum:
+                history = await self.mailcow.get_rspamd_history(count)
+                LOGGER.debug("Loaded %d Rspamd history entries at configured maximum", len(history))
+                return history
+
+            probe_index = self._history_probe_index(count)
+            probe = await range_reader(probe_index, probe_index)
+            probe_timestamp = _event_timestamp(probe[0]) if probe else None
+            if probe_timestamp is not None and probe_timestamp >= boundary:
+                continue
+
+            history = await self.mailcow.get_rspamd_history(count)
+            if len(history) < count or self._history_has_target_headroom(history, boundary):
+                LOGGER.debug(
+                    "Loaded %d Rspamd history entries after adaptive probe for %d",
+                    len(history),
+                    count,
+                )
+                return history
+
+        return await self.mailcow.get_rspamd_history(maximum)
+
     async def collect_once(self) -> int:
         self._last_history = None
         tracking_started_at = await self.store.tracking_started_at()
@@ -262,7 +337,7 @@ class UsageCollector:
         if not eligible:
             return 0
 
-        history = await self.mailcow.get_rspamd_history(self.settings.usage_history_count)
+        history = await self._adaptive_rspamd_history(tracking_started_at)
         self._last_history = history
 
         alias_targets: dict[str, str] = {}
@@ -398,7 +473,7 @@ class UsageCollector:
             )
         elif health.history_full:
             LOGGER.warning(
-                "Cowcloak Rspamd history reached the configured limit of %d entries; this "
+                "Cowcloak Rspamd history needed the configured maximum of %d entries; this "
                 "is a warning signal, not proof that data was missed",
                 health.history_limit or self.settings.usage_history_count,
             )

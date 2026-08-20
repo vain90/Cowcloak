@@ -62,7 +62,7 @@ async def test_healthy_overlap_uses_entries_older_than_previous_watermark(tmp_pa
     ).state == "healthy"
 
 
-async def test_low_headroom_below_twenty_five_percent(tmp_path):
+async def test_exactly_ten_percent_headroom_is_healthy(tmp_path):
     store = await initialized_store(tmp_path)
     await successful_poll(
         store,
@@ -80,6 +80,34 @@ async def test_low_headroom_below_twenty_five_percent(tmp_path):
 
     assert health.overlap_count == 1
     assert health.headroom_percent == 10.0
+    assert health.coverage_state == "healthy"
+    assert assess_collector_health(
+        health,
+        poll_interval_seconds=60,
+        stale_polls=3,
+        now=162,
+    ).state == "healthy"
+
+
+async def test_low_headroom_below_ten_percent(tmp_path):
+    store = await initialized_store(tmp_path)
+    await successful_poll(
+        store,
+        attempted_at=100,
+        finished_at=101,
+        values=history(10, 20, 30, 40, 50),
+    )
+
+    values = history(40, 50, *range(60, 240, 10))
+    health = await successful_poll(
+        store,
+        attempted_at=160,
+        finished_at=161,
+        values=values,
+    )
+
+    assert health.overlap_count == 1
+    assert health.headroom_percent == 5.0
     assert health.coverage_state == "low"
     assert assess_collector_health(
         health,
@@ -87,6 +115,26 @@ async def test_low_headroom_below_twenty_five_percent(tmp_path):
         stale_polls=3,
         now=162,
     ).state == "low"
+
+
+async def test_initial_success_stays_starting_until_a_watermark_can_be_compared(tmp_path):
+    store = await initialized_store(tmp_path)
+    health = await successful_poll(
+        store,
+        attempted_at=100,
+        finished_at=101,
+        values=history(10, 20, 30),
+    )
+
+    assert health.previous_watermark is None
+    assert health.headroom_percent is None
+    assert health.coverage_state == "initial"
+    assert assess_collector_health(
+        health,
+        poll_interval_seconds=60,
+        stale_polls=3,
+        now=102,
+    ).state == "starting"
 
 
 async def test_missing_previous_watermark_is_possible_gap(tmp_path):

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-LOW_HEADROOM_PERCENT = 25.0
+LOW_HEADROOM_PERCENT = 10.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +99,7 @@ def assess_collector_health(
         state = "stale"
     elif health.coverage_state == "low":
         state = "low"
-    elif health.last_success_at is None:
+    elif health.last_success_at is None or health.coverage_state == "initial":
         state = "starting"
     else:
         state = "healthy"

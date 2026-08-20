@@ -101,6 +101,17 @@ class MailcowClient:
             return []
         return [item for item in payload if isinstance(item, dict)]
 
+    async def get_rspamd_history_range(self, start: int, end: int) -> list[dict[str, Any]]:
+        if start < 0 or end < start:
+            raise ValueError("invalid Rspamd history range")
+        payload = await self._request(
+            "GET",
+            f"/api/v1/get/logs/rspamd-history/{start}-{end}",
+        )
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
+
     async def _enforce_access_tag(self, email: str, mailbox: dict[str, Any]) -> None:
         configured_tag = self.settings.access_tag.strip().casefold()
         if not configured_tag:
