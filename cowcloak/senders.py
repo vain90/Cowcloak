@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+import tldextract
+
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset(
     {
@@ -28,6 +30,15 @@ _STOPWORDS = frozenset(
     }
 )
 
+# Use tldextract's bundled Public Suffix List snapshot. Sender matching must not
+# cause network access at runtime merely to refresh suffix data.
+_DOMAIN_EXTRACTOR = tldextract.TLDExtract(
+    cache_dir=None,
+    suffix_list_urls=(),
+    fallback_to_snapshot=True,
+    include_psl_private_domains=False,
+)
+
 
 def _ascii(value: str) -> str:
     return (
@@ -51,15 +62,29 @@ def alias_identity_tokens(alias_address: str, description: str) -> set[str]:
     return _tokens(local_part) | _tokens(description)
 
 
+def _canonical_domain(sender_domain: str) -> str | None:
+    labels = sender_domain.strip().strip(".").split(".")
+    if len(labels) < 2 or any(not label for label in labels):
+        return None
+    try:
+        return ".".join(label.encode("idna").decode("ascii") for label in labels).lower()
+    except UnicodeError:
+        return None
+
+
+def registered_domain_label(sender_domain: str) -> str | None:
+    canonical = _canonical_domain(sender_domain)
+    if canonical is None:
+        return None
+    extracted = _DOMAIN_EXTRACTOR(canonical)
+    if not extracted.domain or not extracted.suffix:
+        return None
+    return extracted.domain.lower()
+
+
 def sender_domain_tokens(sender_domain: str) -> set[str]:
-    labels: list[str] = []
-    for label in sender_domain.strip().strip(".").split("."):
-        try:
-            decoded = label.encode("ascii").decode("idna")
-        except (UnicodeError, UnicodeDecodeError):
-            decoded = label
-        labels.extend(re.split(r"[-_]", decoded))
-    return _tokens(" ".join(labels))
+    registered_label = registered_domain_label(sender_domain)
+    return {registered_label} if registered_label else set()
 
 
 def sender_match_token(
@@ -67,12 +92,13 @@ def sender_match_token(
     description: str,
     sender_domain: str,
 ) -> str | None:
-    matches = alias_identity_tokens(alias_address, description) & sender_domain_tokens(
-        sender_domain
-    )
+    registered_label = registered_domain_label(sender_domain)
+    if registered_label is None:
+        return None
+    matches = alias_identity_tokens(alias_address, description) & {registered_label}
     if not matches:
         return None
-    return sorted(matches, key=lambda token: (-len(token), token))[0]
+    return registered_label
 
 
 def sender_matches_alias(
