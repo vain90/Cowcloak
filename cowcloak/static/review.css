@@ -88,6 +88,13 @@
   margin-top: 2px;
 }
 
+.action-required-pool-form .used-pool-list,
+.action-required-pool-form .sender-stats-list {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
+
 .action-required-alias-actions {
   display: flex;
   align-items: center;
