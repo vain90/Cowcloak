@@ -142,3 +142,47 @@ async def test_pruning_removes_only_old_dedup_state_and_blocks_replay_after_rest
     second = await pruner.prune(old_at - 5, pruned_at=recent_at + 2)
     assert second.floor_at == old_at
     assert await pruner.floor_at() == old_at
+
+
+async def test_pruning_deletes_only_one_bounded_batch_per_table(tmp_path):
+    db_path = tmp_path / "bounded.sqlite3"
+    store = StatsStore(str(db_path))
+    await store.initialize()
+    started_at = await store.tracking_started_at()
+    await store.sync_sender_modes({MAILBOX: "full"}, now=started_at)
+
+    usage_events = [
+        UsageEvent(f"usage-{index}", MAILBOX, ALIAS, started_at + index)
+        for index in range(1, 4)
+    ]
+    sender_events = [
+        SenderEvent(
+            f"sender-{index}",
+            MAILBOX,
+            ALIAS,
+            "vendor.example",
+            "one@vendor.example",
+            "full",
+            started_at + index,
+        )
+        for index in range(1, 4)
+    ]
+    assert await store.record_received(usage_events) == 3
+    assert await store.record_senders(sender_events) == 3
+
+    pruner = DedupStore(db_path, batch_size=1)
+    result = await pruner.prune(started_at + 3, pruned_at=started_at + 100)
+    assert result.processed_events == 1
+    assert result.sender_processed_events == 1
+
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM processed_events").fetchone()[0] == 2
+        assert (
+            connection.execute("SELECT COUNT(*) FROM sender_processed_events").fetchone()[0]
+            == 2
+        )
+
+    usage = await store.alias_usage(MAILBOX, [ALIAS])
+    assert usage[ALIAS].received_count == 3
+    senders = await store.sender_usage(MAILBOX, [ALIAS])
+    assert senders[ALIAS][0].received_count == 3
