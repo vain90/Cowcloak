@@ -58,10 +58,12 @@ def test_login_callback_opens_attention_dialogs_in_sequence(page: Page, base_url
     expect(review_dialog).to_contain_text("odd@unexpected.example")
 
 
-def test_live_search_keeps_unexpected_filter_and_filtering_works(
+def test_live_search_keeps_server_unexpected_filter_and_filtering_works(
     page: Page,
     base_url: str,
 ) -> None:
+    requested_urls: list[str] = []
+    page.on("request", lambda request: requested_urls.append(request.url))
     _login(page, base_url)
 
     search = page.locator("[data-live-search]")
@@ -79,10 +81,20 @@ def test_live_search_keeps_unexpected_filter_and_filtering_works(
     expect(unexpected).to_be_visible()
 
     unexpected.click()
-    expect(page).to_have_url(re.compile(r"#unexpected$"))
+    expect(page).to_have_url(re.compile(r"[?&]status=unexpected(?:&|$)"))
     expect(page.locator(".alias-list .alias-row")).to_have_count(1, timeout=5000)
     expect(_alias_row(page, AMAZON)).to_have_count(1)
     expect(_alias_row(page, GITHUB)).to_have_count(0)
+
+    search = page.locator("[data-live-search]")
+    search.fill("GitHub")
+    expect(page.locator(".alias-list .alias-row")).to_have_count(0, timeout=5000)
+    expect(page).to_have_url(re.compile(r"[?&]status=unexpected(?:&|$)"))
+
+    assert not any(
+        "status=all" in url and "per_page=100" in url
+        for url in requested_urls
+    )
 
 
 def test_sender_dialog_and_review_submission_reopen_with_fresh_state(
@@ -174,7 +186,7 @@ def test_used_offline_alias_stays_protected_and_sender_dialog_survives_filter(
     assert abs(used_copy_box["x"] - unused_copy_box["x"]) <= 1
 
     page.locator("[data-unexpected-filter]").click()
-    expect(page).to_have_url(re.compile(r"#unexpected$"))
+    expect(page).to_have_url(re.compile(r"[?&]status=unexpected(?:&|$)"))
     expect(page.locator(".alias-list .alias-row")).to_have_count(1, timeout=5000)
 
     pool_sender_trigger = used.locator(".sender-stats-trigger")

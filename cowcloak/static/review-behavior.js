@@ -48,6 +48,12 @@
   const internalReviewTrigger = () =>
     document.querySelector("[data-unexpected-review-trigger]");
 
+  const usedPoolPromptPending = () =>
+    Boolean(
+      document.querySelector(".pool-item.pool-item-used")
+      && !document.querySelector("[data-used-pool-prompt]"),
+    );
+
   const ensureReviewAction = () => {
     const filters = document.querySelector(".status-filters");
     const internal = internalReviewTrigger();
@@ -76,7 +82,7 @@
     if (button) button.hidden = count === null || count < 1;
 
     if (loginPromptEvaluated || wasLoginPromptEvaluated() || count === null) return;
-    if (document.querySelector("dialog[open]")) return;
+    if (usedPoolPromptPending() || document.querySelector("dialog[open]")) return;
 
     loginPromptEvaluated = true;
     markLoginPromptEvaluated();

@@ -4,9 +4,6 @@
     de: {
       senderTitle: "Absender",
       close: "Schließen",
-      unexpectedFilter: "Nicht erwartet",
-      unexpectedEmpty: "Keine Aliase mit nicht erwarteten Absendern.",
-      unexpectedSummary: (count) => `${count} Alias${count === 1 ? "" : "e"} mit nicht erwarteten Absendern`,
       ignoreUnexpected: "Unerwartete Absender für diesen Alias ignorieren",
       ignoreUnexpectedHint: "Absender und Statistiken bleiben sichtbar, aber dieser Alias wird nicht mehr als unerwartet gemeldet und zählt nicht im roten Filter.",
       ignoreUnexpectedMuted: "Prüfung aus",
@@ -29,9 +26,6 @@
     en: {
       senderTitle: "Senders",
       close: "Close",
-      unexpectedFilter: "Unexpected",
-      unexpectedEmpty: "No aliases with unexpected senders.",
-      unexpectedSummary: (count) => `${count} alias${count === 1 ? "" : "es"} with unexpected senders`,
       ignoreUnexpected: "Ignore unexpected senders for this alias",
       ignoreUnexpectedHint: "Sender details and statistics stay visible, but this alias is no longer flagged as unexpected and is excluded from the red filter.",
       ignoreUnexpectedMuted: "Review off",
@@ -54,10 +48,6 @@
   }[language];
 
   let senderDialogCounter = 0;
-  let unexpectedFilterPill = null;
-  let unexpectedGlobalCount = 0;
-  let unexpectedRenderSequence = 0;
-  const unexpectedCache = new Map();
   const ignoredUnexpectedAliases = new Set();
 
   const formatTimestamp = (element) => {
@@ -184,7 +174,6 @@
       checkbox.disabled = true;
       try {
         await saveUnexpectedIgnored(ownerRow, checkbox.checked);
-        unexpectedCache.clear();
         window.location.reload();
       } catch (error) {
         console.error("Could not save unexpected sender setting", error);
@@ -246,204 +235,6 @@
       trigger.addEventListener("click", () => dialog.showModal());
       bindDialogClose(dialog, close);
     });
-  };
-
-  const rowHasUnexpected = (row) => (
-    !isUnexpectedIgnored(row) && Boolean(row.querySelector(".sender-stats-alert"))
-  );
-
-  const parseTotalPages = (documentRoot) => {
-    const pages = [...documentRoot.querySelectorAll(".pagination .page-link")]
-      .map((item) => Number.parseInt(item.textContent.trim(), 10))
-      .filter(Number.isFinite);
-    return pages.length ? Math.max(...pages) : 1;
-  };
-
-  const fetchAliasPage = async (page, query) => {
-    const url = new URL("/aliases", window.location.origin);
-    url.searchParams.set("status", "all");
-    url.searchParams.set("per_page", "100");
-    url.searchParams.set("page", String(page));
-    if (query) url.searchParams.set("q", query);
-
-    const response = await fetch(url, {
-      headers: { "X-Cowcloak-Partial": "unexpected-filter" },
-      credentials: "same-origin",
-    });
-    if (!response.ok) throw new Error(`Unexpected-filter request failed with HTTP ${response.status}`);
-    const html = await response.text();
-    return new DOMParser().parseFromString(html, "text/html");
-  };
-
-  const loadUnexpectedRows = async (query = "") => {
-    const cacheKey = query.trim().toLowerCase();
-    if (unexpectedCache.has(cacheKey)) return unexpectedCache.get(cacheKey);
-
-    const first = await fetchAliasPage(1, query);
-    const totalPages = parseTotalPages(first);
-    const documents = [first];
-    if (totalPages > 1) {
-      const rest = await Promise.all(
-        Array.from({ length: totalPages - 1 }, (_, index) => fetchAliasPage(index + 2, query)),
-      );
-      documents.push(...rest);
-    }
-
-    const rows = documents.flatMap((doc) =>
-      [...doc.querySelectorAll(".alias-row")]
-        .filter(rowHasUnexpected)
-        .map((row) => row.cloneNode(true)),
-    );
-    unexpectedCache.set(cacheKey, rows);
-    return rows;
-  };
-
-  const isUnexpectedMode = () => window.location.hash === "#unexpected";
-
-  const currentSearchQuery = () => document.querySelector("[data-live-search]")?.value.trim() || "";
-
-  const unexpectedReturnTo = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("status", "all");
-    url.searchParams.delete("page");
-    url.hash = "unexpected";
-    return `${url.pathname}${url.search}${url.hash}`;
-  };
-
-  const setUnexpectedFilterVisualState = (active) => {
-    document.querySelectorAll(".status-filters .filter-pill").forEach((pill) => {
-      pill.classList.toggle("current", active ? pill === unexpectedFilterPill : false);
-    });
-  };
-
-  const rebindInsertedAliasRows = (root) => {
-    formatTimestamps(root);
-    enhanceSenderDetails(root);
-    window.bindCopyButtons?.(root);
-    window.bindConfirmForms?.(root);
-    window.bindReplacementActions?.(root);
-  };
-
-  const renderUnexpectedFilter = async () => {
-    if (!isUnexpectedMode()) return;
-    const sequence = ++unexpectedRenderSequence;
-    const region = document.querySelector("[data-alias-results-region]");
-    const aliasList = region?.querySelector(".alias-list");
-    if (!region || !aliasList) return;
-
-    setUnexpectedFilterVisualState(true);
-    region.classList.add("unexpected-filter-active");
-    const bulkToolbar = region.querySelector("[data-bulk-toolbar]");
-    const footer = region.querySelector(".list-footer");
-    if (bulkToolbar) bulkToolbar.hidden = true;
-    if (footer) footer.hidden = true;
-
-    aliasList.classList.add("unexpected-filter-loading");
-    try {
-      const query = currentSearchQuery();
-      const rows = await loadUnexpectedRows(query);
-      if (sequence !== unexpectedRenderSequence || !isUnexpectedMode()) return;
-
-      document.querySelectorAll("[data-generated-sender-dialog]").forEach((dialog) => dialog.remove());
-      aliasList.replaceChildren();
-
-      if (rows.length) {
-        rows.forEach((sourceRow) => {
-          const row = document.importNode(sourceRow, true);
-          row.querySelectorAll('input[name="return_to"]').forEach((input) => {
-            input.value = unexpectedReturnTo();
-          });
-          aliasList.append(row);
-        });
-      } else {
-        const empty = document.createElement("p");
-        empty.className = "empty";
-        empty.textContent = text.unexpectedEmpty;
-        aliasList.append(empty);
-      }
-
-      const summary = document.querySelector("[data-assigned-summary]");
-      if (summary) summary.textContent = text.unexpectedSummary(rows.length);
-      rebindInsertedAliasRows(aliasList);
-    } catch (error) {
-      console.error("Could not load unexpected aliases", error);
-    } finally {
-      if (sequence === unexpectedRenderSequence) aliasList.classList.remove("unexpected-filter-loading");
-    }
-  };
-
-  const installUnexpectedFilter = async () => {
-    const filters = document.querySelector(".status-filters");
-    if (!filters) return;
-
-    const existing = filters.querySelector("[data-unexpected-filter]");
-    if (existing) {
-      unexpectedFilterPill = existing;
-      if (isUnexpectedMode()) renderUnexpectedFilter();
-      return;
-    }
-
-    unexpectedFilterPill = document.createElement("a");
-    unexpectedFilterPill.className = "filter-pill unexpected-filter-pill";
-    unexpectedFilterPill.dataset.unexpectedFilter = "1";
-    unexpectedFilterPill.href = "#unexpected";
-    unexpectedFilterPill.append(document.createTextNode(`${text.unexpectedFilter} `));
-    const count = document.createElement("span");
-    count.textContent = "…";
-    unexpectedFilterPill.append(count);
-    filters.append(unexpectedFilterPill);
-
-    unexpectedFilterPill.addEventListener("click", (event) => {
-      event.preventDefault();
-      const url = new URL(window.location.href);
-      url.searchParams.set("status", "all");
-      url.searchParams.delete("page");
-      url.hash = "unexpected";
-      history.pushState({}, "", url);
-      renderUnexpectedFilter();
-    });
-
-    try {
-      const rows = await loadUnexpectedRows("");
-      unexpectedGlobalCount = rows.length;
-      count.textContent = String(unexpectedGlobalCount);
-      unexpectedFilterPill.classList.toggle("has-unexpected", unexpectedGlobalCount > 0);
-    } catch (error) {
-      console.error("Could not count unexpected aliases", error);
-      const visibleCount = [...document.querySelectorAll(".alias-row")].filter(rowHasUnexpected).length;
-      count.textContent = String(visibleCount);
-      unexpectedFilterPill.classList.toggle("has-unexpected", visibleCount > 0);
-    }
-
-    if (isUnexpectedMode()) renderUnexpectedFilter();
-  };
-
-  const installUnexpectedSearchHandling = () => {
-    const search = document.querySelector("[data-live-search]");
-    if (!search || search.dataset.unexpectedSearchBound === "1") return;
-    search.dataset.unexpectedSearchBound = "1";
-    let timer = null;
-
-    search.addEventListener(
-      "input",
-      (event) => {
-        if (!isUnexpectedMode()) return;
-        event.stopImmediatePropagation();
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          const url = new URL(window.location.href);
-          const query = search.value.trim();
-          if (query) url.searchParams.set("q", query);
-          else url.searchParams.delete("q");
-          url.searchParams.set("status", "all");
-          url.searchParams.delete("page");
-          url.hash = "unexpected";
-          history.replaceState({}, "", url);
-          renderUnexpectedFilter();
-        }, 180);
-      },
-      true,
-    );
   };
 
   const promptStorageKey = () => {
@@ -650,8 +441,6 @@
     await loadReviewSettings();
     formatTimestamps();
     enhanceSenderDetails();
-    installUnexpectedSearchHandling();
-    installUnexpectedFilter();
     buildUsedPoolPrompt();
 
     const observer = new MutationObserver((mutations) => {
@@ -661,24 +450,11 @@
           if (node.matches("[data-local-timestamp]")) formatTimestamp(node);
           formatTimestamps(node);
           enhanceSenderDetails(node);
-          if (
-            node.matches("[data-alias-results-region], .status-filters")
-            || node.querySelector("[data-alias-results-region], .status-filters")
-          ) {
-            unexpectedFilterPill = null;
-            installUnexpectedSearchHandling();
-            installUnexpectedFilter();
-          }
         }
       }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-
-    window.addEventListener("popstate", () => {
-      if (isUnexpectedMode()) renderUnexpectedFilter();
-      else window.location.reload();
-    });
   };
 
   if (document.readyState === "loading") {

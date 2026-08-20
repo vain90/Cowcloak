@@ -33,6 +33,7 @@ from cowcloak.i18n import (
     translations,
 )
 from cowcloak.mailcow import MailcowAccessDenied, MailcowClient, MailcowError
+from cowcloak.review_settings import AliasReviewSettingsStore
 from cowcloak.review_settings import router as review_settings_router
 from cowcloak.security import ensure_csrf_token, require_user, validate_csrf
 from cowcloak.senders import sender_match_token
@@ -50,7 +51,7 @@ from cowcloak.usage import UsageCollector, mailbox_stats_state
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
 PAGE_SIZES = (10, 25, 50, 100)
-STATUS_FILTERS = ("all", "active", "disabled")
+STATUS_FILTERS = ("all", "active", "disabled", "unexpected")
 BULK_ACTIONS = {"enable", "disable", "sogo-on", "sogo-off"}
 STATS_MODE_SELECTIONS = {"inherit", "off", "basic", "domain", "full"}
 SENDER_DECISIONS = {"expected", "unexpected", "clear"}
@@ -318,35 +319,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             (alias for alias in owned if not alias.is_reserved),
             key=lambda item: (item.description.lower(), item.address),
         )
-        status_counts = {
-            "all": len(assigned_all),
-            "active": sum(alias.active for alias in assigned_all),
-            "disabled": sum(not alias.active for alias in assigned_all),
-        }
-
-        if status_filter == "active":
-            assigned_filtered = [alias for alias in assigned_all if alias.active]
-        elif status_filter == "disabled":
-            assigned_filtered = [alias for alias in assigned_all if not alias.active]
-        else:
-            assigned_filtered = assigned_all
-
-        search_query = q.strip()
-        if search_query:
-            needle = search_query.lower()
-            assigned_filtered = [
-                alias
-                for alias in assigned_filtered
-                if needle in f"{alias.address} {alias.public_comment}".lower()
-            ]
-
-        filtered_total = len(assigned_filtered)
-        total_pages = max(1, (filtered_total + per_page - 1) // per_page)
-        page = min(page, total_pages)
-        offset = (page - 1) * per_page
-        assigned = assigned_filtered[offset : offset + per_page]
-        range_start = offset + 1 if filtered_total else 0
-        range_end = min(offset + per_page, filtered_total)
 
         stats_store = request.app.state.stats_store
         stats_available = settings.usage_stats and stats_store is not None
@@ -360,6 +332,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             str,
             list[dict[str, str | int | bool | None]],
         ] = {}
+        unexpected_aliases: set[str] = set()
 
         if stats_available:
             try:
@@ -382,80 +355,137 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 stats_state = None
                 usage_stats_visible = False
 
-            if usage_stats_visible and stats_state is not None:
-                displayed_aliases = [*assigned, *reserved]
-                addresses = [alias.address for alias in displayed_aliases]
-                stored_usage = await stats_store.alias_usage(user, addresses)
-                for alias in displayed_aliases:
-                    usage = stored_usage.get(alias.address.lower())
-                    received_count = usage.received_count if usage is not None else 0
-                    sent_count = usage.sent_count if usage is not None else 0
-                    timestamps = (
-                        []
-                        if usage is None
-                        else [
-                            value
-                            for value in (usage.last_received_at, usage.last_sent_at)
-                            if value is not None
-                        ]
-                    )
-                    usage_stats[alias.address.lower()] = {
-                        "received_count": received_count,
-                        "sent_count": sent_count,
-                        "last_used_at": max(timestamps) if timestamps else None,
-                    }
-
-                if stats_state.sender_detail_enabled:
-                    stored_senders = await stats_store.sender_usage(user, addresses)
-                    displayed_by_address = {
-                        alias.address.lower(): alias for alias in displayed_aliases
-                    }
-                    for alias_address, entries in stored_senders.items():
-                        alias_record = displayed_by_address.get(alias_address)
-                        if alias_record is None:
-                            continue
-                        rows: list[dict[str, str | int | bool | None]] = []
-                        for entry in entries:
-                            match_token = sender_match_token(
-                                alias_record.address,
-                                alias_record.description,
-                                entry.sender_domain,
-                            )
-                            automatic_expected = match_token is not None
-                            if entry.manual_expected is None:
-                                expected = automatic_expected
-                                review_source = (
-                                    "automatic" if automatic_expected else "unreviewed"
-                                )
-                            elif entry.manual_expected:
-                                expected = True
-                                review_source = "manual"
-                            else:
-                                expected = False
-                                review_source = "manual-unexpected"
-
-                            rows.append(
-                                {
-                                    "sender_key": entry.sender_key,
-                                    "label": entry.sender_address or entry.sender_domain,
-                                    "domain": entry.sender_domain,
-                                    "received_count": entry.received_count,
-                                    "last_received_at": entry.last_received_at,
-                                    "expected": expected,
-                                    "review_source": review_source,
-                                    "manual_expected": entry.manual_expected,
-                                    "match_token": match_token,
-                                }
-                            )
-
-                        rows.sort(
-                            key=lambda row: (
-                                bool(row["expected"]),
-                                -int(row["last_received_at"] or 0),
-                                str(row["label"]),
-                            )
+            if (
+                usage_stats_visible
+                and stats_state is not None
+                and stats_state.sender_detail_enabled
+            ):
+                sender_aliases = [*assigned_all, *reserved]
+                sender_addresses = [alias.address for alias in sender_aliases]
+                stored_senders = await stats_store.sender_usage(user, sender_addresses)
+                aliases_by_address = {
+                    alias.address.lower(): alias for alias in sender_aliases
+                }
+                for alias_address, entries in stored_senders.items():
+                    alias_record = aliases_by_address.get(alias_address)
+                    if alias_record is None:
+                        continue
+                    rows: list[dict[str, str | int | bool | None]] = []
+                    for entry in entries:
+                        match_token = sender_match_token(
+                            alias_record.address,
+                            alias_record.description,
+                            entry.sender_domain,
                         )
-                        sender_stats[alias_address] = rows
+                        automatic_expected = match_token is not None
+                        if entry.manual_expected is None:
+                            expected = automatic_expected
+                            review_source = (
+                                "automatic" if automatic_expected else "unreviewed"
+                            )
+                        elif entry.manual_expected:
+                            expected = True
+                            review_source = "manual"
+                        else:
+                            expected = False
+                            review_source = "manual-unexpected"
+
+                        rows.append(
+                            {
+                                "sender_key": entry.sender_key,
+                                "label": entry.sender_address or entry.sender_domain,
+                                "domain": entry.sender_domain,
+                                "received_count": entry.received_count,
+                                "last_received_at": entry.last_received_at,
+                                "expected": expected,
+                                "review_source": review_source,
+                                "manual_expected": entry.manual_expected,
+                                "match_token": match_token,
+                            }
+                        )
+
+                    rows.sort(
+                        key=lambda row: (
+                            bool(row["expected"]),
+                            -int(row["last_received_at"] or 0),
+                            str(row["label"]),
+                        )
+                    )
+                    sender_stats[alias_address] = rows
+
+                ignored_aliases = await AliasReviewSettingsStore(
+                    stats_store.path
+                ).ignored_aliases(user)
+                assigned_addresses = {
+                    alias.address.lower() for alias in assigned_all
+                }
+                unexpected_aliases = {
+                    alias_address
+                    for alias_address, rows in sender_stats.items()
+                    if alias_address in assigned_addresses
+                    and alias_address not in ignored_aliases
+                    and any(not bool(row["expected"]) for row in rows)
+                }
+
+        status_counts = {
+            "all": len(assigned_all),
+            "active": sum(alias.active for alias in assigned_all),
+            "disabled": sum(not alias.active for alias in assigned_all),
+            "unexpected": len(unexpected_aliases),
+        }
+
+        if status_filter == "active":
+            assigned_filtered = [alias for alias in assigned_all if alias.active]
+        elif status_filter == "disabled":
+            assigned_filtered = [alias for alias in assigned_all if not alias.active]
+        elif status_filter == "unexpected":
+            assigned_filtered = [
+                alias
+                for alias in assigned_all
+                if alias.address.lower() in unexpected_aliases
+            ]
+        else:
+            assigned_filtered = assigned_all
+
+        search_query = q.strip()
+        if search_query:
+            needle = search_query.lower()
+            assigned_filtered = [
+                alias
+                for alias in assigned_filtered
+                if needle in f"{alias.address} {alias.public_comment}".lower()
+            ]
+
+        filtered_total = len(assigned_filtered)
+        total_pages = max(1, (filtered_total + per_page - 1) // per_page)
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+        assigned = assigned_filtered[offset : offset + per_page]
+        range_start = offset + 1 if filtered_total else 0
+        range_end = min(offset + per_page, filtered_total)
+
+        if usage_stats_visible and stats_state is not None:
+            displayed_aliases = [*assigned, *reserved]
+            addresses = [alias.address for alias in displayed_aliases]
+            stored_usage = await stats_store.alias_usage(user, addresses)
+            for alias in displayed_aliases:
+                usage = stored_usage.get(alias.address.lower())
+                received_count = usage.received_count if usage is not None else 0
+                sent_count = usage.sent_count if usage is not None else 0
+                timestamps = (
+                    []
+                    if usage is None
+                    else [
+                        value
+                        for value in (usage.last_received_at, usage.last_sent_at)
+                        if value is not None
+                    ]
+                )
+                usage_stats[alias.address.lower()] = {
+                    "received_count": received_count,
+                    "sent_count": sent_count,
+                    "last_used_at": max(timestamps) if timestamps else None,
+                }
 
         return TEMPLATES.TemplateResponse(
             request,
