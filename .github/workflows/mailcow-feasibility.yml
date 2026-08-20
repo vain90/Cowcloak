@@ -13,8 +13,8 @@ jobs:
     timeout-minutes: 30
 
     env:
-      MAILCOW_DIR: ${{ runner.temp }}/mailcow-dockerized
-      REPORT_DIR: ${{ runner.temp }}/mailcow-feasibility
+      MAILCOW_DIR: /tmp/mailcow-dockerized
+      REPORT_DIR: /tmp/mailcow-feasibility
       MAILCOW_HOSTNAME: mail.mailcow-ci.test
       MAILCOW_HTTP_PORT: "8080"
       MAILCOW_API_KEY: cowcloak-ci-feasibility
@@ -197,7 +197,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mailcow-feasibility-diagnostics
-          path: ${{ runner.temp }}/mailcow-feasibility
+          path: /tmp/mailcow-feasibility
           if-no-files-found: ignore
           retention-days: 7
 
