@@ -1,0 +1,96 @@
+.collector-health-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 750;
+}
+
+.collector-health-badge.state-healthy {
+  color: #067647;
+  background: #ecfdf3;
+}
+
+.collector-health-badge.state-low,
+.collector-health-badge.state-stale {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+.collector-health-badge.state-gap,
+.collector-health-badge.state-failed {
+  color: #b42318;
+  background: #fef3f2;
+  border-color: #fecdca;
+}
+
+.collector-health-badge.state-starting,
+.collector-health-badge.state-unavailable {
+  color: #667085;
+  background: #f2f4f7;
+}
+
+.collector-health-details {
+  margin-top: 5px;
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.collector-health-details > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #475467;
+  font-weight: 650;
+}
+
+.collector-health-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+
+.collector-health-grid dt {
+  color: #667085;
+  font-weight: 650;
+}
+
+.collector-health-grid dd {
+  margin: 0;
+  color: #344054;
+  overflow-wrap: anywhere;
+}
+
+.collector-health-explanation,
+.collector-health-warning {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.collector-health-warning {
+  padding: 7px 8px;
+  border: 1px solid #fedf89;
+  border-radius: 7px;
+  background: #fffaeb;
+  color: #93370d;
+}
+
+@media (max-width: 760px) {
+  .collector-health-badge {
+    font-size: 10px;
+  }
+
+  .collector-health-grid {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+
+  .collector-health-grid dd {
+    margin-bottom: 5px;
+  }
+}

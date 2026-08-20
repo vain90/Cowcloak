@@ -31,6 +31,12 @@ class Settings(BaseSettings):
         le=10000,
         alias="COWCLOAK_USAGE_HISTORY_COUNT",
     )
+    usage_stale_polls: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        alias="COWCLOAK_USAGE_STALE_POLLS",
+    )
 
     mailcow_url: str = Field(alias="MAILCOW_URL")
     mailcow_api_key: str = Field(alias="MAILCOW_API_KEY", min_length=1)
