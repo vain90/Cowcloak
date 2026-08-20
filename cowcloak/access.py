@@ -7,14 +7,27 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from cowcloak.mailcow import MailcowAccessDenied, MailcowError
 
 
+def _accepts_html(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "").lower()
+
+
 class AccessRevalidationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         if not request.url.path.startswith("/aliases"):
             return await call_next(request)
 
         email = request.session.get("user_email")
+        if not email:
+            request.session.clear()
+            if _accepts_html(request):
+                return RedirectResponse("/", status_code=303)
+            return JSONResponse(
+                {"detail": "Authentication required"},
+                status_code=401,
+            )
+
         settings = request.app.state.settings
-        if not email or not settings.access_tag:
+        if not settings.access_tag:
             return await call_next(request)
 
         try:
