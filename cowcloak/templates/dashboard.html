@@ -296,6 +296,11 @@
         class="filter-pill {% if status_filter == 'disabled' %}current{% endif %}"
         href="/aliases?status=disabled&q={{ search_query|urlencode }}&per_page={{ per_page }}"
       >{{ t.filter_disabled }} <span>{{ status_counts["disabled"] }}</span></a>
+      <a
+        class="filter-pill unexpected-filter-pill {% if status_filter == 'unexpected' %}current{% endif %} {% if status_counts['unexpected'] %}has-unexpected{% endif %}"
+        href="/aliases?status=unexpected&q={{ search_query|urlencode }}&per_page={{ per_page }}"
+        data-unexpected-filter
+      >{{ t.sender_state_unexpected }} <span>{{ status_counts["unexpected"] }}</span></a>
     </nav>
 
     {% if assigned %}

@@ -53,7 +53,7 @@
 
   const fetchAliasPage = async (page) => {
     const url = new URL("/aliases", window.location.origin);
-    url.searchParams.set("status", "all");
+    url.searchParams.set("status", "unexpected");
     url.searchParams.set("per_page", "100");
     url.searchParams.set("page", String(page));
 
@@ -69,29 +69,8 @@
     return new DOMParser().parseFromString(await response.text(), "text/html");
   };
 
-  const loadIgnoredAliases = async () => {
-    const response = await fetch("/aliases/review-settings", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
-    if (handleAuthenticationLoss(response)) throw new Error("Authentication required");
-    if (!response.ok) return new Set();
-    const payload = await response.json();
-    const values = Array.isArray(payload.ignored_unexpected) ? payload.ignored_unexpected : [];
-    return new Set(values.map((value) => String(value).trim().toLowerCase()).filter(Boolean));
-  };
-
-  const rowAddress = (row) =>
-    row.querySelector("[data-alias-select]")?.dataset.address?.trim().toLowerCase() || "";
-
-  const rowHasUnexpected = (row, ignored) => {
-    const address = rowAddress(row);
-    if (!address || ignored.has(address)) return false;
-    return Boolean(row.querySelector("details.sender-stats > summary .sender-stats-alert"));
-  };
-
   const loadUnexpectedRows = async () => {
-    const [first, ignored] = await Promise.all([fetchAliasPage(1), loadIgnoredAliases()]);
+    const first = await fetchAliasPage(1);
     const documents = [first];
     const totalPages = parseTotalPages(first);
     if (totalPages > 1) {
@@ -102,9 +81,7 @@
     }
 
     return documents.flatMap((documentRoot) =>
-      [...documentRoot.querySelectorAll(".alias-row")]
-        .filter((row) => rowHasUnexpected(row, ignored))
-        .map((row) => row.cloneNode(true)),
+      [...documentRoot.querySelectorAll(".alias-row")].map((row) => row.cloneNode(true)),
     );
   };
 
