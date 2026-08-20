@@ -417,7 +417,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     stats_store.path
                 ).ignored_aliases(user)
                 assigned_addresses = {
-                    alias.address.lower() for alias in assigned_all
+                    alias.address.lower() for alias in assigned_all if alias.active
                 }
                 unexpected_aliases = {
                     alias_address
