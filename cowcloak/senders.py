@@ -73,19 +73,26 @@ def _canonical_domain(sender_domain: str) -> str | None:
         return None
 
 
-def registered_domain_label(sender_domain: str) -> str | None:
+def _domain_identity(sender_domain: str) -> tuple[str, bool] | None:
     canonical = _canonical_domain(sender_domain)
     if canonical is None:
         return None
     extracted = _DOMAIN_EXTRACTOR(canonical)
     if not extracted.domain or not extracted.suffix:
         return None
-    return extracted.domain.lower()
+    return extracted.domain.lower(), bool(extracted.is_private)
+
+
+def registered_domain_label(sender_domain: str) -> str | None:
+    identity = _domain_identity(sender_domain)
+    return identity[0] if identity is not None else None
 
 
 def sender_domain_tokens(sender_domain: str) -> set[str]:
-    registered_label = registered_domain_label(sender_domain)
-    return {registered_label} if registered_label else set()
+    identity = _domain_identity(sender_domain)
+    if identity is None or identity[1]:
+        return set()
+    return {identity[0]}
 
 
 def sender_match_token(
@@ -93,8 +100,11 @@ def sender_match_token(
     description: str,
     sender_domain: str,
 ) -> str | None:
-    registered_label = registered_domain_label(sender_domain)
-    if registered_label is None:
+    identity = _domain_identity(sender_domain)
+    if identity is None:
+        return None
+    registered_label, is_private = identity
+    if is_private:
         return None
     matches = alias_identity_tokens(alias_address, description) & {registered_label}
     if not matches:
