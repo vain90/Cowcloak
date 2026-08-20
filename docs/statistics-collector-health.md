@@ -66,7 +66,7 @@ The stale threshold is `COWCLOAK_USAGE_POLL_SECONDS × COWCLOAK_USAGE_STALE_POLL
 
 The prune floor is stored persistently in the statistics database. The same transaction that advances the floor removes deduplication rows at or below it. Persistent SQLite insert guards then reject any later replayed Rspamd event at or below that floor even though its original hash has already been deleted. This keeps cleanup safe across application restarts and prevents an old history entry from being counted a second time.
 
-Cleanup is checked only periodically, at most once every six hours after a safe watermark is available. It uses the existing `event_at` indexes and does not run `VACUUM` in the collector hot path. SQLite can reuse freed pages for later writes; administrators may perform offline database maintenance separately if shrinking the physical file is ever required.
+Cleanup is checked only periodically, at most once every six hours after a safe watermark is available. Each cleanup transaction deletes at most 50,000 old rows from `processed_events` and at most 50,000 from `sender_processed_events`; a larger backlog is drained over later passes rather than creating one unbounded delete transaction. The cleanup uses the existing `event_at` indexes and does not run `VACUUM` in the collector hot path. SQLite can reuse freed pages for later writes; administrators may perform offline database maintenance separately if shrinking the physical file is ever required.
 
 ## Stale threshold
 
