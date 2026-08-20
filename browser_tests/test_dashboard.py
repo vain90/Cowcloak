@@ -115,7 +115,7 @@ def test_sender_dialog_and_review_submission_reopen_with_fresh_state(
     expect(unexpected_sender).to_have_count(1)
     expect(unexpected_sender).to_contain_text("odd@unexpected.example")
 
-    unexpected_sender.locator(".sender-review-form button").click()
+    unexpected_sender.locator('.sender-review-form button[type="submit"]').click()
 
     expect(review_dialog).to_be_visible(timeout=5000)
     expect(review_dialog.locator(".unexpected-review-list .empty")).to_be_visible()
