@@ -81,12 +81,6 @@
     if (loginPromptEvaluated || wasLoginPromptEvaluated()) return;
     if (hasBlockingDialog()) return;
 
-    // A persisted action/review operation can reopen the unified dialog from
-    // review.js during page startup. ensureActionDialog() creates the dialog
-    // synchronously before its asynchronous content load starts, so its mere
-    // presence is enough to avoid starting a competing login-time render here.
-    if (document.querySelector("[data-action-required-dialog]")) return;
-
     loginPromptEvaluated = true;
     markLoginPromptEvaluated();
     if (summary.total > 0) await api.open();
