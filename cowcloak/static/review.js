@@ -10,6 +10,7 @@
           : `${count} Aliase enthalten mindestens einen nicht erwarteten Absender. Prüfe hier pro Alias die gesamte Absenderliste.`,
       empty: "Aktuell gibt es keine Aliase mit nicht erwarteten Absendern.",
       unexpected: (count) => `${count} nicht erwartet`,
+      replace: "Alias ersetzen",
       close: "Schließen",
       senderTitle: "Absender",
       poolHint: "Dieser Offline-Alias ist noch nicht zugeordnet. Die Absenderbewertung steht nach der Zuordnung zur Verfügung.",
@@ -25,6 +26,7 @@
           : `${count} aliases contain at least one unexpected sender. Review the complete sender list for each alias here.`,
       empty: "There are currently no aliases with unexpected senders.",
       unexpected: (count) => `${count} unexpected`,
+      replace: "Replace alias",
       close: "Close",
       senderTitle: "Senders",
       poolHint: "This offline alias has not been assigned yet. Sender review becomes available after assignment.",
@@ -126,16 +128,53 @@
     return reviewDialog;
   };
 
+  const markReviewForReopen = () => {
+    try {
+      sessionStorage.setItem(REOPEN_KEY, "1");
+    } catch (error) {
+      console.debug("sessionStorage is unavailable", error);
+    }
+  };
+
+  const clearReviewReopen = () => {
+    try {
+      sessionStorage.removeItem(REOPEN_KEY);
+    } catch (error) {
+      console.debug("sessionStorage is unavailable", error);
+    }
+  };
+
   const prepareReviewForm = (form) => {
     const returnTo = form.querySelector('input[name="return_to"]');
     if (returnTo) returnTo.value = "/aliases";
-    form.addEventListener("submit", () => {
-      try {
-        sessionStorage.setItem(REOPEN_KEY, "1");
-      } catch (error) {
-        console.debug("sessionStorage is unavailable", error);
-      }
-    });
+    form.addEventListener("submit", markReviewForReopen);
+  };
+
+  const openReplacementFromReview = (select) => {
+    if (typeof window.showReplacementDialog !== "function") return;
+
+    const existingDialogs = new Set(document.querySelectorAll("dialog"));
+    window.showReplacementDialog(select, null);
+    const replacementDialog = [...document.querySelectorAll("dialog")].find(
+      (dialog) => !existingDialogs.has(dialog),
+    );
+    if (!replacementDialog) return;
+
+    replacementDialog.querySelector(".button.primary")?.addEventListener(
+      "click",
+      markReviewForReopen,
+    );
+    replacementDialog.addEventListener(
+      "close",
+      () => {
+        window.setTimeout(() => {
+          if (!document.querySelector("dialog.assign-dialog-single[open]")) {
+            clearReviewReopen();
+          }
+        }, 0);
+      },
+      { once: true },
+    );
   };
 
   const buildAliasReview = (sourceRow) => {
@@ -166,7 +205,15 @@
     const alert = document.createElement("span");
     alert.className = "sender-stats-alert";
     alert.textContent = text.unexpected(unexpectedCount);
-    header.append(identity, alert);
+
+    const replace = document.createElement("button");
+    replace.className = "button compact";
+    replace.type = "button";
+    replace.dataset.reviewReplaceAlias = select.value;
+    replace.textContent = text.replace;
+    replace.addEventListener("click", () => openReplacementFromReview(select));
+
+    header.append(identity, alert, replace);
 
     const senderList = document.importNode(sourceList, true);
     senderList.querySelectorAll(".sender-review-form").forEach(prepareReviewForm);
