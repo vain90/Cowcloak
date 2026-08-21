@@ -6,6 +6,10 @@ on:
   pull_request:
     paths:
       - "integration_tests/**"
+      - "moolias/mailcow_agent.py"
+      - "moolias/sender_protocol.py"
+      - "moolias/sender_protection.py"
+      - "scripts/install-mailcow-agent.sh"
       - ".github/scripts/mailcow-feasibility.sh"
       - ".github/workflows/mailcow-integration.yml"
 
@@ -22,6 +26,7 @@ jobs:
       MAILCOW_HOSTNAME: mail.mailcow-ci.test
       MAILCOW_HTTP_PORT: "8080"
       MAILCOW_API_KEY: moolias-ci-integration
+      MOOLIAS_AGENT_IMAGE: moolias:sender-agent-ci
       MAILCOW_READY_COMMAND: pytest -q integration_tests
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +38,8 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -e '.[dev]'
+      - name: Build local Moolias agent image
+        run: docker build -t "$MOOLIAS_AGENT_IMAGE" .
       - name: Run Moolias against disposable Mailcow
         run: bash .github/scripts/mailcow-feasibility.sh
       - name: Upload Mailcow integration diagnostics
