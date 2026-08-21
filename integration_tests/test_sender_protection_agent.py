@@ -119,11 +119,17 @@ def _install_agent(mailcow_dir: str) -> str:
             "bash",
             "scripts/install-mailcow-agent.sh",
         ],
-        check=True,
+        check=False,
         text=True,
         capture_output=True,
         env=env,
     )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Moolias Mailcow Agent installer failed:\n"
+            f"--- stdout ---\n{result.stdout}\n"
+            f"--- stderr ---\n{result.stderr}"
+        )
     match = re.search(r"^MOOLIAS_SENDER_AGENT_SECRET=(.+)$", result.stdout, re.MULTILINE)
     if match is None:
         raise AssertionError(f"Installer did not print the agent secret:\n{result.stdout}")
