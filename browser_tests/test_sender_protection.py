@@ -16,7 +16,7 @@ def _login(page: Page, base_url: str) -> None:
         dialog.locator(".dialog-close").click()
 
 
-def test_sender_protection_switch_updates_and_enforces_visible_cooldown(
+def test_sender_protection_lives_in_settings_and_updates_warning(
     page: Page,
     base_url: str,
 ) -> None:
@@ -33,6 +33,7 @@ def test_sender_protection_switch_updates_and_enforces_visible_cooldown(
                         "enabled": True,
                         "available": True,
                         "blocked": state["blocked"],
+                        "managed": True,
                         "retry_after": 0,
                     }
                 ),
@@ -50,6 +51,7 @@ def test_sender_protection_switch_updates_and_enforces_visible_cooldown(
             body=json.dumps(
                 {
                     "blocked": state["blocked"],
+                    "managed": True,
                     "retry_after": 1,
                 }
             ),
@@ -58,19 +60,39 @@ def test_sender_protection_switch_updates_and_enforces_visible_cooldown(
     page.route("**/aliases/sender-protection", sender_protection_route)
     _login(page, base_url)
 
-    card = page.locator(".sender-protection-card")
-    expect(card).to_be_visible(timeout=5000)
-    switch = card.locator('input[role="switch"]')
+    expect(page.locator(".sender-protection-card")).to_have_count(0)
+
+    warning = page.locator("[data-sender-protection-warning]")
+    expect(warning).to_be_visible(timeout=5000)
+    expect(warning).to_contain_text("primary address")
+
+    settings_button = page.locator("[data-open-settings-dialog]")
+    expect(settings_button).to_be_visible()
+    settings_button.click()
+
+    settings_dialog = page.locator("[data-settings-dialog]")
+    expect(settings_dialog).to_be_visible()
+    protection = settings_dialog.locator("[data-sender-protection-settings]")
+    expect(protection).to_be_visible()
+
+    switch = protection.locator('input[role="switch"]')
     expect(switch).not_to_be_checked()
-    expect(card.locator(".sender-protection-state")).to_have_text("Sending allowed")
+    expect(protection.locator(".sender-protection-state")).to_have_text("Sending allowed")
 
     switch.check()
 
     expect(switch).to_be_checked()
     expect(switch).to_be_disabled()
-    expect(card.locator(".sender-protection-state")).to_have_text("Protected")
-    expect(card.locator(".sender-protection-message")).to_contain_text("1 second")
+    expect(protection.locator(".sender-protection-state")).to_have_text("Protected")
+    expect(protection.locator(".sender-protection-message")).to_contain_text("1 second")
+    expect(warning).to_be_hidden()
     assert requests == [{"blocked": True}]
 
     page.wait_for_timeout(1100)
     expect(switch).to_be_enabled()
+
+    switch.uncheck()
+
+    expect(switch).not_to_be_checked()
+    expect(warning).to_be_visible()
+    assert requests == [{"blocked": True}, {"blocked": False}]
