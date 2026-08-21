@@ -15,11 +15,11 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from moolias.mailcow import MailcowAccessDenied, MailcowError
 from moolias.security import require_user, validate_csrf
 from moolias.sender_protocol import (
-    AgentProtectionState,
     NONCE_HEADER,
     PROTOCOL_VERSION,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
+    AgentProtectionState,
     request_signature,
 )
 
@@ -96,7 +96,7 @@ class SenderAgentClient:
     async def close(self) -> None:
         await self.client.aclose()
 
-    async def __aenter__(self) -> "SenderAgentClient":
+    async def __aenter__(self) -> SenderAgentClient:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
