@@ -35,6 +35,25 @@ class CollectorHealth:
             and self.history_count >= self.history_limit
         )
 
+    @property
+    def history_buffer_percent(self) -> float | None:
+        """Remaining configured Rspamd-history capacity since the previous watermark."""
+        if (
+            self.history_limit is None
+            or self.history_limit <= 0
+            or self.history_count is None
+            or self.overlap_count is None
+            or self.coverage_state in {None, "initial", "unavailable", "unknown", "gap"}
+        ):
+            return None
+
+        # overlap_count deliberately includes only entries strictly older than the
+        # previous watermark. Entries with the same timestamp are therefore treated
+        # as consumed capacity, which keeps this user-facing buffer conservative.
+        consumed = max(0, self.history_count - self.overlap_count)
+        remaining = max(0, self.history_limit - consumed)
+        return min(100.0, (remaining / self.history_limit) * 100.0)
+
 
 @dataclass(frozen=True, slots=True)
 class CollectorHealthView:
@@ -49,6 +68,7 @@ class CollectorHealthView:
             "stale": self.stale,
             "stale_after_seconds": self.stale_after_seconds,
             "history_full": self.health.history_full,
+            "history_buffer_percent": self.health.history_buffer_percent,
             "last_attempt_at": self.health.last_attempt_at,
             "last_success_at": self.health.last_success_at,
             "last_error": self.health.last_error,
@@ -90,6 +110,7 @@ def assess_collector_health(
         health.last_success_at is not None
         and timestamp - health.last_success_at >= stale_after_seconds
     )
+    history_buffer_percent = health.history_buffer_percent
 
     if health.last_error:
         state = "failed"
@@ -97,7 +118,10 @@ def assess_collector_health(
         state = "gap"
     elif stale:
         state = "stale"
-    elif health.coverage_state == "low":
+    elif (
+        history_buffer_percent is not None
+        and history_buffer_percent < LOW_HEADROOM_PERCENT
+    ):
         state = "low"
     elif health.last_success_at is None or health.coverage_state == "initial":
         state = "starting"
