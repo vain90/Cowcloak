@@ -14,6 +14,9 @@
       toggle: "Primäradresse als Absender sperren",
       blocked: "Geschützt",
       allowed: "Senden erlaubt",
+      external: "Extern geschützt",
+      externalHint:
+        "Diese Adresse wird bereits durch eine bestehende Mailcow/Postfix-Regel gesperrt und deshalb nicht von Moolias verwaltet.",
       cooldown: (seconds) =>
         seconds === 1
           ? "Erneute Änderung in 1 Sekunde möglich."
@@ -34,6 +37,9 @@
       toggle: "Block primary address as sender",
       blocked: "Protected",
       allowed: "Sending allowed",
+      external: "Protected externally",
+      externalHint:
+        "This address is already blocked by an existing Mailcow/Postfix rule and is therefore not managed by Moolias.",
       cooldown: (seconds) =>
         seconds === 1
           ? "You can change this again in 1 second."
@@ -53,6 +59,7 @@
   let stateLabel = null;
   let message = null;
   let currentBlocked = false;
+  let externallyManaged = false;
   let countdownTimer = null;
 
   function csrfToken() {
@@ -93,7 +100,11 @@
   function setState(blocked) {
     currentBlocked = Boolean(blocked);
     toggle.checked = currentBlocked;
-    stateLabel.textContent = currentBlocked ? copy.blocked : copy.allowed;
+    stateLabel.textContent = externallyManaged
+      ? copy.external
+      : currentBlocked
+        ? copy.blocked
+        : copy.allowed;
     stateLabel.classList.toggle("is-blocked", currentBlocked);
   }
 
@@ -106,6 +117,13 @@
 
   function startCountdown(seconds) {
     stopCountdown();
+    if (externallyManaged) {
+      toggle.disabled = true;
+      message.classList.remove("is-error");
+      message.textContent = copy.externalHint;
+      return;
+    }
+
     let remaining = Math.max(0, Number.parseInt(seconds, 10) || 0);
     if (remaining <= 0) {
       toggle.disabled = false;
@@ -158,6 +176,7 @@
       }
 
       ensureCard();
+      externallyManaged = data.managed === false;
       message.classList.remove("is-error");
       setState(data.blocked);
       startCountdown(data.retry_after || 0);
@@ -167,6 +186,12 @@
   }
 
   async function save() {
+    if (externallyManaged) {
+      setState(true);
+      startCountdown(0);
+      return;
+    }
+
     const requested = toggle.checked;
     toggle.disabled = true;
     message.classList.remove("is-error");
@@ -183,6 +208,13 @@
         body: JSON.stringify({ blocked: requested }),
       });
 
+      if (response.status === 409) {
+        externallyManaged = true;
+        setState(true);
+        startCountdown(0);
+        return;
+      }
+
       if (response.status === 429) {
         setState(currentBlocked);
         startCountdown(response.headers.get("Retry-After") || "1");
@@ -198,6 +230,7 @@
       }
 
       const data = await response.json();
+      externallyManaged = data.managed === false;
       message.classList.remove("is-error");
       setState(data.blocked);
       startCountdown(data.retry_after || 0);
