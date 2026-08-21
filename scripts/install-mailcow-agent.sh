@@ -301,18 +301,28 @@ done
 docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
-# extra.cf is consumed when the Postfix container starts. This is the only
-# restart required by the installation; normal sender toggles do not restart it.
+# extra.cf is consumed while the Postfix container starts. The restart is only
+# required by the one-time installation; normal sender toggles do not restart it.
 docker compose restart postfix-mailcow
 
-active_maps="$(
-  docker compose exec -T postfix-mailcow \
-    postconf -c /opt/postfix/conf smtpd_sender_login_maps
-)"
-grep -Fq "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" <<<"$active_maps" \
-  || die "Postfix did not load the Moolias PCRE sender map."
-grep -Fq "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" <<<"$active_maps" \
-  || die "Postfix's normal Mailcow sender ACL is missing after installation."
+postfix_ready=false
+active_maps=""
+for _ in $(seq 1 30); do
+  active_maps="$(
+    docker compose exec -T postfix-mailcow \
+      postconf -c /opt/postfix/conf smtpd_sender_login_maps 2>/dev/null \
+      || true
+  )"
+  if grep -Fq "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" <<<"$active_maps" \
+    && grep -Fq "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" <<<"$active_maps"; then
+    postfix_ready=true
+    break
+  fi
+  sleep 1
+done
+
+[[ "$postfix_ready" == true ]] \
+  || die "Postfix did not load the Moolias sender map within 30 seconds."
 
 cat <<EOF
 
