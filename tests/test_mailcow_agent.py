@@ -45,7 +45,14 @@ def _signed_headers(
 
 def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_path):
     now = [1000.0]
-    store = AgentStateStore(tmp_path, cooldown_seconds=10, clock=lambda: now[0])
+    state_dir = tmp_path / "state"
+    policy_path = tmp_path / "postfix-policy" / "blocked_sender_login.pcre"
+    store = AgentStateStore(
+        state_dir,
+        cooldown_seconds=10,
+        policy_path=policy_path,
+        clock=lambda: now[0],
+    )
     store.ensure_files()
 
     changed = store.set_blocked("User+tag@example.org", True)
@@ -53,9 +60,10 @@ def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_
     assert changed["changed"] is True
     assert changed["retry_after"] == 10
 
-    pcre = (tmp_path / "blocked_sender_login.pcre").read_text(encoding="utf-8")
+    pcre = policy_path.read_text(encoding="utf-8")
     assert "/^user\\+tag@example\\.org$/" in pcre
     assert "__moolias_blocked_primary_sender__" in pcre
+    assert not (state_dir / "blocked_sender_login.pcre").exists()
 
     with pytest.raises(AgentCooldownError) as error:
         store.set_blocked("user+tag@example.org", False)
@@ -69,16 +77,19 @@ def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_
     cleared = store.set_blocked("USER+TAG@example.org", False)
     assert cleared["blocked"] is False
 
-    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    state = json.loads((state_dir / "state.json").read_text(encoding="utf-8"))
     assert "user+tag@example.org" not in state["blocked"]
     assert "other@example.org" in state["blocked"]
 
 
 async def test_agent_requires_valid_signature_and_rejects_replay(tmp_path):
     now = [2000.0]
+    state_dir = tmp_path / "state"
+    policy_path = tmp_path / "policy" / "blocked_sender_login.pcre"
     app = create_agent_app(
         secret=SECRET,
-        state_dir=tmp_path,
+        state_dir=state_dir,
+        policy_path=policy_path,
         cooldown_seconds=10,
         clock=lambda: now[0],
     )
@@ -109,9 +120,12 @@ async def test_agent_requires_valid_signature_and_rejects_replay(tmp_path):
 
 async def test_agent_rejects_client_supplied_regex_and_rate_limits_changes(tmp_path):
     now = [3000.0]
+    state_dir = tmp_path / "state"
+    policy_path = tmp_path / "policy" / "blocked_sender_login.pcre"
     app = create_agent_app(
         secret=SECRET,
-        state_dir=tmp_path,
+        state_dir=state_dir,
+        policy_path=policy_path,
         cooldown_seconds=10,
         clock=lambda: now[0],
     )
@@ -162,5 +176,5 @@ async def test_agent_rejects_client_supplied_regex_and_rate_limits_changes(tmp_p
         )
         assert invalid.status_code == 400
 
-    pcre = Path(tmp_path, "blocked_sender_login.pcre").read_text(encoding="utf-8")
+    pcre = Path(policy_path).read_text(encoding="utf-8")
     assert "/.*/" not in pcre
