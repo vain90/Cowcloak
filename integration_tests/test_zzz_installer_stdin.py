@@ -1,18 +1,30 @@
 from __future__ import annotations
 
+import functools
+import http.server
 import os
 import subprocess
+import tempfile
+import threading
 from pathlib import Path
 
 import pytest
 
 
-def test_installer_completes_when_supplied_through_stdin() -> None:
+def test_documented_curl_bootstrap_completes_outside_mailcow_dir() -> None:
     mailcow_dir = os.environ.get("MAILCOW_DIR")
     if not mailcow_dir:
         pytest.skip("real Mailcow integration environment is not configured")
 
     installer = Path(__file__).resolve().parents[1] / "scripts" / "install-mailcow-agent.sh"
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler,
+        directory=str(installer.parent),
+    )
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
     env = os.environ.copy()
     env["MAILCOW_DIR"] = mailcow_dir
     env["MOOLIAS_AGENT_IMAGE"] = os.environ.get(
@@ -22,25 +34,31 @@ def test_installer_completes_when_supplied_through_stdin() -> None:
     env["MOOLIAS_AGENT_COOLDOWN_SECONDS"] = "1"
     env["MOOLIAS_IMPORT_EXISTING_SENDER_RULES"] = "no"
 
-    result = subprocess.run(
-        [
-            "sudo",
-            "--preserve-env="
-            "MAILCOW_DIR,MOOLIAS_AGENT_IMAGE,MOOLIAS_AGENT_COOLDOWN_SECONDS,"
-            "MOOLIAS_IMPORT_EXISTING_SENDER_RULES",
-            "bash",
-        ],
-        input=installer.read_text(encoding="utf-8"),
-        cwd=mailcow_dir,
-        check=False,
-        text=True,
-        capture_output=True,
-        env=env,
-        timeout=120,
+    port = server.server_address[1]
+    command = (
+        f"curl -fsSL http://127.0.0.1:{port}/install-mailcow-agent.sh | "
+        "sudo --preserve-env="
+        "MAILCOW_DIR,MOOLIAS_AGENT_IMAGE,MOOLIAS_AGENT_COOLDOWN_SECONDS,"
+        "MOOLIAS_IMPORT_EXISTING_SENDER_RULES bash"
     )
 
+    try:
+        result = subprocess.run(
+            ["bash", "-o", "pipefail", "-c", command],
+            cwd=tempfile.gettempdir(),
+            check=False,
+            text=True,
+            capture_output=True,
+            env=env,
+            timeout=120,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
+
     assert result.returncode == 0, (
-        "Piped installer failed:\n"
+        "Documented curl bootstrap failed:\n"
         f"--- stdout ---\n{result.stdout}\n"
         f"--- stderr ---\n{result.stderr}"
     )
