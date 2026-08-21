@@ -78,16 +78,31 @@ def _postfix_container_id(mailcow_dir: str) -> str:
 
 def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
     postfix_dir = os.path.join(mailcow_dir, "data", "conf", "postfix")
-    os.makedirs(postfix_dir, exist_ok=True)
     legacy_pcre = os.path.join(postfix_dir, "blocked_sender_login.pcre")
-    with open(legacy_pcre, "w", encoding="utf-8") as handle:
-        handle.write(r"/^legacy\.blocked@example\.org$/    __blocked_hidden_sender__" + "\n")
-    with open(os.path.join(postfix_dir, "extra.cf"), "a", encoding="utf-8") as handle:
-        handle.write(
+    extra_cf = os.path.join(postfix_dir, "extra.cf")
+
+    subprocess.run(
+        ["sudo", "install", "-d", "-m", "0755", postfix_dir],
+        check=True,
+    )
+    subprocess.run(
+        ["sudo", "tee", legacy_pcre],
+        input=r"/^legacy\.blocked@example\.org$/    __blocked_hidden_sender__" + "\n",
+        check=True,
+        text=True,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["sudo", "tee", "-a", extra_cf],
+        input=(
             "\nsmtpd_sender_login_maps = "
             "pcre:/opt/postfix/conf/blocked_sender_login.pcre, "
             "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf\n"
-        )
+        ),
+        check=True,
+        text=True,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def _install_agent(mailcow_dir: str) -> str:
