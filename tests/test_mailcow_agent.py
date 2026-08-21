@@ -10,6 +10,7 @@ import pytest
 
 from moolias.mailcow_agent import (
     AgentCooldownError,
+    AgentExternalPolicyError,
     AgentStateStore,
     create_agent_app,
 )
@@ -59,6 +60,7 @@ def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_
 
     changed = store.set_blocked("User+tag@example.org", True)
     assert changed["blocked"] is True
+    assert changed["managed"] is True
     assert changed["changed"] is True
     assert changed["retry_after"] == 10
 
@@ -82,6 +84,40 @@ def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_
     state = json.loads((state_dir / "state.json").read_text(encoding="utf-8"))
     assert "user+tag@example.org" not in state["blocked"]
     assert "other@example.org" in state["blocked"]
+
+
+def test_external_sender_rule_is_reported_but_not_modified(tmp_path):
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "blocked": [],
+                "external_blocked": ["external@example.org"],
+                "last_changed": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy_path = tmp_path / "policy" / "blocked_sender_login.pcre"
+    store = AgentStateStore(state_dir, policy_path=policy_path)
+    store.ensure_files()
+
+    status = store.status("EXTERNAL@example.org")
+    assert status["blocked"] is True
+    assert status["managed"] is False
+    assert status["retry_after"] == 0
+
+    already_blocked = store.set_blocked("external@example.org", True)
+    assert already_blocked["blocked"] is True
+    assert already_blocked["managed"] is False
+    assert already_blocked["changed"] is False
+
+    with pytest.raises(AgentExternalPolicyError):
+        store.set_blocked("external@example.org", False)
+
+    assert "external@example" not in policy_path.read_text(encoding="utf-8")
 
 
 def test_same_state_is_idempotent_without_rewriting_policy(tmp_path):
@@ -181,6 +217,7 @@ async def test_agent_requires_valid_signature_and_rejects_replay(tmp_path):
         signed = await client.post("/v1/status", content=body, headers=headers)
         assert signed.status_code == 200
         assert signed.json()["mailbox"] == "user@example.org"
+        assert signed.json()["managed"] is True
 
         replay = await client.post("/v1/status", content=body, headers=headers)
         assert replay.status_code == 401
