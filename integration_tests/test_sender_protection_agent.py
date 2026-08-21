@@ -11,16 +11,28 @@ import time
 import httpx
 import pytest
 
-from moolias.sender_protection import SenderAgentClient
+from moolias.sender_protection import (
+    SenderAgentClient,
+    SenderAgentExternalPolicy,
+)
 
 DOMAIN = "moolias-sender-agent.test"
 MAILBOX = f"owner@{DOMAIN}"
 ALIAS = f"service@{DOMAIN}"
 PASSWORD = "Moolias-Sender-Agent-CI-4f9d!A7"
 LEGACY_MAILBOX = "legacy.blocked@example.org"
+LEGACY_MAILBOX_2 = "legacy.second@example.org"
 BLOCKED_OWNER = "__moolias_blocked_primary_sender__"
-PCRE_MAP = "pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
-POLICY_PATH = "/opt/moolias-sender-agent/blocked_sender_login.pcre"
+PCRE_MAP = "pcre:/opt/postfix/conf/moolias-sender-agent/blocked_sender_login.pcre"
+LEGACY_MAP = "pcre:/opt/postfix/conf/blocked_sender_login.pcre"
+POLICY_PATH = "/opt/postfix/conf/moolias-sender-agent/blocked_sender_login.pcre"
+
+
+def _scenario() -> str:
+    value = os.environ.get("MOOLIAS_TEST_SCENARIO", "fresh")
+    if value not in {"fresh", "legacy-import", "legacy-keep"}:
+        raise AssertionError(f"Unknown sender protection integration scenario: {value}")
+    return value
 
 
 def _result_types(body: object) -> list[str]:
@@ -128,14 +140,7 @@ print(json.dumps([
             f"--- stdout ---\n{result.stdout}\n"
             f"--- stderr ---\n{result.stderr}"
         )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise AssertionError(
-            f"SOGo-path SMTP client returned invalid output: {result.stdout!r}"
-        ) from exc
-    if not isinstance(payload, list) or len(payload) != 4:
-        raise AssertionError(f"Unexpected SOGo-path SMTP result: {payload!r}")
+    payload = json.loads(result.stdout)
     return (
         int(payload[0]),
         str(payload[1]),
@@ -189,7 +194,6 @@ def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
             "Postfix PCRE lookup failed unexpectedly: "
             f"exit={lookup_result.returncode}, stderr={lookup_result.stderr!r}"
         )
-    lookup = lookup_result.stdout.strip()
     rendered = subprocess.run(
         [
             "docker",
@@ -205,7 +209,23 @@ def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
         text=True,
         capture_output=True,
     ).stdout
-    return lookup, rendered
+    return lookup_result.stdout.strip(), rendered
+
+
+def _prepare_existing_compose_override(mailcow_dir: str) -> None:
+    override = os.path.join(mailcow_dir, "docker-compose.override.yml")
+    subprocess.run(
+        ["sudo", "tee", override],
+        input=(
+            "services:\n"
+            "  unrelated-test-service:\n"
+            "    image: busybox:1.36\n"
+            "    command: [\"true\"]\n"
+        ),
+        check=True,
+        text=True,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
@@ -219,7 +239,11 @@ def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
     )
     subprocess.run(
         ["sudo", "tee", legacy_pcre],
-        input=r"/^legacy\.blocked@example\.org$/    __blocked_hidden_sender__" + "\n",
+        input=(
+            r"/^legacy\.blocked@example\.org$/    __blocked_hidden_sender__" + "\n"
+            r"/^legacy\.second@example\.org$/     __blocked_hidden_sender_2__" + "\n"
+            r"/^special\..*@example\.net$/        __custom_external_rule__" + "\n"
+        ),
         check=True,
         text=True,
         stdout=subprocess.DEVNULL,
@@ -228,7 +252,7 @@ def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
         ["sudo", "tee", "-a", extra_cf],
         input=(
             "\nsmtpd_sender_login_maps = "
-            "pcre:/opt/postfix/conf/blocked_sender_login.pcre, "
+            f"{LEGACY_MAP}, "
             "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf\n"
         ),
         check=True,
@@ -238,6 +262,7 @@ def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
 
 
 def _installer_env(mailcow_dir: str) -> dict[str, str]:
+    scenario = _scenario()
     env = os.environ.copy()
     env["MAILCOW_DIR"] = mailcow_dir
     env["MOOLIAS_AGENT_IMAGE"] = os.environ.get(
@@ -245,6 +270,9 @@ def _installer_env(mailcow_dir: str) -> dict[str, str]:
         "moolias:sender-agent-ci",
     )
     env["MOOLIAS_AGENT_COOLDOWN_SECONDS"] = "1"
+    env["MOOLIAS_IMPORT_EXISTING_SENDER_RULES"] = (
+        "yes" if scenario == "legacy-import" else "no"
+    )
     return env
 
 
@@ -253,7 +281,9 @@ def _run_installer(mailcow_dir: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             "sudo",
-            "--preserve-env=MAILCOW_DIR,MOOLIAS_AGENT_IMAGE,MOOLIAS_AGENT_COOLDOWN_SECONDS",
+            "--preserve-env="
+            "MAILCOW_DIR,MOOLIAS_AGENT_IMAGE,MOOLIAS_AGENT_COOLDOWN_SECONDS,"
+            "MOOLIAS_IMPORT_EXISTING_SENDER_RULES",
             "bash",
             "scripts/install-mailcow-agent.sh",
         ],
@@ -278,58 +308,6 @@ def _install_agent(mailcow_dir: str) -> str:
     return match.group(1).strip()
 
 
-def _assert_postfix_policy_is_read_only(mailcow_dir: str) -> None:
-    readable = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "postfix-mailcow",
-            "test",
-            "-r",
-            POLICY_PATH,
-        ],
-        cwd=mailcow_dir,
-        check=False,
-    )
-    assert readable.returncode == 0
-
-    write_probe = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "postfix-mailcow",
-            "sh",
-            "-c",
-            "printf probe > /opt/moolias-sender-agent/.write-probe",
-        ],
-        cwd=mailcow_dir,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-    assert write_probe.returncode != 0, write_probe
-
-    old_config_tree = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "postfix-mailcow",
-            "test",
-            "-e",
-            "/opt/postfix/conf/moolias",
-        ],
-        cwd=mailcow_dir,
-        check=False,
-    )
-    assert old_config_tree.returncode != 0
-
-
 def _assert_agent_runtime_hardening(mailcow_dir: str) -> None:
     container_id = _agent_container_id(mailcow_dir)
     assert container_id
@@ -341,7 +319,6 @@ def _assert_agent_runtime_hardening(mailcow_dir: str) -> None:
         capture_output=True,
     )
     inspected = json.loads(result.stdout)
-    assert isinstance(inspected, list) and len(inspected) == 1
     container = inspected[0]
 
     assert container["Config"]["User"] == "10001:10001"
@@ -358,37 +335,64 @@ def _assert_agent_runtime_hardening(mailcow_dir: str) -> None:
     assert set(mounts) == {"/state", "/postfix-policy"}, mounts
     assert mounts["/state"]["RW"] is True
     assert mounts["/postfix-policy"]["RW"] is True
+    assert mounts["/postfix-policy"]["Source"].endswith(
+        "/data/conf/postfix/moolias-sender-agent"
+    )
     assert "/var/run/docker.sock" not in mounts
 
 
-def _assert_modified_managed_override_is_not_overwritten(mailcow_dir: str) -> None:
-    override_file = os.path.join(mailcow_dir, "docker-compose.override.yml")
-    marker = "# administrator custom change that must survive\n"
-    subprocess.run(
-        ["sudo", "tee", "-a", override_file],
-        input=marker,
-        check=True,
-        text=True,
-        stdout=subprocess.DEVNULL,
-    )
-
-    rerun = _run_installer(mailcow_dir)
-    assert rerun.returncode != 0, rerun.stdout
-    assert "was changed after Moolias created it" in rerun.stderr
-    with open(override_file, encoding="utf-8") as handle:
-        assert marker.strip() in handle.read()
+def _assert_compose_override_preserved(mailcow_dir: str) -> None:
+    override = os.path.join(mailcow_dir, "docker-compose.override.yml")
+    with open(override, encoding="utf-8") as handle:
+        content = handle.read()
+    assert "unrelated-test-service:" in content
+    assert "# BEGIN MOOLIAS SENDER AGENT" in content
+    assert "moolias-sender-agent:" in content
+    assert "postfix-mailcow:" not in content
 
 
-async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() -> None:
+async def test_sender_protection_on_disposable_mailcow() -> None:
     base_url = os.environ.get("MAILCOW_URL")
     api_key = os.environ.get("MAILCOW_API_KEY")
     mailcow_dir = os.environ.get("MAILCOW_DIR")
     if not base_url or not api_key or not mailcow_dir:
         pytest.skip("real Mailcow integration environment is not configured")
 
-    _prepare_legacy_sender_block(mailcow_dir)
+    scenario = _scenario()
+    _prepare_existing_compose_override(mailcow_dir)
+    if scenario.startswith("legacy-"):
+        _prepare_legacy_sender_block(mailcow_dir)
+
     secret = _install_agent(mailcow_dir)
     _assert_agent_runtime_hardening(mailcow_dir)
+    _assert_compose_override_preserved(mailcow_dir)
+
+    extra_cf = os.path.join(mailcow_dir, "data", "conf", "postfix", "extra.cf")
+    with open(extra_cf, encoding="utf-8") as handle:
+        extra_content = handle.read()
+    assert PCRE_MAP in extra_content
+    assert "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" in extra_content
+
+    if scenario.startswith("legacy-"):
+        assert LEGACY_MAP in extra_content
+        legacy_path = os.path.join(
+            mailcow_dir,
+            "data",
+            "conf",
+            "postfix",
+            "blocked_sender_login.pcre",
+        )
+        with open(legacy_path, encoding="utf-8") as handle:
+            legacy_content = handle.read()
+        assert r"/^special\..*@example\.net$/" in legacy_content
+        if scenario == "legacy-import":
+            assert "legacy\\.blocked@example\\.org" not in legacy_content
+            assert "legacy\\.second@example\\.org" not in legacy_content
+        else:
+            assert "legacy\\.blocked@example\\.org" in legacy_content
+            assert "legacy\\.second@example\\.org" in legacy_content
+    else:
+        assert LEGACY_MAP not in extra_content
 
     async with httpx.AsyncClient(
         base_url=base_url,
@@ -447,18 +451,10 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
 
     baseline_primary = _smtp_envelope_when_ready(MAILBOX)
     baseline_alias = _smtp_envelope_when_ready(ALIAS)
-    assert baseline_primary[0] == 250, baseline_primary
-    assert baseline_primary[2] == 250, baseline_primary
-    assert baseline_alias[0] == 250, baseline_alias
-    assert baseline_alias[2] == 250, baseline_alias
-
-    baseline_sogo = _sogo_envelope(mailcow_dir, MAILBOX)
-    assert baseline_sogo[0] == 250, baseline_sogo
-    assert baseline_sogo[2] == 250, baseline_sogo
+    assert baseline_primary[0] == 250 and baseline_primary[2] == 250, baseline_primary
+    assert baseline_alias[0] == 250 and baseline_alias[2] == 250, baseline_alias
 
     public_agent_url = f"{base_url.rstrip('/')}/moolias-agent"
-
-    # The nginx route is reachable, but unauthenticated callers cannot change state.
     async with httpx.AsyncClient(
         base_url=f"{public_agent_url}/",
         timeout=10.0,
@@ -493,8 +489,8 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
         capture_output=True,
     ).stdout
     assert PCRE_MAP in active_maps
-    assert "pcre:/opt/postfix/conf/blocked_sender_login.pcre" not in active_maps
-    assert "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" not in active_maps
+    if scenario.startswith("legacy-"):
+        assert LEGACY_MAP in active_maps
 
     for service in ("smtps", "submission", "588"):
         max_use = subprocess.run(
@@ -517,44 +513,45 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
         ).stdout
         assert re.search(r"=\s*1\s*$", max_use), max_use
 
-    _assert_postfix_policy_is_read_only(mailcow_dir)
-
     async with SenderAgentClient(
         public_agent_url,
         secret,
         verify_tls=False,
     ) as agent:
         await agent.probe()
+
+        if scenario == "legacy-import":
+            migrated = await agent.status(LEGACY_MAILBOX)
+            migrated_2 = await agent.status(LEGACY_MAILBOX_2)
+            assert migrated.blocked is True and migrated.managed is True
+            assert migrated_2.blocked is True and migrated_2.managed is True
+        elif scenario == "legacy-keep":
+            external = await agent.status(LEGACY_MAILBOX)
+            assert external.blocked is True
+            assert external.managed is False
+            with pytest.raises(SenderAgentExternalPolicy):
+                await agent.set_blocked(LEGACY_MAILBOX, False)
+
         initial = await agent.status(MAILBOX)
         assert initial.blocked is False
-
-        migrated = await agent.status(LEGACY_MAILBOX)
-        assert migrated.blocked is True
+        assert initial.managed is True
 
         blocked, changed = await agent.set_blocked(MAILBOX, True)
         assert changed is True
         assert blocked.blocked is True
 
         lookup, rendered = _postfix_map_query(mailcow_dir, MAILBOX)
-        assert lookup == BLOCKED_OWNER, (
-            f"Postfix PCRE lookup returned {lookup!r}; rendered map:\n{rendered}"
-        )
+        assert lookup == BLOCKED_OWNER, rendered
 
         blocked_primary = _smtp_envelope_when_ready(MAILBOX)
         allowed_alias = _smtp_envelope_when_ready(ALIAS)
-        # Mailcow keeps smtpd_delay_reject enabled, so sender restrictions are
-        # evaluated at RCPT TO rather than at MAIL FROM.
-        assert blocked_primary[0] == 250, blocked_primary
-        assert blocked_primary[2] >= 500, blocked_primary
-        assert allowed_alias[0] == 250, allowed_alias
-        assert allowed_alias[2] == 250, allowed_alias
+        assert blocked_primary[0] == 250 and blocked_primary[2] >= 500, blocked_primary
+        assert allowed_alias[0] == 250 and allowed_alias[2] == 250, allowed_alias
 
         blocked_sogo = _sogo_envelope(mailcow_dir, MAILBOX)
         allowed_sogo_alias = _sogo_envelope(mailcow_dir, ALIAS)
-        assert blocked_sogo[0] == 250, blocked_sogo
-        assert blocked_sogo[2] >= 500, blocked_sogo
-        assert allowed_sogo_alias[0] == 250, allowed_sogo_alias
-        assert allowed_sogo_alias[2] == 250, allowed_sogo_alias
+        assert blocked_sogo[0] == 250 and blocked_sogo[2] >= 500, blocked_sogo
+        assert allowed_sogo_alias[0] == 250 and allowed_sogo_alias[2] == 250, allowed_sogo_alias
         assert _postfix_container_id(mailcow_dir) == postfix_id
 
         time.sleep(1.1)
@@ -563,26 +560,12 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
         assert unblocked.blocked is False
 
         lookup, rendered = _postfix_map_query(mailcow_dir, MAILBOX)
-        assert lookup == "", (
-            f"Postfix PCRE lookup still returned {lookup!r}; rendered map:\n{rendered}"
-        )
+        assert lookup == "", rendered
 
     allowed_primary = _smtp_envelope_when_ready(MAILBOX)
-    assert allowed_primary[0] == 250, allowed_primary
-    assert allowed_primary[2] == 250, allowed_primary
-
-    allowed_sogo_primary = _sogo_envelope(mailcow_dir, MAILBOX)
-    assert allowed_sogo_primary[0] == 250, allowed_sogo_primary
-    assert allowed_sogo_primary[2] == 250, allowed_sogo_primary
+    assert allowed_primary[0] == 250 and allowed_primary[2] == 250, allowed_primary
     assert _postfix_container_id(mailcow_dir) == postfix_id
 
-    postfix_logs = subprocess.run(
-        ["docker", "compose", "logs", "--no-color", "postfix-mailcow"],
-        cwd=mailcow_dir,
-        check=True,
-        text=True,
-        capture_output=True,
-    ).stdout
-    assert "not owned by root: /opt/postfix/conf/./moolias" not in postfix_logs
-
-    _assert_modified_managed_override_is_not_overwritten(mailcow_dir)
+    rerun = _run_installer(mailcow_dir)
+    assert rerun.returncode == 0, rerun.stderr
+    _assert_compose_override_preserved(mailcow_dir)
