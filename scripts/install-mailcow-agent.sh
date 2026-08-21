@@ -18,6 +18,7 @@ LEGACY_PCRE="${POSTFIX_DIR}/blocked_sender_login.pcre"
 NGINX_CUSTOM="${NGINX_DIR}/site.moolias-sender-agent.custom"
 OVERRIDE_FILE="${MAILCOW_DIR}/docker-compose.override.yml"
 AGENT_ENV="${AGENT_DIR}/agent.env"
+OVERRIDE_HASH="${AGENT_DIR}/docker-compose.override.sha256"
 
 PCRE_MAP="pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
 SQL_SENDER_MAP="proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf"
@@ -25,6 +26,7 @@ BEGIN_MARKER="# BEGIN MOOLIAS SENDER PROTECTION"
 END_MARKER="# END MOOLIAS SENDER PROTECTION"
 OVERRIDE_MARKER="# Managed by the Moolias Mailcow Agent installer."
 HOOK_MARKER="# Managed by Moolias Sender Protection."
+NGINX_MARKER="# Managed by Moolias Sender Protection."
 
 die() {
   echo "Moolias Mailcow Agent installer: $*" >&2
@@ -37,6 +39,7 @@ fi
 
 command -v docker >/dev/null 2>&1 || die "Docker is required."
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required."
 
 [[ -d "$MAILCOW_DIR" ]] || die "Mailcow directory not found: $MAILCOW_DIR"
 [[ -f "${MAILCOW_DIR}/docker-compose.yml" ]] || \
@@ -83,8 +86,32 @@ EOF
 fi
 
 manage_compose_override=true
-if [[ -s "$OVERRIDE_FILE" ]] && ! grep -Fq "$OVERRIDE_MARKER" "$OVERRIDE_FILE"; then
-  if grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$OVERRIDE_FILE" \
+if [[ -s "$OVERRIDE_FILE" ]]; then
+  if grep -Fq "$OVERRIDE_MARKER" "$OVERRIDE_FILE"; then
+    [[ -f "$OVERRIDE_HASH" ]] || cat >&2 <<EOF
+Moolias Mailcow Agent installer:
+  ${OVERRIDE_FILE} is marked as Moolias-managed but has no recorded checksum.
+
+The installer will not overwrite it because it cannot prove that an administrator
+has not added custom Compose settings. Review the file and merge the current service
+fragment from docs/sender-protection.md, then remove the Moolias marker or recreate
+the file intentionally before running the installer again.
+EOF
+    [[ -f "$OVERRIDE_HASH" ]] || exit 1
+
+    expected_hash="$(tr -d '[:space:]' < "$OVERRIDE_HASH")"
+    actual_hash="$(sha256sum "$OVERRIDE_FILE" | awk '{print $1}')"
+    [[ -n "$expected_hash" && "$actual_hash" == "$expected_hash" ]] || cat >&2 <<EOF
+Moolias Mailcow Agent installer:
+  ${OVERRIDE_FILE} was changed after Moolias created it.
+
+The installer will not overwrite administrator changes. Merge the current Moolias
+service fragment from docs/sender-protection.md into the file manually. Keep the
+custom file without the Moolias ownership marker if you want future installer runs
+to leave it untouched.
+EOF
+    [[ -n "$expected_hash" && "$actual_hash" == "$expected_hash" ]] || exit 1
+  elif grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$OVERRIDE_FILE" \
     && grep -Fq ':/opt/moolias-sender-agent:ro' "$OVERRIDE_FILE" \
     && grep -Fq ':/state' "$OVERRIDE_FILE" \
     && grep -Fq ':/postfix-policy' "$OVERRIDE_FILE"; then
@@ -105,6 +132,10 @@ fi
 
 if [[ -e "$POSTFIX_HOOK" ]] && ! grep -Fq "$HOOK_MARKER" "$POSTFIX_HOOK"; then
   die "${POSTFIX_HOOK} already exists and is not managed by Moolias."
+fi
+
+if [[ -e "$NGINX_CUSTOM" ]] && ! grep -Fq "$NGINX_MARKER" "$NGINX_CUSTOM"; then
+  die "${NGINX_CUSTOM} already exists and is not managed by Moolias."
 fi
 
 install -d -m 0755 "$AGENT_DIR"
@@ -233,6 +264,7 @@ chmod 0755 "$POSTFIX_HOOK"
 
 if [[ "$manage_compose_override" == true ]]; then
   backup_file "$OVERRIDE_FILE"
+  backup_file "$OVERRIDE_HASH"
   cat > "$OVERRIDE_FILE" <<EOF
 ${OVERRIDE_MARKER}
 services:
@@ -242,6 +274,7 @@ services:
 
   moolias-sender-agent:
     image: ${MOOLIAS_AGENT_IMAGE}
+    user: "10001:10001"
     restart: unless-stopped
     env_file:
       - ./data/conf/moolias-sender-agent/agent.env
@@ -282,6 +315,8 @@ services:
       retries: 3
 EOF
   chmod 0644 "$OVERRIDE_FILE"
+  sha256sum "$OVERRIDE_FILE" | awk '{print $1}' > "$OVERRIDE_HASH"
+  chmod 0600 "$OVERRIDE_HASH"
 fi
 
 if [[ "$manage_sender_map" == true ]]; then
@@ -323,17 +358,19 @@ EOF
 fi
 
 backup_file "$NGINX_CUSTOM"
-cat > "$NGINX_CUSTOM" <<'EOF'
+cat > "$NGINX_CUSTOM" <<EOF
+${NGINX_MARKER}
 location ^~ /moolias-agent/ {
     proxy_pass http://moolias-sender-agent:8081/;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_connect_timeout 3s;
     proxy_send_timeout 10s;
     proxy_read_timeout 10s;
+    client_max_body_size 4k;
 }
 EOF
 chmod 0644 "$NGINX_CUSTOM"
@@ -418,6 +455,7 @@ By default Moolias uses:
 Only set MOOLIAS_SENDER_AGENT_URL when the agent is reachable at a different URL.
 
 The agent:
+  - runs as uid/gid 10001:10001
   - has no SSH access
   - has no Docker socket
   - has no Mailcow API key
