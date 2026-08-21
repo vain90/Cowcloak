@@ -83,6 +83,18 @@ fi
 stamp="$(date +%Y%m%d-%H%M%S)"
 touch "$EXTRA_CF"
 
+# Preserve whether a previous installer-owned sender map still referenced the
+# administrator's legacy PCRE. This makes reruns safe after a partial install.
+managed_block_had_legacy=false
+if awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v legacy="$LEGACY_MAP" '
+  index($0, begin) { managed = 1; next }
+  index($0, end) { managed = 0; next }
+  managed && index($0, legacy) { found = 1 }
+  END { exit(found ? 0 : 1) }
+' "$EXTRA_CF"; then
+  managed_block_had_legacy=true
+fi
+
 # Remove only the installer-owned sender-map block before inspecting any
 # administrator configuration around it.
 extra_without_moolias="$(mktemp "${POSTFIX_DIR}/.extra.cf.moolias.XXXXXX")"
@@ -103,7 +115,7 @@ sender_assignment="$(
   ' "$extra_without_moolias"
 )"
 
-legacy_was_active=false
+legacy_was_active="$managed_block_had_legacy"
 if [[ -n "$sender_assignment" ]]; then
   normalized_assignment="$(printf '%s' "$sender_assignment" | tr -d '[:space:]')"
   expected_legacy="smtpd_sender_login_maps=${LEGACY_MAP},${SQL_SENDER_MAP}"
@@ -317,6 +329,25 @@ if grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$compose_base"; t
   die "docker-compose.override.yml already defines moolias-sender-agent outside the managed block."
 fi
 
+# Match the indentation already used for service names in an existing override.
+# YAML permits more than two spaces, but sibling service keys must stay at the
+# same indentation level. Default to two spaces for a new or empty services map.
+service_indent="$(
+  awk '
+    /^services:[[:space:]]*$/ { in_services = 1; next }
+    in_services && /^[[:space:]]*($|#)/ { next }
+    in_services && /^[^[:space:]]/ { exit }
+    in_services {
+      match($0, /^ +/)
+      if (RLENGTH > 0) print RLENGTH
+      exit
+    }
+  ' "$compose_base"
+)"
+service_indent="${service_indent:-2}"
+[[ "$service_indent" =~ ^[0-9]+$ ]] || die "could not determine Compose service indentation."
+(( service_indent >= 2 )) || die "Compose services must be indented by at least two spaces."
+
 agent_compose="$(mktemp "${MAILCOW_DIR}/.moolias-agent-compose.XXXXXX")"
 cat > "$agent_compose" <<EOF
   ${COMPOSE_BEGIN}
@@ -363,6 +394,12 @@ cat > "$agent_compose" <<EOF
       retries: 3
   ${COMPOSE_END}
 EOF
+
+if (( service_indent > 2 )); then
+  extra_indent="$(printf '%*s' "$((service_indent - 2))" '')"
+  sed "s/^/${extra_indent}/" "$agent_compose" > "${agent_compose}.indented"
+  mv "${agent_compose}.indented" "$agent_compose"
+fi
 
 compose_new="$(mktemp "${MAILCOW_DIR}/.docker-compose.override.new.XXXXXX")"
 if grep -Eq '^services:[[:space:]]*$' "$compose_base"; then
