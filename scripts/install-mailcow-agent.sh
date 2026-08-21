@@ -366,9 +366,9 @@ docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
 # extra.cf, the read-only policy mount and the Postfix hook are consumed while
-# the container starts. This restart is only required by the one-time install;
-# normal sender toggles do not restart or reload Postfix.
-docker compose restart postfix-mailcow
+# the container starts. Recreate Postfix once so Docker applies the new mount;
+# normal sender toggles do not restart, recreate or reload Postfix.
+docker compose up -d --force-recreate --no-deps postfix-mailcow
 
 postfix_ready=false
 active_maps=""
