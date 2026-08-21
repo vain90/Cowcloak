@@ -85,7 +85,7 @@ def _postfix_container_id(mailcow_dir: str) -> str:
 
 
 def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
-    lookup = subprocess.run(
+    lookup_result = subprocess.run(
         [
             "docker",
             "compose",
@@ -98,10 +98,16 @@ def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
             PCRE_MAP,
         ],
         cwd=mailcow_dir,
-        check=True,
+        check=False,
         text=True,
         capture_output=True,
-    ).stdout.strip()
+    )
+    if lookup_result.returncode not in {0, 1}:
+        raise AssertionError(
+            "Postfix PCRE lookup failed unexpectedly: "
+            f"exit={lookup_result.returncode}, stderr={lookup_result.stderr!r}"
+        )
+    lookup = lookup_result.stdout.strip()
     rendered = subprocess.run(
         [
             "docker",
