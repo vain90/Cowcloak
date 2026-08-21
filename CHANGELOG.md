@@ -2,6 +2,43 @@
 
 All notable changes to Moolias are documented here.
 
+## 0.2.0 - 2026-08-21
+
+### Breaking changes
+
+- Cowcloak has been renamed to Moolias across the Python package, container image, Docker Compose service, runtime identifiers and application configuration. Existing 0.1.x installations must follow `docs/migration-to-moolias.md` before switching to the 0.2.0 stable image.
+- application settings now use `MOOLIAS_*`, the container image is `ghcr.io/vain90/moolias`, the Compose service is `moolias`, and the default access/statistics tags and statistics database path use the `moolias` name. Legacy reserved offline-alias markers remain recognized so existing aliases can be migrated safely.
+
+### Added
+
+- unified `Action required` / `Handlungsbedarf` workflow for used offline aliases, unexpected senders and actionable collector-health warnings
+- alias replacement directly from the aggregate unexpected-sender review while preserving the existing safe replacement backend
+- reusable application-owned confirmation, warning and recoverable-error dialogs instead of native browser dialogs
+- collector-health diagnostics for successful/failed polls, staleness, Rspamd history coverage, overlap/headroom and possible gaps
+- adaptive Rspamd history loading using `10 -> 25 -> 50 -> 100 -> 250 -> 500 -> configured maximum` with a 10% overlap target
+- lightweight three-entry Rspamd history head probe for quiet healthy collectors; unchanged history skips the normal adaptive fetch while changed or uncertain state falls back to the full safety path
+- safe long-term pruning of statistics deduplication hashes behind a persistent replay floor and healthy-history watermark
+- conservative sender-domain trust using a bundled Public Suffix List snapshot, including separate exact-address/domain decisions in FULL mode and strict compound-brand matching
+- Chromium browser E2E coverage for the interactive dashboard and theme behavior
+- disposable GitHub-hosted Mailcow feasibility and real Mailcow API integration tests without production credentials or data
+- system-aware light/dark appearance selector with `System`, `Light` and `Dark` modes, browser-local persistence and live `prefers-color-scheme` updates
+- automated stable release publication after successful `main` CI, including GitHub Release creation and stable multi-architecture GHCR tags
+
+### Changed
+
+- unexpected-sender filtering, counts and pagination are now computed server-side rather than crawling all alias pages in the browser
+- disabled aliases no longer contribute to unexpected/action-required alerts while their sender history remains available for traceability
+- sender review matching is intentionally stricter around registrable domains, public/private suffixes, subdomains, lookalikes and explicit user decisions
+- deduplication cleanup runs in bounded batches and only advances after a safely overlapping healthy collector window
+- the README has been rewritten around the privacy model, first-time installation and current product behavior rather than implementation history
+- the project, documentation, package imports, Compose resources, default tags, cookie names and GHCR image references have been comprehensively rebranded from Cowcloak to Moolias
+
+### Fixed
+
+- scrolling inside the aggregate Action required surface no longer gets trapped by nested offline-alias or sender-detail lists
+- collector diagnostics no longer confuse the lightweight three-entry unchanged-history probe with a normal loaded history window
+- history changes with identical timestamps but different entry identity no longer risk being mistaken for unchanged history
+
 ## 0.1.3 - 2026-08-20
 
 ### Added
