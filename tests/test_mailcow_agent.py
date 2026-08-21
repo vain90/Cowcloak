@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -80,6 +82,72 @@ def test_state_store_blocks_exact_mailbox_and_enforces_per_mailbox_cooldown(tmp_
     state = json.loads((state_dir / "state.json").read_text(encoding="utf-8"))
     assert "user+tag@example.org" not in state["blocked"]
     assert "other@example.org" in state["blocked"]
+
+
+def test_same_state_is_idempotent_without_rewriting_policy(tmp_path):
+    state_dir = tmp_path / "state"
+    policy_path = tmp_path / "policy" / "blocked_sender_login.pcre"
+    store = AgentStateStore(
+        state_dir,
+        cooldown_seconds=10,
+        policy_path=policy_path,
+        clock=lambda: 1000.0,
+    )
+    store.ensure_files()
+
+    first = store.set_blocked("same@example.org", True)
+    assert first["changed"] is True
+    before_content = policy_path.read_bytes()
+    before_stat = policy_path.stat()
+
+    repeated = store.set_blocked("SAME@example.org", True)
+    assert repeated["blocked"] is True
+    assert repeated["changed"] is False
+    assert policy_path.read_bytes() == before_content
+
+    after_stat = policy_path.stat()
+    assert after_stat.st_ino == before_stat.st_ino
+    assert after_stat.st_mtime_ns == before_stat.st_mtime_ns
+
+
+def test_concurrent_mailbox_changes_do_not_lose_state(tmp_path):
+    state_dir = tmp_path / "state"
+    policy_path = tmp_path / "policy" / "blocked_sender_login.pcre"
+    first_store = AgentStateStore(
+        state_dir,
+        cooldown_seconds=10,
+        policy_path=policy_path,
+        clock=lambda: 1000.0,
+    )
+    second_store = AgentStateStore(
+        state_dir,
+        cooldown_seconds=10,
+        policy_path=policy_path,
+        clock=lambda: 1000.0,
+    )
+    first_store.ensure_files()
+
+    barrier = threading.Barrier(2)
+
+    def block(store: AgentStateStore, mailbox: str) -> dict[str, object]:
+        barrier.wait(timeout=5)
+        return store.set_blocked(mailbox, True)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(block, first_store, "first@example.org")
+        second_future = executor.submit(block, second_store, "second@example.org")
+        first_result = first_future.result(timeout=5)
+        second_result = second_future.result(timeout=5)
+
+    assert first_result["changed"] is True
+    assert second_result["changed"] is True
+
+    state = json.loads((state_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["blocked"] == ["first@example.org", "second@example.org"]
+
+    policy = policy_path.read_text(encoding="utf-8")
+    assert "/^first@example\\.org$/" in policy
+    assert "/^second@example\\.org$/" in policy
 
 
 async def test_agent_requires_valid_signature_and_rejects_replay(tmp_path):
