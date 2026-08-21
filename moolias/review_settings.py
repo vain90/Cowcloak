@@ -14,10 +14,12 @@ from moolias.collector_health import (
 )
 from moolias.mailcow import MailcowError
 from moolias.security import require_user, validate_csrf
+from moolias.sender_protection import router as sender_protection_router
 from moolias.stats_mode import StatsMode
 from moolias.usage import mailbox_stats_state
 
 router = APIRouter()
+router.include_router(sender_protection_router)
 
 
 class AliasReviewSettingsStore:

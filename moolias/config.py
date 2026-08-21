@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     trusted_hosts: str = Field(default="*", alias="MOOLIAS_TRUSTED_HOSTS")
     access_tag: str = Field(default="", alias="MOOLIAS_ACCESS_TAG")
 
+    sender_protection: bool = Field(default=False, alias="MOOLIAS_SENDER_PROTECTION")
+    sender_agent_url: str = Field(default="", alias="MOOLIAS_SENDER_AGENT_URL")
+    sender_agent_secret: str = Field(default="", alias="MOOLIAS_SENDER_AGENT_SECRET")
+    sender_protection_cooldown_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=300,
+        alias="MOOLIAS_SENDER_PROTECTION_COOLDOWN_SECONDS",
+    )
+
     usage_stats: bool = Field(default=False, alias="MOOLIAS_USAGE_STATS")
     usage_tag: str = Field(default="moolias-stats", alias="MOOLIAS_USAGE_TAG")
     usage_db_path: str = Field(
@@ -44,18 +54,23 @@ class Settings(BaseSettings):
     mailcow_oauth_client_secret: str = Field(alias="MAILCOW_OAUTH_CLIENT_SECRET", min_length=1)
     mailcow_verify_tls: bool = Field(default=True, alias="MAILCOW_VERIFY_TLS")
 
-    @field_validator("base_url", "mailcow_url")
+    @field_validator("base_url", "mailcow_url", "sender_agent_url")
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
-    @field_validator("access_tag", "usage_tag", "usage_db_path")
+    @field_validator(
+        "access_tag",
+        "usage_tag",
+        "usage_db_path",
+        "sender_agent_secret",
+    )
     @classmethod
     def strip_optional_value(cls, value: str) -> str:
         return value.strip()
 
     @model_validator(mode="after")
-    def validate_usage_settings(self) -> "Settings":
+    def validate_optional_features(self) -> "Settings":
         if self.usage_stats and not self.usage_tag:
             raise ValueError("MOOLIAS_USAGE_TAG must be set when usage statistics are enabled")
         if self.usage_stats and not self.usage_db_path:

@@ -43,7 +43,11 @@ def test_destructive_confirmation_is_internal_and_cancellable(page: Page, base_u
 def test_statistics_downgrade_uses_internal_confirmation(page: Page, base_url: str) -> None:
     _login(page, base_url)
 
-    form = page.locator(".usage-mode-form")
+    page.locator("[data-open-settings-dialog]").click()
+    settings_dialog = page.locator("[data-settings-dialog]")
+    expect(settings_dialog).to_be_visible()
+
+    form = settings_dialog.locator(".usage-mode-form")
     form.locator('select[name="mode"]').select_option("basic")
     form.locator('button[type="submit"]').click()
 

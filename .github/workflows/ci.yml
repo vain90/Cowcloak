@@ -30,6 +30,8 @@ jobs:
       - run: node --check moolias/static/review.js
       - run: node --check moolias/static/review-behavior.js
       - run: node --check moolias/static/stats-mode.js
+      - run: node --check moolias/static/sender-protection.js
+      - run: bash -n scripts/install-mailcow-agent.sh
       - run: bash -n update.sh
       - name: Validate Docker Compose
         run: |
