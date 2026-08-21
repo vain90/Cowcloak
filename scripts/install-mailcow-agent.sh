@@ -6,16 +6,21 @@ MOOLIAS_AGENT_IMAGE="${MOOLIAS_AGENT_IMAGE:-ghcr.io/vain90/moolias:edge}"
 MOOLIAS_AGENT_COOLDOWN_SECONDS="${MOOLIAS_AGENT_COOLDOWN_SECONDS:-10}"
 
 POSTFIX_DIR="${MAILCOW_DIR}/data/conf/postfix"
-POSTFIX_HOOK="${MAILCOW_DIR}/data/hooks/postfix/moolias-sender-protection.sh"
+POSTFIX_HOOK_DIR="${MAILCOW_DIR}/data/hooks/postfix"
+POSTFIX_HOOK="${POSTFIX_HOOK_DIR}/moolias-sender-protection.sh"
 NGINX_DIR="${MAILCOW_DIR}/data/conf/nginx"
 AGENT_DIR="${MAILCOW_DIR}/data/conf/moolias-sender-agent"
-STATE_DIR="${POSTFIX_DIR}/moolias"
+STATE_DIR="${AGENT_DIR}/state"
+POLICY_DIR="${AGENT_DIR}/postfix"
+OLD_AGENT_STATE_DIR="${POSTFIX_DIR}/moolias"
 EXTRA_CF="${POSTFIX_DIR}/extra.cf"
 LEGACY_PCRE="${POSTFIX_DIR}/blocked_sender_login.pcre"
 NGINX_CUSTOM="${NGINX_DIR}/site.moolias-sender-agent.custom"
 OVERRIDE_FILE="${MAILCOW_DIR}/docker-compose.override.yml"
 AGENT_ENV="${AGENT_DIR}/agent.env"
 
+PCRE_MAP="pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
+SQL_SENDER_MAP="proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf"
 BEGIN_MARKER="# BEGIN MOOLIAS SENDER PROTECTION"
 END_MARKER="# END MOOLIAS SENDER PROTECTION"
 OVERRIDE_MARKER="# Managed by the Moolias Mailcow Agent installer."
@@ -53,11 +58,11 @@ manage_sender_map=true
 legacy_sender_map=false
 if grep -Eq '^[[:space:]]*smtpd_sender_login_maps[[:space:]]*=' "$EXTRA_CF" \
   && ! grep -Fq "$BEGIN_MARKER" "$EXTRA_CF"; then
-  if grep -Fq "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" "$EXTRA_CF" \
-    && grep -Fq "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" "$EXTRA_CF"; then
+  if grep -Fq "$PCRE_MAP" "$EXTRA_CF" \
+    && grep -Fq "$SQL_SENDER_MAP" "$EXTRA_CF"; then
     manage_sender_map=false
   elif grep -Fq "pcre:/opt/postfix/conf/blocked_sender_login.pcre" "$EXTRA_CF" \
-    && grep -Fq "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" "$EXTRA_CF" \
+    && grep -Fq "$SQL_SENDER_MAP" "$EXTRA_CF" \
     && [[ -f "$LEGACY_PCRE" ]]; then
     legacy_sender_map=true
   else
@@ -70,8 +75,8 @@ Back up and merge the Moolias PCRE map before Mailcow's normal SQL sender ACL,
 then run the installer again.
 
 Required order:
-  pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre
-  proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf
+  ${PCRE_MAP}
+  ${SQL_SENDER_MAP}
 EOF
     exit 1
   fi
@@ -79,7 +84,10 @@ fi
 
 manage_compose_override=true
 if [[ -s "$OVERRIDE_FILE" ]] && ! grep -Fq "$OVERRIDE_MARKER" "$OVERRIDE_FILE"; then
-  if grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$OVERRIDE_FILE"; then
+  if grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$OVERRIDE_FILE" \
+    && grep -Fq ':/opt/moolias-sender-agent:ro' "$OVERRIDE_FILE" \
+    && grep -Fq ':/state' "$OVERRIDE_FILE" \
+    && grep -Fq ':/postfix-policy' "$OVERRIDE_FILE"; then
     manage_compose_override=false
   else
     cat >&2 <<EOF
@@ -87,9 +95,9 @@ Moolias Mailcow Agent installer:
   ${OVERRIDE_FILE} already exists and is not managed by Moolias.
 
 The installer intentionally refuses to rewrite custom Docker Compose overrides.
-Merge the service fragment from docs/sender-protection.md into that file, then
-run this installer again. Once the moolias-sender-agent service is present, the
-installer will leave your custom override untouched.
+Merge the service and Postfix read-only policy mount from
+  docs/sender-protection.md
+into that file, then run this installer again.
 EOF
     exit 1
   fi
@@ -100,7 +108,9 @@ if [[ -e "$POSTFIX_HOOK" ]] && ! grep -Fq "$HOOK_MARKER" "$POSTFIX_HOOK"; then
 fi
 
 install -d -m 0755 "$AGENT_DIR"
-install -d -m 0755 -o 10001 -g 10001 "$STATE_DIR"
+install -d -m 0755 "$POSTFIX_HOOK_DIR"
+install -d -m 0700 -o 10001 -g 10001 "$STATE_DIR"
+install -d -m 0755 -o 10001 -g 10001 "$POLICY_DIR"
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 backup_file() {
@@ -110,12 +120,27 @@ backup_file() {
   fi
 }
 
-# Development builds briefly installed a Postfix hook that forced max_use=1 on
-# submission services. It is no longer required. Remove only the known Moolias
-# hook and leave any unrelated administrator hook untouched.
-if [[ -e "$POSTFIX_HOOK" ]]; then
-  backup_file "$POSTFIX_HOOK"
-  rm -f "$POSTFIX_HOOK"
+# Move state from early development installs out of Postfix's configuration
+# tree. Only the known Moolias files are accepted for automatic cleanup.
+if [[ -d "$OLD_AGENT_STATE_DIR" ]]; then
+  unknown_old_file="$(
+    find "$OLD_AGENT_STATE_DIR" -mindepth 1 -maxdepth 1 \
+      ! -name state.json \
+      ! -name blocked_sender_login.pcre \
+      ! -name .lock \
+      -print -quit
+  )"
+  [[ -z "$unknown_old_file" ]] \
+    || die "refusing to remove unknown file from old Moolias state directory: $unknown_old_file"
+
+  if [[ -f "${OLD_AGENT_STATE_DIR}/state.json" ]]; then
+    [[ ! -e "${STATE_DIR}/state.json" ]] \
+      || die "old and new Moolias sender state both exist; refusing an unsafe automatic merge."
+    install -m 0600 -o 10001 -g 10001 \
+      "${OLD_AGENT_STATE_DIR}/state.json" "${STATE_DIR}/state.json"
+  fi
+  backup_file "$OLD_AGENT_STATE_DIR"
+  rm -rf "$OLD_AGENT_STATE_DIR"
 fi
 
 if [[ "$legacy_sender_map" == true ]]; then
@@ -185,15 +210,36 @@ umask 077
 cat > "$AGENT_ENV" <<EOF
 MOOLIAS_AGENT_SECRET=${secret}
 MOOLIAS_AGENT_STATE_DIR=/state
+MOOLIAS_AGENT_POLICY_PATH=/postfix-policy/blocked_sender_login.pcre
 MOOLIAS_AGENT_COOLDOWN_SECONDS=${MOOLIAS_AGENT_COOLDOWN_SECONDS}
 EOF
 chmod 0600 "$AGENT_ENV"
+
+backup_file "$POSTFIX_HOOK"
+cat > "$POSTFIX_HOOK" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+${HOOK_MARKER}
+# Postfix caches PCRE maps in smtpd workers. Limit only authenticated submission
+# workers to one client connection so the next connection sees policy changes.
+for service in smtps 10465 submission 10587 588; do
+  if /usr/sbin/postconf -c /opt/postfix/conf -M "\${service}/inet" >/dev/null 2>&1; then
+    /usr/sbin/postconf -c /opt/postfix/conf -P "\${service}/inet/max_use=1"
+  fi
+done
+EOF
+chmod 0755 "$POSTFIX_HOOK"
 
 if [[ "$manage_compose_override" == true ]]; then
   backup_file "$OVERRIDE_FILE"
   cat > "$OVERRIDE_FILE" <<EOF
 ${OVERRIDE_MARKER}
 services:
+  postfix-mailcow:
+    volumes:
+      - ./data/conf/moolias-sender-agent/postfix:/opt/moolias-sender-agent:ro
+
   moolias-sender-agent:
     image: ${MOOLIAS_AGENT_IMAGE}
     restart: unless-stopped
@@ -211,7 +257,8 @@ services:
       - --forwarded-allow-ips
       - "*"
     volumes:
-      - ./data/conf/postfix/moolias:/state
+      - ./data/conf/moolias-sender-agent/state:/state
+      - ./data/conf/moolias-sender-agent/postfix:/postfix-policy
     networks:
       - mailcow-network
     read_only: true
@@ -264,8 +311,8 @@ if [[ "$manage_sender_map" == true ]]; then
 ${BEGIN_MARKER}
 # Block selected primary mailbox addresses before Mailcow's normal sender ACL.
 smtpd_sender_login_maps =
-  pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre,
-  proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf
+  ${PCRE_MAP},
+  ${SQL_SENDER_MAP}
 ${END_MARKER}
 EOF
   } > "${tmp_extra}.new"
@@ -312,12 +359,15 @@ for _ in $(seq 1 30); do
 done
 [[ "$agent_ready" == true ]] || die "agent container did not become healthy."
 
+[[ -r "${POLICY_DIR}/blocked_sender_login.pcre" ]] \
+  || die "agent did not render the Postfix policy file."
+
 docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
-# extra.cf is consumed while the Postfix container starts. This restart is only
-# required by the one-time installation; normal sender toggles do not restart
-# or reload Postfix.
+# extra.cf, the read-only policy mount and the Postfix hook are consumed while
+# the container starts. This restart is only required by the one-time install;
+# normal sender toggles do not restart or reload Postfix.
 docker compose restart postfix-mailcow
 
 postfix_ready=false
@@ -328,8 +378,8 @@ for _ in $(seq 1 30); do
       postconf -c /opt/postfix/conf smtpd_sender_login_maps 2>/dev/null \
       || true
   )"
-  if grep -Fq "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" <<<"$active_maps" \
-    && grep -Fq "proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf" <<<"$active_maps"; then
+  if grep -Fq "$PCRE_MAP" <<<"$active_maps" \
+    && grep -Fq "$SQL_SENDER_MAP" <<<"$active_maps"; then
     postfix_ready=true
     break
   fi
@@ -338,6 +388,20 @@ done
 
 [[ "$postfix_ready" == true ]] \
   || die "Postfix did not load the Moolias sender map within 30 seconds."
+
+for service in smtps submission 588; do
+  max_use="$(
+    docker compose exec -T postfix-mailcow \
+      postconf -c /opt/postfix/conf -P "${service}/inet/max_use" 2>/dev/null \
+      || true
+  )"
+  grep -Eq '=[[:space:]]*1[[:space:]]*$' <<<"$max_use" \
+    || die "Postfix service ${service}/inet did not load max_use=1 from the Moolias hook."
+done
+
+docker compose exec -T postfix-mailcow \
+  test -r /opt/moolias-sender-agent/blocked_sender_login.pcre \
+  || die "Postfix cannot read the Moolias sender policy."
 
 cat <<EOF
 
@@ -357,6 +421,7 @@ The agent:
   - has no SSH access
   - has no Docker socket
   - has no Mailcow API key
-  - can write only data/conf/postfix/moolias/
+  - keeps private state outside Postfix configuration
+  - renders only a dedicated policy directory that Postfix mounts read-only
   - does not restart or reload Postfix when users change the toggle
 EOF
