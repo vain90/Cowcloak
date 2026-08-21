@@ -62,10 +62,13 @@ agent rejects invalid signatures, stale requests and nonce replays.
 
 The agent:
 
+- runs explicitly as uid/gid `10001:10001`
 - has no SSH access
 - has no Docker socket
 - has no Mailcow API key or database credentials
-- runs without Linux capabilities and with a read-only root filesystem
+- runs without Linux capabilities, with `no-new-privileges`, and with a read-only
+  root filesystem
+- has no host port published directly
 - keeps private state in its dedicated `state/` directory
 - can render only its dedicated `postfix/` policy directory
 - has no writable mount into Mailcow's Postfix configuration tree
@@ -77,6 +80,10 @@ Postfix receives the rendered policy directory read-only. The SMTP path has no
 runtime dependency on the agent: if the agent stops, the last rendered policy remains
 on disk and existing sender protection continues to be enforced. Only changes to the
 switch are temporarily unavailable.
+
+The agent is exposed through Mailcow's existing HTTPS nginx endpoint rather than a
+new host port. That location limits request bodies to 4 KiB; state-changing endpoints
+still require a valid HMAC signature.
 
 Moolias also applies a per-mailbox cooldown before contacting the agent. The agent
 remains authoritative, so direct or concurrent requests cannot bypass the cooldown.
@@ -129,18 +136,26 @@ The installer:
 5. adds the Moolias sender map to `data/conf/postfix/extra.cf`
 6. adds a read-only policy mount to `postfix-mailcow`
 7. adds the unprivileged agent as a Mailcow Compose sidecar
-8. adds `/moolias-agent/` to Mailcow's existing HTTPS nginx virtual host
-9. validates the combined Compose configuration
-10. starts and health-checks the agent and verifies that it rendered the policy
-11. validates and reloads nginx
-12. recreates `postfix-mailcow` once so Docker applies the new mount and Postfix
+8. records a checksum for a Compose override that it created itself, so later reruns
+   cannot silently overwrite administrator changes
+9. adds `/moolias-agent/` to Mailcow's existing HTTPS nginx virtual host
+10. validates the combined Compose configuration
+11. starts and health-checks the agent and verifies that it rendered the policy
+12. validates and reloads nginx
+13. recreates `postfix-mailcow` once so Docker applies the new mount and Postfix
     consumes the persistent configuration and hook
-13. verifies the active sender-map order, submission-service `max_use=1` settings,
+14. verifies the active sender-map order, submission-service `max_use=1` settings,
     and Postfix access to the read-only policy
-14. prints the Moolias `.env` values to copy
+15. prints the Moolias `.env` values to copy
 
 All Mailcow changes are under Mailcow's persistent configuration paths, hook path, or
 local Compose override and therefore survive normal Mailcow updates.
+
+If Moolias created `docker-compose.override.yml`, it records the exact file checksum.
+A later installer run updates the file automatically only while that checksum still
+matches. If an administrator has edited the file, the installer stops and asks for a
+manual merge instead of overwriting those changes. Existing unrelated Compose
+configurations are never taken over automatically.
 
 ## Enable the feature in Moolias
 
@@ -209,8 +224,8 @@ mailbox addresses, the installer stops instead of guessing.
 ## Existing custom Mailcow overrides
 
 The installer deliberately refuses to overwrite an existing custom
-`smtpd_sender_login_maps` policy, unrelated Postfix hook, or unrelated
-`docker-compose.override.yml`.
+`smtpd_sender_login_maps` policy, unrelated Postfix hook, unrelated nginx site file,
+or unrelated `docker-compose.override.yml`.
 
 This is a safety feature. Existing customizations must be reviewed rather than
 silently replaced.
@@ -245,6 +260,7 @@ services:
 
   moolias-sender-agent:
     image: ghcr.io/vain90/moolias:edge
+    user: "10001:10001"
     restart: unless-stopped
     env_file:
       - ./data/conf/moolias-sender-agent/agent.env
@@ -281,4 +297,6 @@ untouched and completes the remaining setup.
 
 While this feature is unreleased, the installer on `main` uses the `edge` image.
 The release PR will pin the installer and documentation to the corresponding stable
-Moolias release. Re-running the installer reuses the existing secret and state.
+Moolias release. Re-running the installer reuses the existing secret and state. A
+Moolias-created Compose override is updated automatically only when its recorded
+checksum proves that it has not been modified by an administrator.
