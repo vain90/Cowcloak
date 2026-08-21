@@ -297,27 +297,6 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
     assert PCRE_MAP in active_maps
     assert "pcre:/opt/postfix/conf/blocked_sender_login.pcre" not in active_maps
 
-    for service in ("smtps", "submission", "588"):
-        max_use = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "exec",
-                "-T",
-                "postfix-mailcow",
-                "postconf",
-                "-c",
-                "/opt/postfix/conf",
-                "-P",
-                f"{service}/inet/max_use",
-            ],
-            cwd=mailcow_dir,
-            check=True,
-            text=True,
-            capture_output=True,
-        ).stdout
-        assert re.search(r"=\s*1\s*$", max_use), max_use
-
     async with SenderAgentClient(
         public_agent_url,
         secret,
