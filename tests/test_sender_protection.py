@@ -16,6 +16,7 @@ import moolias.main as main_module
 import moolias.sender_protection as sender_module
 from moolias.config import Settings
 from moolias.main import create_app
+from moolias.sender_protection import SenderAgentAuthenticationError
 from moolias.sender_protocol import AgentProtectionState
 
 
@@ -68,13 +69,20 @@ class FakeSenderAgentClient:
         )
 
 
-def settings(*, enabled: bool = True) -> Settings:
+class FakeUnauthenticatedSenderAgentClient(FakeSenderAgentClient):
+    async def status(self, mailbox: str) -> AgentProtectionState:
+        raise SenderAgentAuthenticationError("authentication failed")
+
+
+def settings(*, enabled: bool = True, secret: str | None = None) -> Settings:
+    if secret is None:
+        secret = "a" * 64 if enabled else ""
     return Settings(
         MOOLIAS_BASE_URL="https://aliases.example.org",
         MOOLIAS_SESSION_SECRET="x" * 64,
         MOOLIAS_COOKIE_SECURE=False,
         MOOLIAS_SENDER_PROTECTION=enabled,
-        MOOLIAS_SENDER_AGENT_SECRET="a" * 64 if enabled else "",
+        MOOLIAS_SENDER_AGENT_SECRET=secret,
         MAILCOW_URL="https://mail.example.org",
         MAILCOW_API_KEY="secret",
         MAILCOW_OAUTH_CLIENT_ID="client",
@@ -112,6 +120,28 @@ def test_sender_protection_is_completely_optional(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"enabled": False}
+
+
+def test_enabled_sender_protection_with_missing_secret_does_not_break_app(monkeypatch):
+    monkeypatch.setattr(
+        sender_module,
+        "SenderAgentClient",
+        FakeUnauthenticatedSenderAgentClient,
+    )
+
+    app = create_app(settings(enabled=True, secret=""))
+    with TestClient(app) as client:
+        app.state.mailcow = FakeMailcowClient()
+        login(client, monkeypatch, "missing-secret@example.org")
+
+        response = client.get("/aliases/sender-protection")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "available": False,
+        "reason": "authentication",
+    }
 
 
 def test_browser_cannot_choose_another_mailbox(monkeypatch):
