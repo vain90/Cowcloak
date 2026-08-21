@@ -18,7 +18,8 @@ ALIAS = f"service@{DOMAIN}"
 PASSWORD = "Moolias-Sender-Agent-CI-4f9d!A7"
 LEGACY_MAILBOX = "legacy.blocked@example.org"
 BLOCKED_OWNER = "__moolias_blocked_primary_sender__"
-PCRE_MAP = "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre"
+PCRE_MAP = "pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
+POLICY_PATH = "/opt/moolias-sender-agent/blocked_sender_login.pcre"
 
 
 def _result_types(body: object) -> list[str]:
@@ -73,6 +74,46 @@ def _smtp_envelope_when_ready(sender: str) -> tuple[int, str, int, str]:
     raise AssertionError(f"Mailcow submission did not become ready: {last_error!r}")
 
 
+def _sogo_send(mailcow_dir: str, sender: str) -> subprocess.CompletedProcess[str]:
+    message = (
+        f"From: <{sender}>\r\n"
+        f"To: <{MAILBOX}>\r\n"
+        "Subject: Moolias SOGo sender protection integration\r\n"
+        "\r\n"
+        "Moolias integration test.\r\n"
+    )
+    return subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "sogo-mailcow",
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--insecure",
+            "--ssl-reqd",
+            "--url",
+            "smtp://postfix-mailcow:588",
+            "--user",
+            f"{MAILBOX}:{PASSWORD}",
+            "--mail-from",
+            sender,
+            "--mail-rcpt",
+            MAILBOX,
+            "--upload-file",
+            "-",
+        ],
+        cwd=mailcow_dir,
+        check=False,
+        text=True,
+        input=message,
+        capture_output=True,
+    )
+
+
 def _postfix_container_id(mailcow_dir: str) -> str:
     result = subprocess.run(
         ["docker", "compose", "ps", "-q", "postfix-mailcow"],
@@ -116,7 +157,7 @@ def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
             "-T",
             "postfix-mailcow",
             "cat",
-            "/opt/postfix/conf/moolias/blocked_sender_login.pcre",
+            POLICY_PATH,
         ],
         cwd=mailcow_dir,
         check=True,
@@ -186,7 +227,59 @@ def _install_agent(mailcow_dir: str) -> str:
     return match.group(1).strip()
 
 
-async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restart() -> None:
+def _assert_postfix_policy_is_read_only(mailcow_dir: str) -> None:
+    readable = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postfix-mailcow",
+            "test",
+            "-r",
+            POLICY_PATH,
+        ],
+        cwd=mailcow_dir,
+        check=False,
+    )
+    assert readable.returncode == 0
+
+    write_probe = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postfix-mailcow",
+            "sh",
+            "-c",
+            "printf probe > /opt/moolias-sender-agent/.write-probe",
+        ],
+        cwd=mailcow_dir,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert write_probe.returncode != 0, write_probe
+
+    old_config_tree = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postfix-mailcow",
+            "test",
+            "-e",
+            "/opt/postfix/conf/moolias",
+        ],
+        cwd=mailcow_dir,
+        check=False,
+    )
+    assert old_config_tree.returncode != 0
+
+
+async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() -> None:
     base_url = os.environ.get("MAILCOW_URL")
     api_key = os.environ.get("MAILCOW_API_KEY")
     mailcow_dir = os.environ.get("MAILCOW_DIR")
@@ -258,6 +351,9 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
     assert baseline_alias[0] == 250, baseline_alias
     assert baseline_alias[2] == 250, baseline_alias
 
+    baseline_sogo = _sogo_send(mailcow_dir, MAILBOX)
+    assert baseline_sogo.returncode == 0, baseline_sogo.stderr
+
     public_agent_url = f"{base_url.rstrip('/')}/moolias-agent"
 
     # The nginx route is reachable, but unauthenticated callers cannot change state.
@@ -296,6 +392,30 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
     ).stdout
     assert PCRE_MAP in active_maps
     assert "pcre:/opt/postfix/conf/blocked_sender_login.pcre" not in active_maps
+    assert "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" not in active_maps
+
+    for service in ("smtps", "submission", "588"):
+        max_use = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "postfix-mailcow",
+                "postconf",
+                "-c",
+                "/opt/postfix/conf",
+                "-P",
+                f"{service}/inet/max_use",
+            ],
+            cwd=mailcow_dir,
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout
+        assert re.search(r"=\s*1\s*$", max_use), max_use
+
+    _assert_postfix_policy_is_read_only(mailcow_dir)
 
     async with SenderAgentClient(
         public_agent_url,
@@ -326,6 +446,12 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
         assert blocked_primary[2] >= 500, blocked_primary
         assert allowed_alias[0] == 250, allowed_alias
         assert allowed_alias[2] == 250, allowed_alias
+
+        blocked_sogo = _sogo_send(mailcow_dir, MAILBOX)
+        allowed_sogo_alias = _sogo_send(mailcow_dir, ALIAS)
+        assert blocked_sogo.returncode != 0, blocked_sogo.stderr
+        assert "553" in blocked_sogo.stderr, blocked_sogo.stderr
+        assert allowed_sogo_alias.returncode == 0, allowed_sogo_alias.stderr
         assert _postfix_container_id(mailcow_dir) == postfix_id
 
         time.sleep(1.1)
@@ -341,4 +467,16 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
     allowed_primary = _smtp_envelope_when_ready(MAILBOX)
     assert allowed_primary[0] == 250, allowed_primary
     assert allowed_primary[2] == 250, allowed_primary
+
+    allowed_sogo_primary = _sogo_send(mailcow_dir, MAILBOX)
+    assert allowed_sogo_primary.returncode == 0, allowed_sogo_primary.stderr
     assert _postfix_container_id(mailcow_dir) == postfix_id
+
+    postfix_logs = subprocess.run(
+        ["docker", "compose", "logs", "--no-color", "postfix-mailcow"],
+        cwd=mailcow_dir,
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout
+    assert "not owned by root: /opt/postfix/conf/./moolias" not in postfix_logs
