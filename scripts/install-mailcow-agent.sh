@@ -180,26 +180,38 @@ if [[ "$legacy_sender_map" == true ]]; then
 
   legacy_addresses="$(mktemp)"
   legacy_patterns="$(mktemp)"
-  trap 'rm -f "${legacy_addresses:-}" "${legacy_patterns:-}"' EXIT
+  legacy_bodies="$(mktemp)"
+  trap 'rm -f "${legacy_addresses:-}" "${legacy_patterns:-}" "${legacy_bodies:-}"' EXIT
 
   grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PCRE" > "$legacy_patterns" || true
   sed -n \
     's#^[[:space:]]*/\^\(.*\)\$/[[:space:]]\+__blocked_hidden_sender__[[:space:]]*$#\1#p' \
-    "$legacy_patterns" \
-    | sed 's/\\//g' \
-    | tr '[:upper:]' '[:lower:]' \
-    | sort -u > "$legacy_addresses"
+    "$legacy_patterns" > "$legacy_bodies"
 
   pattern_count="$(wc -l < "$legacy_patterns" | tr -d ' ')"
-  address_count="$(wc -l < "$legacy_addresses" | tr -d ' ')"
-  [[ "$pattern_count" == "$address_count" ]] || \
+  body_count="$(wc -l < "$legacy_bodies" | tr -d ' ')"
+  [[ "$pattern_count" == "$body_count" ]] || \
     die "legacy blocked_sender_login.pcre contains rules that cannot be migrated safely."
 
-  while IFS= read -r address; do
-    [[ "$address" =~ ^[A-Za-z0-9._+@-]+$ ]] \
-      || die "legacy sender address contains unsupported characters: $address"
-    [[ "$address" == *@* ]] || die "invalid legacy sender address: $address"
-  done < "$legacy_addresses"
+  : > "$legacy_addresses"
+  while IFS= read -r pattern; do
+    [[ "$pattern" =~ ^([A-Za-z0-9_@-]|\\[.+-])+$ ]] \
+      || die "legacy sender rule is not an unambiguous exact mailbox pattern: $pattern"
+
+    address="$(
+      printf '%s\n' "$pattern" \
+        | sed -E 's/\\([.+-])/\1/g' \
+        | tr '[:upper:]' '[:lower:]'
+    )"
+    [[ "$address" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+$ ]] \
+      || die "invalid legacy sender address: $address"
+    printf '%s\n' "$address" >> "$legacy_addresses"
+  done < "$legacy_bodies"
+
+  sort -u -o "$legacy_addresses" "$legacy_addresses"
+  address_count="$(wc -l < "$legacy_addresses" | tr -d ' ')"
+  [[ "$body_count" == "$address_count" ]] || \
+    die "legacy blocked_sender_login.pcre contains duplicate or ambiguous sender rules."
 
   backup_file "$EXTRA_CF"
   backup_file "$LEGACY_PCRE"
@@ -222,7 +234,7 @@ if [[ "$legacy_sender_map" == true ]]; then
   chmod 0600 "${STATE_DIR}/state.json"
 
   echo "Migrated ${address_count} existing blocked sender address(es) into the Moolias agent state."
-  rm -f "$legacy_addresses" "$legacy_patterns"
+  rm -f "$legacy_addresses" "$legacy_patterns" "$legacy_bodies"
   trap - EXIT
 fi
 
