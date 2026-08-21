@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import re
 import smtplib
@@ -74,43 +75,60 @@ def _smtp_envelope_when_ready(sender: str) -> tuple[int, str, int, str]:
     raise AssertionError(f"Mailcow submission did not become ready: {last_error!r}")
 
 
-def _sogo_send(mailcow_dir: str, sender: str) -> subprocess.CompletedProcess[str]:
-    message = (
-        f"From: <{sender}>\r\n"
-        f"To: <{MAILBOX}>\r\n"
-        "Subject: Moolias SOGo sender protection integration\r\n"
-        "\r\n"
-        "Moolias integration test.\r\n"
+def _sogo_envelope(mailcow_dir: str, sender: str) -> tuple[int, str, int, str]:
+    auth = base64.b64encode(f"\0{MAILBOX}\0{PASSWORD}".encode()).decode("ascii")
+    commands = (
+        "EHLO moolias-sogo-test\r\n"
+        f"AUTH PLAIN {auth}\r\n"
+        f"MAIL FROM:<{sender}>\r\n"
+        f"RCPT TO:<{MAILBOX}>\r\n"
+        "QUIT\r\n"
     )
-    return subprocess.run(
+    result = subprocess.run(
         [
             "docker",
             "compose",
             "exec",
             "-T",
             "sogo-mailcow",
-            "curl",
-            "--silent",
-            "--show-error",
-            "--verbose",
-            "--insecure",
-            "--ssl-reqd",
-            "--url",
-            "smtp://postfix-mailcow:588",
-            "--user",
-            f"{MAILBOX}:{PASSWORD}",
-            "--mail-from",
-            sender,
-            "--mail-rcpt",
-            MAILBOX,
-            "--upload-file",
-            "-",
+            "openssl",
+            "s_client",
+            "-quiet",
+            "-crlf",
+            "-starttls",
+            "smtp",
+            "-connect",
+            "postfix-mailcow:588",
         ],
         cwd=mailcow_dir,
         check=False,
         text=True,
-        input=message,
+        input=commands,
         capture_output=True,
+        timeout=30,
+    )
+    transcript = f"{result.stdout}\n{result.stderr}"
+    if not re.search(r"^235[ -]", result.stdout, re.MULTILINE):
+        raise AssertionError(f"SOGo-path SMTP AUTH failed:\n{transcript}")
+
+    mail_match = re.search(r"^(\d{3})[ -](2\.1\.0[^\r\n]*)", result.stdout, re.MULTILINE)
+    if mail_match is None:
+        raise AssertionError(f"SOGo-path MAIL FROM response missing:\n{transcript}")
+
+    after_mail = result.stdout[mail_match.end() :]
+    rcpt_match = re.search(
+        r"^(\d{3})[ -]((?:2\.1\.5|5\.7\.1)[^\r\n]*)",
+        after_mail,
+        re.MULTILINE,
+    )
+    if rcpt_match is None:
+        raise AssertionError(f"SOGo-path RCPT TO response missing:\n{transcript}")
+
+    return (
+        int(mail_match.group(1)),
+        mail_match.group(2),
+        int(rcpt_match.group(1)),
+        rcpt_match.group(2),
     )
 
 
@@ -351,8 +369,9 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
     assert baseline_alias[0] == 250, baseline_alias
     assert baseline_alias[2] == 250, baseline_alias
 
-    baseline_sogo = _sogo_send(mailcow_dir, MAILBOX)
-    assert baseline_sogo.returncode == 0, baseline_sogo.stderr
+    baseline_sogo = _sogo_envelope(mailcow_dir, MAILBOX)
+    assert baseline_sogo[0] == 250, baseline_sogo
+    assert baseline_sogo[2] == 250, baseline_sogo
 
     public_agent_url = f"{base_url.rstrip('/')}/moolias-agent"
 
@@ -447,11 +466,12 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
         assert allowed_alias[0] == 250, allowed_alias
         assert allowed_alias[2] == 250, allowed_alias
 
-        blocked_sogo = _sogo_send(mailcow_dir, MAILBOX)
-        allowed_sogo_alias = _sogo_send(mailcow_dir, ALIAS)
-        assert blocked_sogo.returncode != 0, blocked_sogo.stderr
-        assert "553" in blocked_sogo.stderr, blocked_sogo.stderr
-        assert allowed_sogo_alias.returncode == 0, allowed_sogo_alias.stderr
+        blocked_sogo = _sogo_envelope(mailcow_dir, MAILBOX)
+        allowed_sogo_alias = _sogo_envelope(mailcow_dir, ALIAS)
+        assert blocked_sogo[0] == 250, blocked_sogo
+        assert blocked_sogo[2] >= 500, blocked_sogo
+        assert allowed_sogo_alias[0] == 250, allowed_sogo_alias
+        assert allowed_sogo_alias[2] == 250, allowed_sogo_alias
         assert _postfix_container_id(mailcow_dir) == postfix_id
 
         time.sleep(1.1)
@@ -468,8 +488,9 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
     assert allowed_primary[0] == 250, allowed_primary
     assert allowed_primary[2] == 250, allowed_primary
 
-    allowed_sogo_primary = _sogo_send(mailcow_dir, MAILBOX)
-    assert allowed_sogo_primary.returncode == 0, allowed_sogo_primary.stderr
+    allowed_sogo_primary = _sogo_envelope(mailcow_dir, MAILBOX)
+    assert allowed_sogo_primary[0] == 250, allowed_sogo_primary
+    assert allowed_sogo_primary[2] == 250, allowed_sogo_primary
     assert _postfix_container_id(mailcow_dir) == postfix_id
 
     postfix_logs = subprocess.run(
