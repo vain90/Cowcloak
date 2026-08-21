@@ -66,3 +66,4 @@ class AgentProtectionState:
     mailbox: str
     blocked: bool
     retry_after: int
+    managed: bool = True
