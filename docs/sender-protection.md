@@ -11,7 +11,7 @@ Mailcow's normal authenticated sender policy is kept intact. The optional Moolia
 Mailcow Agent maintains one PCRE sender-login map before Mailcow's normal SQL map:
 
 ```text
-pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre
+pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre
 proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf
 ```
 
@@ -21,9 +21,33 @@ the primary address as an authenticated sender.
 
 Normal Mailcow aliases and sender permissions continue through the SQL map.
 
-The map file is rewritten atomically. New Postfix `smtpd` processes pick up changes
-without a Postfix reload or container restart. Only the one-time installation needs
-to restart `postfix-mailcow` so the persistent `extra.cf` override becomes active.
+The agent keeps its private state separate from Postfix configuration:
+
+```text
+data/conf/moolias-sender-agent/state/state.json
+data/conf/moolias-sender-agent/postfix/blocked_sender_login.pcre
+```
+
+The agent writes the policy atomically. Postfix mounts only the policy directory and
+mounts it read-only at `/opt/moolias-sender-agent/`; Postfix cannot modify the agent's
+state or policy files.
+
+Postfix PCRE maps are cached by an `smtpd` worker once opened. The installer therefore
+adds a small Mailcow Postfix hook that sets `max_use=1` only on authenticated
+submission services (`smtps`, `10465`, `submission`, `10587`, and SOGo's internal
+port `588`, when those services exist). Each new client connection consequently uses
+a fresh `smtpd` process and sees the current policy file. Normal SMTP delivery
+services are not changed.
+
+The one-time installation recreates `postfix-mailcow` so Docker applies the new
+read-only policy mount and Postfix consumes the persistent configuration and hook.
+After installation, changing the switch does **not** reload, restart, or recreate
+Postfix.
+
+The disposable-Mailcow integration test verifies the complete allow -> block ->
+allow sequence on normal authenticated submission port 587 and on Mailcow's SOGo
+submission service on port 588. It also verifies that a normal sender-enabled alias
+continues to work while the primary address is blocked.
 
 ## Security model
 
@@ -42,19 +66,28 @@ The agent:
 - has no Docker socket
 - has no Mailcow API key or database credentials
 - runs without Linux capabilities and with a read-only root filesystem
-- can write only `data/conf/postfix/moolias/`
+- keeps private state in its dedicated `state/` directory
+- can render only its dedicated `postfix/` policy directory
+- has no writable mount into Mailcow's Postfix configuration tree
 - validates and escapes mailbox addresses itself; clients cannot submit PCRE rules
 - serializes state changes with a file lock
 - enforces a per-mailbox cooldown (10 seconds by default)
 
+Postfix receives the rendered policy directory read-only. The SMTP path has no
+runtime dependency on the agent: if the agent stops, the last rendered policy remains
+on disk and existing sender protection continues to be enforced. Only changes to the
+switch are temporarily unavailable.
+
 Moolias also applies a per-mailbox cooldown before contacting the agent. The agent
 remains authoritative, so direct or concurrent requests cannot bypass the cooldown.
+Repeated requests for the already active state are idempotent and do not rewrite the
+policy.
 
 ## Standard installation
 
 Requirements are the same Docker and Docker Compose installation already required by
-Mailcow. No Python installation, SSH access from Moolias, database access or new DNS
-record is required.
+Mailcow. No Python installation, SSH access from Moolias, database access, additional
+public port, TLS certificate or new DNS record is required.
 
 Run this command on the Mailcow host:
 
@@ -90,19 +123,24 @@ The installer:
 
 1. validates the Mailcow directory and Docker Compose
 2. generates or reuses a 256-bit agent secret
-3. creates `data/conf/postfix/moolias/`
-4. adds the Moolias sender map to `data/conf/postfix/extra.cf`
-5. adds the agent as a Mailcow Compose sidecar
-6. adds `/moolias-agent/` to Mailcow's existing HTTPS nginx virtual host
-7. validates the combined Compose configuration
-8. starts and health-checks the agent
-9. validates and reloads nginx
-10. restarts `postfix-mailcow` once to activate the persistent sender map
-11. verifies the active Postfix sender-map order
-12. prints the Moolias `.env` values to copy
+3. creates separate private-state and rendered-policy directories under
+   `data/conf/moolias-sender-agent/`
+4. creates the persistent Postfix hook for the submission-worker `max_use=1` setting
+5. adds the Moolias sender map to `data/conf/postfix/extra.cf`
+6. adds a read-only policy mount to `postfix-mailcow`
+7. adds the unprivileged agent as a Mailcow Compose sidecar
+8. adds `/moolias-agent/` to Mailcow's existing HTTPS nginx virtual host
+9. validates the combined Compose configuration
+10. starts and health-checks the agent and verifies that it rendered the policy
+11. validates and reloads nginx
+12. recreates `postfix-mailcow` once so Docker applies the new mount and Postfix
+    consumes the persistent configuration and hook
+13. verifies the active sender-map order, submission-service `max_use=1` settings,
+    and Postfix access to the read-only policy
+14. prints the Moolias `.env` values to copy
 
-All Mailcow changes are under Mailcow's persistent configuration paths or the local
-Compose override and therefore survive normal Mailcow updates.
+All Mailcow changes are under Mailcow's persistent configuration paths, hook path, or
+local Compose override and therefore survive normal Mailcow updates.
 
 ## Enable the feature in Moolias
 
@@ -146,7 +184,6 @@ When the feature is enabled but the agent is missing, unreachable or authenticat
 with the wrong secret, Moolias continues to work and reports sender protection as
 unavailable. Existing rules on the Mailcow host remain in effect.
 
-
 ### Migration from the earlier manual PCRE setup
 
 The installer recognizes the earlier manual Moolias sender-block setup that used:
@@ -162,13 +199,18 @@ rules into the agent state before replacing the sender-map override. The address
 therefore remain blocked across the migration. `extra.cf` and the old PCRE file are
 backed up with a timestamp before anything is changed.
 
-If the legacy file contains rules that cannot be interpreted safely as exact mailbox
-addresses, the installer stops instead of guessing.
+The installer also migrates the known state files from early unreleased agent builds
+that used `data/conf/postfix/moolias/`. Unknown files in that directory cause the
+installer to stop instead of deleting or guessing.
+
+If the legacy PCRE file contains rules that cannot be interpreted safely as exact
+mailbox addresses, the installer stops instead of guessing.
 
 ## Existing custom Mailcow overrides
 
 The installer deliberately refuses to overwrite an existing custom
-`smtpd_sender_login_maps` policy or an unrelated `docker-compose.override.yml`.
+`smtpd_sender_login_maps` policy, unrelated Postfix hook, or unrelated
+`docker-compose.override.yml`.
 
 This is a safety feature. Existing customizations must be reviewed rather than
 silently replaced.
@@ -179,19 +221,28 @@ The required Moolias map must appear before Mailcow's normal sender ACL:
 
 ```text
 smtpd_sender_login_maps =
-  pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre,
+  pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre,
   proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf
 ```
 
 After manually merging this ordering into `data/conf/postfix/extra.cf`, rerun the
 installer. It detects the required map and leaves the custom policy untouched.
 
+The Postfix hook is still required so runtime changes are visible on the next
+submission connection. If the Moolias hook path is already occupied by an unrelated
+file, the installer stops rather than replacing it.
+
 ### Existing Docker Compose override
 
-Merge this service into the existing `docker-compose.override.yml`:
+Merge both the Postfix read-only mount and the agent service into the existing
+`docker-compose.override.yml`:
 
 ```yaml
 services:
+  postfix-mailcow:
+    volumes:
+      - ./data/conf/moolias-sender-agent/postfix:/opt/moolias-sender-agent:ro
+
   moolias-sender-agent:
     image: ghcr.io/vain90/moolias:edge
     restart: unless-stopped
@@ -209,7 +260,8 @@ services:
       - --forwarded-allow-ips
       - "*"
     volumes:
-      - ./data/conf/postfix/moolias:/state
+      - ./data/conf/moolias-sender-agent/state:/state
+      - ./data/conf/moolias-sender-agent/postfix:/postfix-policy
     networks:
       - mailcow-network
     read_only: true
@@ -221,8 +273,9 @@ services:
       - ALL
 ```
 
-Then rerun the installer. When it finds the `moolias-sender-agent` service, it leaves
-the custom Compose override untouched and completes the remaining setup.
+Then rerun the installer. When it finds the expected `moolias-sender-agent` service,
+state/policy mounts and Postfix read-only mount, it leaves the custom Compose override
+untouched and completes the remaining setup.
 
 ## Updating the agent
 
