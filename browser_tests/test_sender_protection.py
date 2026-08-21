@@ -96,3 +96,10 @@ def test_sender_protection_lives_in_settings_and_updates_warning(
     expect(switch).not_to_be_checked()
     expect(warning).to_be_visible()
     assert requests == [{"blocked": True}, {"blocked": False}]
+
+    settings_dialog.locator("[data-close-settings-dialog]").click()
+    page.locator("[data-open-help-dialog]").click()
+    help_dialog = page.locator("[data-help-dialog]")
+    expect(help_dialog).to_be_visible()
+    expect(help_dialog.locator("[data-settings-help]")).to_contain_text("Settings")
+    expect(help_dialog.locator("[data-settings-help]")).to_contain_text("gear")
