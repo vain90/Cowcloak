@@ -408,6 +408,37 @@ for _ in $(seq 1 30); do
 done
 [[ "$agent_ready" == true ]] || die "agent container did not become healthy."
 
+agent_id="$(docker compose ps -q moolias-sender-agent)"
+[[ -n "$agent_id" ]] || die "could not resolve the running agent container."
+
+agent_uid="$(docker compose exec -T moolias-sender-agent id -u | tr -d '[:space:]')"
+agent_gid="$(docker compose exec -T moolias-sender-agent id -g | tr -d '[:space:]')"
+[[ "$agent_uid" == "10001" && "$agent_gid" == "10001" ]] \
+  || die "agent must run as uid/gid 10001:10001."
+
+agent_readonly="$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$agent_id")"
+[[ "$agent_readonly" == "true" ]] || die "agent root filesystem must be read-only."
+
+agent_cap_drop="$(docker inspect -f '{{json .HostConfig.CapDrop}}' "$agent_id")"
+grep -Fq '"ALL"' <<<"$agent_cap_drop" || die "agent must drop all Linux capabilities."
+
+agent_security_opt="$(docker inspect -f '{{json .HostConfig.SecurityOpt}}' "$agent_id")"
+grep -Fq 'no-new-privileges' <<<"$agent_security_opt" \
+  || die "agent must enable no-new-privileges."
+
+agent_ports="$(docker inspect -f '{{json .HostConfig.PortBindings}}' "$agent_id")"
+[[ "$agent_ports" == "{}" || "$agent_ports" == "null" ]] \
+  || die "agent must not publish host ports."
+
+agent_mounts="$(
+  docker inspect -f '{{range .Mounts}}{{println .Destination .RW}}{{end}}' "$agent_id" \
+    | sed '/^[[:space:]]*$/d' \
+    | sort
+)"
+expected_agent_mounts="$(printf '%s\n' '/postfix-policy true' '/state true' | sort)"
+[[ "$agent_mounts" == "$expected_agent_mounts" ]] \
+  || die "agent has unexpected mounts; only /state and /postfix-policy are allowed."
+
 [[ -r "${POLICY_DIR}/blocked_sender_login.pcre" ]] \
   || die "agent did not render the Postfix policy file."
 
