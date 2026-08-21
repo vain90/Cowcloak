@@ -6,7 +6,7 @@ All notable changes to Moolias are documented here.
 
 ### Breaking changes
 
-- Cowcloak has been renamed to Moolias across the Python package, container image, Docker Compose service, runtime identifiers and application configuration. Existing 0.1.x installations must follow `docs/migration-to-moolias.md` before switching to the 0.2.0 stable image.
+- The project has been renamed to Moolias across the Python package, container image, Docker Compose service, runtime identifiers and application configuration. Existing 0.1.x installations must follow `docs/migration-to-moolias.md` before switching to the 0.2.0 stable image.
 - application settings now use `MOOLIAS_*`, the container image is `ghcr.io/vain90/moolias`, the Compose service is `moolias`, and the default access/statistics tags and statistics database path use the `moolias` name. Legacy reserved offline-alias markers remain recognized so existing aliases can be migrated safely.
 
 ### Added
@@ -31,7 +31,7 @@ All notable changes to Moolias are documented here.
 - sender review matching is intentionally stricter around registrable domains, public/private suffixes, subdomains, lookalikes and explicit user decisions
 - deduplication cleanup runs in bounded batches and only advances after a safely overlapping healthy collector window
 - the README has been rewritten around the privacy model, first-time installation and current product behavior rather than implementation history
-- the project, documentation, package imports, Compose resources, default tags, cookie names and GHCR image references have been comprehensively rebranded from Cowcloak to Moolias
+- the project, documentation, package imports, Compose resources, default tags, cookie names and GHCR image references have been comprehensively moved to the Moolias name
 
 ### Fixed
 
