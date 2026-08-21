@@ -17,6 +17,8 @@ MAILBOX = f"owner@{DOMAIN}"
 ALIAS = f"service@{DOMAIN}"
 PASSWORD = "Moolias-Sender-Agent-CI-4f9d!A7"
 LEGACY_MAILBOX = "legacy.blocked@example.org"
+BLOCKED_OWNER = "__moolias_blocked_primary_sender__"
+PCRE_MAP = "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre"
 
 
 def _result_types(body: object) -> list[str]:
@@ -74,6 +76,42 @@ def _postfix_container_id(mailcow_dir: str) -> str:
         capture_output=True,
     )
     return result.stdout.strip()
+
+
+def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
+    lookup = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postfix-mailcow",
+            "postmap",
+            "-q",
+            mailbox,
+            PCRE_MAP,
+        ],
+        cwd=mailcow_dir,
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.strip()
+    rendered = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postfix-mailcow",
+            "cat",
+            "/opt/postfix/conf/moolias/blocked_sender_login.pcre",
+        ],
+        cwd=mailcow_dir,
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout
+    return lookup, rendered
 
 
 def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
@@ -242,8 +280,29 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
         text=True,
         capture_output=True,
     ).stdout
-    assert "pcre:/opt/postfix/conf/moolias/blocked_sender_login.pcre" in active_maps
+    assert PCRE_MAP in active_maps
     assert "pcre:/opt/postfix/conf/blocked_sender_login.pcre" not in active_maps
+
+    for service in ("smtps", "submission", "588"):
+        max_use = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "postfix-mailcow",
+                "postconf",
+                "-c",
+                "/opt/postfix/conf",
+                "-P",
+                f"{service}/inet/max_use",
+            ],
+            cwd=mailcow_dir,
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout
+        assert re.search(r"=\s*1\s*$", max_use), max_use
 
     async with SenderAgentClient(
         public_agent_url,
@@ -261,6 +320,11 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
         assert changed is True
         assert blocked.blocked is True
 
+        lookup, rendered = _postfix_map_query(mailcow_dir, MAILBOX)
+        assert lookup == BLOCKED_OWNER, (
+            f"Postfix PCRE lookup returned {lookup!r}; rendered map:\n{rendered}"
+        )
+
         blocked_primary = _smtp_mail_from_when_ready(MAILBOX)
         allowed_alias = _smtp_mail_from_when_ready(ALIAS)
         assert blocked_primary[0] >= 500, blocked_primary
@@ -271,6 +335,11 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
         unblocked, changed = await agent.set_blocked(MAILBOX, False)
         assert changed is True
         assert unblocked.blocked is False
+
+        lookup, rendered = _postfix_map_query(mailcow_dir, MAILBOX)
+        assert lookup == "", (
+            f"Postfix PCRE lookup still returned {lookup!r}; rendered map:\n{rendered}"
+        )
 
     allowed_primary = _smtp_mail_from_when_ready(MAILBOX)
     assert allowed_primary[0] == 250, allowed_primary
