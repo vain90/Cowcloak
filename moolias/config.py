@@ -71,11 +71,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_optional_features(self) -> "Settings":
-        if self.sender_protection and len(self.sender_agent_secret) < 32:
-            raise ValueError(
-                "MOOLIAS_SENDER_AGENT_SECRET must be at least 32 characters "
-                "when sender protection is enabled"
-            )
         if self.usage_stats and not self.usage_tag:
             raise ValueError("MOOLIAS_USAGE_TAG must be set when usage statistics are enabled")
         if self.usage_stats and not self.usage_db_path:
