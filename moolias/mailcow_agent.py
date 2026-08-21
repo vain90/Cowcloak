@@ -29,6 +29,7 @@ from moolias.sender_protocol import (
 
 BLOCKED_OWNER = "__moolias_blocked_primary_sender__"
 DEFAULT_STATE_DIR = "/state"
+DEFAULT_POLICY_PATH = "/postfix-policy/blocked_sender_login.pcre"
 DEFAULT_COOLDOWN_SECONDS = 10
 MAX_CLOCK_SKEW_SECONDS = 30
 NONCE_TTL_SECONDS = 60
@@ -128,6 +129,7 @@ class AgentStateStore:
         state_dir: str | Path,
         cooldown_seconds: int = DEFAULT_COOLDOWN_SECONDS,
         *,
+        policy_path: str | Path | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if cooldown_seconds < 1 or cooldown_seconds > 300:
@@ -136,23 +138,29 @@ class AgentStateStore:
         self.cooldown_seconds = cooldown_seconds
         self.clock = clock
         self.state_path = self.state_dir / "state.json"
-        self.pcre_path = self.state_dir / "blocked_sender_login.pcre"
+        self.policy_path = (
+            Path(policy_path)
+            if policy_path is not None
+            else self.state_dir / "blocked_sender_login.pcre"
+        )
         self.lock_path = self.state_dir / ".lock"
 
     def ensure_files(self) -> None:
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.policy_path.parent.mkdir(parents=True, exist_ok=True)
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             state = self._load_state()
-            self._write_state_and_pcre(state)
+            self._write_state_and_policy(state)
 
     def status(self, mailbox: str) -> dict[str, Any]:
         mailbox = normalize_mailbox(mailbox)
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.policy_path.parent.mkdir(parents=True, exist_ok=True)
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             state = self._load_state()
-            self._reconcile_pcre(state)
+            self._reconcile_policy(state)
             blocked = mailbox in set(state["blocked"])
             return {
                 "mailbox": mailbox,
@@ -163,13 +171,14 @@ class AgentStateStore:
     def set_blocked(self, mailbox: str, blocked: bool) -> dict[str, Any]:
         mailbox = normalize_mailbox(mailbox)
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.policy_path.parent.mkdir(parents=True, exist_ok=True)
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             state = self._load_state()
             blocked_set = set(state["blocked"])
             current = mailbox in blocked_set
             if current == blocked:
-                self._reconcile_pcre(state)
+                self._reconcile_policy(state)
                 return {
                     "mailbox": mailbox,
                     "blocked": current,
@@ -195,7 +204,7 @@ class AgentStateStore:
             }
             last_changed[mailbox] = now
             state["last_changed"] = last_changed
-            self._write_state_and_pcre(state)
+            self._write_state_and_policy(state)
             return {
                 "mailbox": mailbox,
                 "blocked": blocked,
@@ -233,37 +242,37 @@ class AgentStateStore:
             raise AgentStateError("Invalid sender protection state") from exc
         return {"version": 1, "blocked": blocked, "last_changed": last_changed}
 
-    def _render_pcre(self, state: dict[str, Any]) -> str:
+    def _render_policy(self, state: dict[str, Any]) -> str:
         lines = [
             "# Managed by Moolias Mailcow Agent. Do not edit manually.",
-            "# Changes are loaded by new Postfix smtpd processes without a service restart.",
+            "# New Postfix smtpd workers load the latest policy without a service restart.",
         ]
         for mailbox in state["blocked"]:
             escaped = re.escape(mailbox).replace("/", r"\/")
             lines.append(f"/^{escaped}$/    {BLOCKED_OWNER}")
         return "\n".join(lines) + "\n"
 
-    def _reconcile_pcre(self, state: dict[str, Any]) -> None:
-        expected = self._render_pcre(state)
+    def _reconcile_policy(self, state: dict[str, Any]) -> None:
+        expected = self._render_policy(state)
         try:
-            current = self.pcre_path.read_text(encoding="utf-8")
+            current = self.policy_path.read_text(encoding="utf-8")
         except FileNotFoundError:
             current = ""
         if current != expected:
-            self._atomic_write(self.pcre_path, expected, mode=0o644)
+            self._atomic_write(self.policy_path, expected, mode=0o644)
 
-    def _write_state_and_pcre(self, state: dict[str, Any]) -> None:
+    def _write_state_and_policy(self, state: dict[str, Any]) -> None:
         state_text = json.dumps(
             state,
             sort_keys=True,
             separators=(",", ":"),
         ) + "\n"
-        pcre_text = self._render_pcre(state)
+        policy_text = self._render_policy(state)
         self._atomic_write(self.state_path, state_text, mode=0o600)
         try:
-            self._atomic_write(self.pcre_path, pcre_text, mode=0o644)
+            self._atomic_write(self.policy_path, policy_text, mode=0o644)
         except Exception:
-            # A later status call or process restart reconciles the PCRE from state.
+            # A later status call or process restart reconciles the policy from state.
             raise
 
     def _atomic_write(self, path: Path, content: str, *, mode: int) -> None:
@@ -284,11 +293,16 @@ def create_agent_app(
     *,
     secret: str | None = None,
     state_dir: str | Path | None = None,
+    policy_path: str | Path | None = None,
     cooldown_seconds: int | None = None,
     clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     resolved_secret = secret if secret is not None else os.environ.get("MOOLIAS_AGENT_SECRET", "")
     resolved_state_dir = state_dir or os.environ.get("MOOLIAS_AGENT_STATE_DIR", DEFAULT_STATE_DIR)
+    resolved_policy_path = policy_path or os.environ.get(
+        "MOOLIAS_AGENT_POLICY_PATH",
+        DEFAULT_POLICY_PATH,
+    )
     if cooldown_seconds is None:
         raw_cooldown = os.environ.get(
             "MOOLIAS_AGENT_COOLDOWN_SECONDS",
@@ -302,7 +316,12 @@ def create_agent_app(
             ) from exc
 
     authenticator = AgentAuthenticator(resolved_secret, clock=clock)
-    store = AgentStateStore(resolved_state_dir, cooldown_seconds, clock=clock)
+    store = AgentStateStore(
+        resolved_state_dir,
+        cooldown_seconds,
+        policy_path=resolved_policy_path,
+        clock=clock,
+    )
     store.ensure_files()
 
     app = FastAPI(
