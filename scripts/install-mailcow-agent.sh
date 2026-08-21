@@ -572,18 +572,28 @@ docker compose exec -T postfix-mailcow \
 
 cat <<EOF
 
-Moolias Mailcow Agent installed successfully.
+============================================================
+Moolias Mailcow Agent installed successfully
+============================================================
 
-Add these values to the Moolias .env file:
+NEXT STEP: Configure Moolias
 
+Copy these values into the Moolias .env file:
+
+------------------------------------------------------------
 MOOLIAS_SENDER_PROTECTION=true
 MOOLIAS_SENDER_AGENT_SECRET=${secret}
+------------------------------------------------------------
 
-By default Moolias uses:
-  \${MAILCOW_URL}/moolias-agent
+Keep MOOLIAS_SENDER_AGENT_SECRET private. Do not share it or commit it to Git.
 
+Moolias automatically uses MAILCOW_URL + /moolias-agent.
 Only set MOOLIAS_SENDER_AGENT_URL when the agent is reachable at a different URL.
+
+After updating the Moolias .env file, restart Moolias.
 
 The agent uses Mailcow's existing Postfix configuration mount. Existing manual
 blocked_sender_login.pcre rules remain separate unless they were explicitly imported.
+
+============================================================
 EOF
