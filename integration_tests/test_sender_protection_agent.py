@@ -218,9 +218,9 @@ def _prepare_existing_compose_override(mailcow_dir: str) -> None:
         ["sudo", "tee", override],
         input=(
             "services:\n"
-            "  unrelated-test-service:\n"
-            "    image: busybox:1.36\n"
-            "    command: [\"true\"]\n"
+            "    unrelated-test-service:\n"
+            "      image: busybox:1.36\n"
+            "      command: [\"true\"]\n"
         ),
         check=True,
         text=True,
