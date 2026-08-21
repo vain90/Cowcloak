@@ -44,6 +44,10 @@ class AgentStateError(RuntimeError):
     pass
 
 
+class AgentExternalPolicyError(RuntimeError):
+    pass
+
+
 class AgentCooldownError(RuntimeError):
     def __init__(self, retry_after: int) -> None:
         super().__init__(f"Cooldown active for {retry_after} seconds")
@@ -161,11 +165,15 @@ class AgentStateStore:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             state = self._load_state()
             self._reconcile_policy(state)
-            blocked = mailbox in set(state["blocked"])
+            blocked_set = set(state["blocked"])
+            external_set = set(state["external_blocked"])
+            externally_managed = mailbox in external_set
+            blocked = mailbox in blocked_set or externally_managed
             return {
                 "mailbox": mailbox,
                 "blocked": blocked,
-                "retry_after": self._retry_after(state, mailbox),
+                "managed": not externally_managed,
+                "retry_after": 0 if externally_managed else self._retry_after(state, mailbox),
             }
 
     def set_blocked(self, mailbox: str, blocked: bool) -> dict[str, Any]:
@@ -175,6 +183,21 @@ class AgentStateStore:
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             state = self._load_state()
+            external_set = set(state["external_blocked"])
+            if mailbox in external_set:
+                if blocked:
+                    self._reconcile_policy(state)
+                    return {
+                        "mailbox": mailbox,
+                        "blocked": True,
+                        "managed": False,
+                        "changed": False,
+                        "retry_after": 0,
+                    }
+                raise AgentExternalPolicyError(
+                    "Sender protection is managed by an existing Postfix rule"
+                )
+
             blocked_set = set(state["blocked"])
             current = mailbox in blocked_set
             if current == blocked:
@@ -182,6 +205,7 @@ class AgentStateStore:
                 return {
                     "mailbox": mailbox,
                     "blocked": current,
+                    "managed": True,
                     "changed": False,
                     "retry_after": self._retry_after(state, mailbox),
                 }
@@ -208,6 +232,7 @@ class AgentStateStore:
             return {
                 "mailbox": mailbox,
                 "blocked": blocked,
+                "managed": True,
                 "changed": True,
                 "retry_after": self.cooldown_seconds,
             }
@@ -221,7 +246,12 @@ class AgentStateStore:
 
     def _load_state(self) -> dict[str, Any]:
         if not self.state_path.exists():
-            return {"version": 1, "blocked": [], "last_changed": {}}
+            return {
+                "version": 1,
+                "blocked": [],
+                "external_blocked": [],
+                "last_changed": {},
+            }
         try:
             payload = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
@@ -229,23 +259,36 @@ class AgentStateStore:
         if not isinstance(payload, dict) or payload.get("version") != 1:
             raise AgentStateError("Unsupported sender protection state")
         blocked_raw = payload.get("blocked")
+        external_raw = payload.get("external_blocked", [])
         changed_raw = payload.get("last_changed")
-        if not isinstance(blocked_raw, list) or not isinstance(changed_raw, dict):
+        if (
+            not isinstance(blocked_raw, list)
+            or not isinstance(external_raw, list)
+            or not isinstance(changed_raw, dict)
+        ):
             raise AgentStateError("Invalid sender protection state")
         try:
             blocked = sorted({normalize_mailbox(str(item)) for item in blocked_raw})
+            external_blocked = sorted(
+                {normalize_mailbox(str(item)) for item in external_raw} - set(blocked)
+            )
             last_changed = {
                 normalize_mailbox(str(key)): float(value)
                 for key, value in changed_raw.items()
             }
         except (InvalidMailbox, TypeError, ValueError) as exc:
             raise AgentStateError("Invalid sender protection state") from exc
-        return {"version": 1, "blocked": blocked, "last_changed": last_changed}
+        return {
+            "version": 1,
+            "blocked": blocked,
+            "external_blocked": external_blocked,
+            "last_changed": last_changed,
+        }
 
     def _render_policy(self, state: dict[str, Any]) -> str:
         lines = [
             "# Managed by Moolias Mailcow Agent. Do not edit manually.",
-            "# New Postfix smtpd workers load the latest policy without a service restart.",
+            "# Existing non-Moolias Postfix sender rules are kept in their own map.",
         ]
         for mailbox in state["blocked"]:
             escaped = re.escape(mailbox).replace("/", r"\/")
@@ -269,11 +312,7 @@ class AgentStateStore:
         ) + "\n"
         policy_text = self._render_policy(state)
         self._atomic_write(self.state_path, state_text, mode=0o600)
-        try:
-            self._atomic_write(self.policy_path, policy_text, mode=0o644)
-        except Exception:
-            # A later status call or process restart reconciles the policy from state.
-            raise
+        self._atomic_write(self.policy_path, policy_text, mode=0o644)
 
     def _atomic_write(self, path: Path, content: str, *, mode: int) -> None:
         temporary = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
@@ -379,6 +418,8 @@ def create_agent_app(
                 detail="Sender protection cooldown is active",
                 headers={"Retry-After": str(exc.retry_after)},
             ) from exc
+        except AgentExternalPolicyError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except InvalidMailbox as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except AgentStateError as exc:
