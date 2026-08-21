@@ -33,13 +33,14 @@ async def successful_poll(
     )
 
 
-async def test_healthy_overlap_uses_entries_older_than_previous_watermark(tmp_path):
+async def test_history_buffer_uses_configured_maximum_not_loaded_window(tmp_path):
     store = await initialized_store(tmp_path)
     await successful_poll(
         store,
         attempted_at=100,
         finished_at=101,
         values=history(10, 20, 30, 40, 50),
+        history_limit=1000,
     )
 
     health = await successful_poll(
@@ -47,22 +48,26 @@ async def test_healthy_overlap_uses_entries_older_than_previous_watermark(tmp_pa
         attempted_at=160,
         finished_at=161,
         values=history(20, 30, 40, 50, 60, 70, 80, 90),
+        history_limit=1000,
     )
 
     assert health.previous_watermark == 50
     assert health.watermark == 90
     assert health.overlap_count == 3
     assert health.headroom_percent == 37.5
+    assert health.history_buffer_percent == 99.5
     assert health.coverage_state == "healthy"
-    assert assess_collector_health(
+    view = assess_collector_health(
         health,
         poll_interval_seconds=60,
         stale_polls=3,
         now=162,
-    ).state == "healthy"
+    )
+    assert view.state == "healthy"
+    assert view.as_dict()["history_buffer_percent"] == 99.5
 
 
-async def test_exactly_ten_percent_headroom_is_healthy(tmp_path):
+async def test_exactly_ten_percent_adaptive_overlap_can_have_large_buffer(tmp_path):
     store = await initialized_store(tmp_path)
     await successful_poll(
         store,
@@ -80,6 +85,7 @@ async def test_exactly_ten_percent_headroom_is_healthy(tmp_path):
 
     assert health.overlap_count == 1
     assert health.headroom_percent == 10.0
+    assert health.history_buffer_percent == 91.0
     assert health.coverage_state == "healthy"
     assert assess_collector_health(
         health,
@@ -89,7 +95,7 @@ async def test_exactly_ten_percent_headroom_is_healthy(tmp_path):
     ).state == "healthy"
 
 
-async def test_low_headroom_below_ten_percent(tmp_path):
+async def test_low_adaptive_overlap_is_not_low_when_configured_buffer_is_large(tmp_path):
     store = await initialized_store(tmp_path)
     await successful_poll(
         store,
@@ -108,7 +114,39 @@ async def test_low_headroom_below_ten_percent(tmp_path):
 
     assert health.overlap_count == 1
     assert health.headroom_percent == 5.0
+    assert health.history_buffer_percent == 81.0
     assert health.coverage_state == "low"
+    assert assess_collector_health(
+        health,
+        poll_interval_seconds=60,
+        stale_polls=3,
+        now=162,
+    ).state == "healthy"
+
+
+async def test_low_state_uses_remaining_configured_history_buffer(tmp_path):
+    store = await initialized_store(tmp_path)
+    await successful_poll(
+        store,
+        attempted_at=100,
+        finished_at=101,
+        values=history(10, 20, 30, 40, 50),
+        history_limit=20,
+    )
+
+    values = history(40, 50, *range(60, 240, 10))
+    health = await successful_poll(
+        store,
+        attempted_at=160,
+        finished_at=161,
+        values=values,
+        history_limit=20,
+    )
+
+    assert health.overlap_count == 1
+    assert health.headroom_percent == 5.0
+    assert health.history_buffer_percent == 5.0
+    assert health.history_full
     assert assess_collector_health(
         health,
         poll_interval_seconds=60,
@@ -128,6 +166,7 @@ async def test_initial_success_stays_starting_until_a_watermark_can_be_compared(
 
     assert health.previous_watermark is None
     assert health.headroom_percent is None
+    assert health.history_buffer_percent is None
     assert health.coverage_state == "initial"
     assert assess_collector_health(
         health,
@@ -155,6 +194,7 @@ async def test_missing_previous_watermark_is_possible_gap(tmp_path):
 
     assert health.previous_watermark == 50
     assert health.oldest_event_at == 60
+    assert health.history_buffer_percent is None
     assert health.coverage_state == "gap"
     assert assess_collector_health(
         health,
