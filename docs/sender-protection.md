@@ -146,9 +146,10 @@ When the feature is enabled but the agent is missing, unreachable or authenticat
 with the wrong secret, Moolias continues to work and reports sender protection as
 unavailable. Existing rules on the Mailcow host remain in effect.
 
+
 ### Migration from the earlier manual PCRE setup
 
-The installer recognizes the earlier Moolias/Cowcloak-style manual setup that used:
+The installer recognizes the earlier manual Moolias sender-block setup that used:
 
 ```text
 data/conf/postfix/blocked_sender_login.pcre
