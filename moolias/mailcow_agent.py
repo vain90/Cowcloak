@@ -18,11 +18,11 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from moolias import __version__
 from moolias.sender_protocol import (
-    InvalidMailbox,
     NONCE_HEADER,
     PROTOCOL_VERSION,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
+    InvalidMailbox,
     normalize_mailbox,
     request_signature,
 )
