@@ -6,8 +6,7 @@ MOOLIAS_AGENT_IMAGE="${MOOLIAS_AGENT_IMAGE:-ghcr.io/vain90/moolias:edge}"
 MOOLIAS_AGENT_COOLDOWN_SECONDS="${MOOLIAS_AGENT_COOLDOWN_SECONDS:-10}"
 
 POSTFIX_DIR="${MAILCOW_DIR}/data/conf/postfix"
-POSTFIX_HOOK_DIR="${MAILCOW_DIR}/data/hooks/postfix"
-POSTFIX_HOOK="${POSTFIX_HOOK_DIR}/moolias-sender-protection.sh"
+POSTFIX_HOOK="${MAILCOW_DIR}/data/hooks/postfix/moolias-sender-protection.sh"
 NGINX_DIR="${MAILCOW_DIR}/data/conf/nginx"
 AGENT_DIR="${MAILCOW_DIR}/data/conf/moolias-sender-agent"
 STATE_DIR="${POSTFIX_DIR}/moolias"
@@ -101,7 +100,6 @@ if [[ -e "$POSTFIX_HOOK" ]] && ! grep -Fq "$HOOK_MARKER" "$POSTFIX_HOOK"; then
 fi
 
 install -d -m 0755 "$AGENT_DIR"
-install -d -m 0755 "$POSTFIX_HOOK_DIR"
 install -d -m 0755 -o 10001 -g 10001 "$STATE_DIR"
 
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -111,6 +109,14 @@ backup_file() {
     cp -a "$path" "${path}.before-moolias-agent-${stamp}.bak"
   fi
 }
+
+# Development builds briefly installed a Postfix hook that forced max_use=1 on
+# submission services. It is no longer required. Remove only the known Moolias
+# hook and leave any unrelated administrator hook untouched.
+if [[ -e "$POSTFIX_HOOK" ]]; then
+  backup_file "$POSTFIX_HOOK"
+  rm -f "$POSTFIX_HOOK"
+fi
 
 if [[ "$legacy_sender_map" == true ]]; then
   [[ ! -e "${STATE_DIR}/state.json" ]] || \
@@ -182,22 +188,6 @@ MOOLIAS_AGENT_STATE_DIR=/state
 MOOLIAS_AGENT_COOLDOWN_SECONDS=${MOOLIAS_AGENT_COOLDOWN_SECONDS}
 EOF
 chmod 0600 "$AGENT_ENV"
-
-backup_file "$POSTFIX_HOOK"
-cat > "$POSTFIX_HOOK" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-
-${HOOK_MARKER}
-# Postfix caches PCRE maps in smtpd workers. Limit authenticated submission
-# workers to one client connection so the next connection sees policy changes.
-for service in smtps 10465 submission 10587 588; do
-  if /usr/sbin/postconf -c /opt/postfix/conf -M "\${service}/inet" >/dev/null 2>&1; then
-    /usr/sbin/postconf -c /opt/postfix/conf -P "\${service}/inet/max_use=1"
-  fi
-done
-EOF
-chmod 0755 "$POSTFIX_HOOK"
 
 if [[ "$manage_compose_override" == true ]]; then
   backup_file "$OVERRIDE_FILE"
@@ -325,9 +315,9 @@ done
 docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
-# extra.cf and the Postfix hook are consumed while the container starts. This
-# restart is only required by the one-time installation; normal sender toggles
-# do not restart or reload Postfix.
+# extra.cf is consumed while the Postfix container starts. This restart is only
+# required by the one-time installation; normal sender toggles do not restart
+# or reload Postfix.
 docker compose restart postfix-mailcow
 
 postfix_ready=false
@@ -348,16 +338,6 @@ done
 
 [[ "$postfix_ready" == true ]] \
   || die "Postfix did not load the Moolias sender map within 30 seconds."
-
-for service in smtps submission 588; do
-  max_use="$(
-    docker compose exec -T postfix-mailcow \
-      postconf -c /opt/postfix/conf -P "${service}/inet/max_use" 2>/dev/null \
-      || true
-  )"
-  grep -Eq '=[[:space:]]*1[[:space:]]*$' <<<"$max_use" \
-    || die "Postfix service ${service}/inet did not load max_use=1 from the Moolias hook."
-done
 
 cat <<EOF
 
