@@ -43,9 +43,7 @@ def canonical_request(
     body: bytes,
 ) -> bytes:
     body_hash = hashlib.sha256(body).hexdigest()
-    return (
-        f"{timestamp}\n{nonce}\n{method.upper()}\n{path}\n{body_hash}"
-    ).encode("utf-8")
+    return f"{timestamp}\n{nonce}\n{method.upper()}\n{path}\n{body_hash}".encode()
 
 
 def request_signature(
