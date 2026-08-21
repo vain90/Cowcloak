@@ -4,6 +4,7 @@ set -euo pipefail
 MAILCOW_DIR="${MAILCOW_DIR:-/opt/mailcow-dockerized}"
 MOOLIAS_AGENT_IMAGE="${MOOLIAS_AGENT_IMAGE:-ghcr.io/vain90/moolias:edge}"
 MOOLIAS_AGENT_COOLDOWN_SECONDS="${MOOLIAS_AGENT_COOLDOWN_SECONDS:-10}"
+MOOLIAS_IMPORT_EXISTING_SENDER_RULES="${MOOLIAS_IMPORT_EXISTING_SENDER_RULES:-ask}"
 
 POSTFIX_DIR="${MAILCOW_DIR}/data/conf/postfix"
 POSTFIX_HOOK_DIR="${MAILCOW_DIR}/data/hooks/postfix"
@@ -11,20 +12,21 @@ POSTFIX_HOOK="${POSTFIX_HOOK_DIR}/moolias-sender-protection.sh"
 NGINX_DIR="${MAILCOW_DIR}/data/conf/nginx"
 AGENT_DIR="${MAILCOW_DIR}/data/conf/moolias-sender-agent"
 STATE_DIR="${AGENT_DIR}/state"
-POLICY_DIR="${AGENT_DIR}/postfix"
-OLD_AGENT_STATE_DIR="${POSTFIX_DIR}/moolias"
+POLICY_DIR="${POSTFIX_DIR}/moolias-sender-agent"
 EXTRA_CF="${POSTFIX_DIR}/extra.cf"
 LEGACY_PCRE="${POSTFIX_DIR}/blocked_sender_login.pcre"
 NGINX_CUSTOM="${NGINX_DIR}/site.moolias-sender-agent.custom"
 OVERRIDE_FILE="${MAILCOW_DIR}/docker-compose.override.yml"
 AGENT_ENV="${AGENT_DIR}/agent.env"
-OVERRIDE_HASH="${AGENT_DIR}/docker-compose.override.sha256"
 
-PCRE_MAP="pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
+PCRE_MAP="pcre:/opt/postfix/conf/moolias-sender-agent/blocked_sender_login.pcre"
+LEGACY_MAP="pcre:/opt/postfix/conf/blocked_sender_login.pcre"
+OLD_PCRE_MAP="pcre:/opt/moolias-sender-agent/blocked_sender_login.pcre"
 SQL_SENDER_MAP="proxy:mysql:/opt/postfix/conf/sql/mysql_virtual_sender_acl.cf"
 BEGIN_MARKER="# BEGIN MOOLIAS SENDER PROTECTION"
 END_MARKER="# END MOOLIAS SENDER PROTECTION"
-OVERRIDE_MARKER="# Managed by the Moolias Mailcow Agent installer."
+COMPOSE_BEGIN="# BEGIN MOOLIAS SENDER AGENT"
+COMPOSE_END="# END MOOLIAS SENDER AGENT"
 HOOK_MARKER="# Managed by Moolias Sender Protection."
 NGINX_MARKER="# Managed by Moolias Sender Protection."
 
@@ -33,13 +35,30 @@ die() {
   exit 1
 }
 
+backup_file() {
+  local path="$1"
+  if [[ -e "$path" ]]; then
+    cp -a "$path" "${path}.before-moolias-agent-${stamp}.bak"
+  fi
+}
+
+strip_managed_block() {
+  local source="$1"
+  local begin="$2"
+  local end="$3"
+  awk -v begin="$begin" -v end="$end" '
+    index($0, begin) { skip = 1; next }
+    index($0, end) { skip = 0; next }
+    !skip { print }
+  ' "$source"
+}
+
 if [[ "${EUID}" -ne 0 ]]; then
   die "run this installer as root, for example with sudo."
 fi
 
 command -v docker >/dev/null 2>&1 || die "Docker is required."
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
-command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required."
 
 [[ -d "$MAILCOW_DIR" ]] || die "Mailcow directory not found: $MAILCOW_DIR"
 [[ -f "${MAILCOW_DIR}/docker-compose.yml" ]] || \
@@ -52,190 +71,200 @@ if ! [[ "$MOOLIAS_AGENT_COOLDOWN_SECONDS" =~ ^[0-9]+$ ]] \
   die "MOOLIAS_AGENT_COOLDOWN_SECONDS must be an integer between 1 and 300."
 fi
 
+case "${MOOLIAS_IMPORT_EXISTING_SENDER_RULES,,}" in
+  ask|yes|no) ;;
+  *) die "MOOLIAS_IMPORT_EXISTING_SENDER_RULES must be ask, yes or no." ;;
+esac
+
 if ! [[ "$MOOLIAS_AGENT_IMAGE" =~ ^[A-Za-z0-9._/:@-]+$ ]]; then
   die "MOOLIAS_AGENT_IMAGE contains unsupported characters."
 fi
 
+stamp="$(date +%Y%m%d-%H%M%S)"
 touch "$EXTRA_CF"
-manage_sender_map=true
-legacy_sender_map=false
-if grep -Eq '^[[:space:]]*smtpd_sender_login_maps[[:space:]]*=' "$EXTRA_CF" \
-  && ! grep -Fq "$BEGIN_MARKER" "$EXTRA_CF"; then
-  if grep -Fq "$PCRE_MAP" "$EXTRA_CF" \
-    && grep -Fq "$SQL_SENDER_MAP" "$EXTRA_CF"; then
-    manage_sender_map=false
-  elif grep -Fq "pcre:/opt/postfix/conf/blocked_sender_login.pcre" "$EXTRA_CF" \
-    && grep -Fq "$SQL_SENDER_MAP" "$EXTRA_CF" \
-    && [[ -f "$LEGACY_PCRE" ]]; then
-    legacy_sender_map=true
-  else
-    cat >&2 <<EOF
-Moolias Mailcow Agent installer:
-  ${EXTRA_CF} already contains a custom smtpd_sender_login_maps override.
 
-The installer will not replace an unknown sender policy automatically.
-Back up and merge the Moolias PCRE map before Mailcow's normal SQL sender ACL,
-then run the installer again.
+# Remove only the installer-owned sender-map block before inspecting any
+# administrator configuration around it.
+extra_without_moolias="$(mktemp "${POSTFIX_DIR}/.extra.cf.moolias.XXXXXX")"
+strip_managed_block "$EXTRA_CF" "$BEGIN_MARKER" "$END_MARKER" > "$extra_without_moolias"
 
-Required order:
-  ${PCRE_MAP}
-  ${SQL_SENDER_MAP}
-EOF
-    exit 1
-  fi
+sender_assignment="$(
+  awk '
+    /^[[:space:]]*smtpd_sender_login_maps[[:space:]]*=/ {
+      capture = 1
+      print
+      next
+    }
+    capture && /^[[:space:]]+/ {
+      print
+      next
+    }
+    capture { exit }
+  ' "$extra_without_moolias"
+)"
+
+legacy_was_active=false
+if [[ -n "$sender_assignment" ]]; then
+  normalized_assignment="$(printf '%s' "$sender_assignment" | tr -d '[:space:]')"
+  expected_legacy="smtpd_sender_login_maps=${LEGACY_MAP},${SQL_SENDER_MAP}"
+  expected_current="smtpd_sender_login_maps=${PCRE_MAP},${SQL_SENDER_MAP}"
+  expected_old="smtpd_sender_login_maps=${OLD_PCRE_MAP},${SQL_SENDER_MAP}"
+  expected_both="smtpd_sender_login_maps=${LEGACY_MAP},${PCRE_MAP},${SQL_SENDER_MAP}"
+
+  case "$normalized_assignment" in
+    "$expected_legacy")
+      legacy_was_active=true
+      ;;
+    "$expected_current"|"$expected_old")
+      ;;
+    "$expected_both")
+      legacy_was_active=true
+      ;;
+    *)
+      rm -f "$extra_without_moolias"
+      die "extra.cf contains a custom smtpd_sender_login_maps policy that cannot be merged safely."
+      ;;
+  esac
 fi
 
-manage_compose_override=true
-if [[ -s "$OVERRIDE_FILE" ]]; then
-  if grep -Fq "$OVERRIDE_MARKER" "$OVERRIDE_FILE"; then
-    [[ -f "$OVERRIDE_HASH" ]] || cat >&2 <<EOF
-Moolias Mailcow Agent installer:
-  ${OVERRIDE_FILE} is marked as Moolias-managed but has no recorded checksum.
-
-The installer will not overwrite it because it cannot prove that an administrator
-has not added custom Compose settings. Review the file and merge the current service
-fragment from docs/sender-protection.md, then remove the Moolias marker or recreate
-the file intentionally before running the installer again.
-EOF
-    [[ -f "$OVERRIDE_HASH" ]] || exit 1
-
-    expected_hash="$(tr -d '[:space:]' < "$OVERRIDE_HASH")"
-    actual_hash="$(sha256sum "$OVERRIDE_FILE" | awk '{print $1}')"
-    [[ -n "$expected_hash" && "$actual_hash" == "$expected_hash" ]] || cat >&2 <<EOF
-Moolias Mailcow Agent installer:
-  ${OVERRIDE_FILE} was changed after Moolias created it.
-
-The installer will not overwrite administrator changes. Merge the current Moolias
-service fragment from docs/sender-protection.md into the file manually. Keep the
-custom file without the Moolias ownership marker if you want future installer runs
-to leave it untouched.
-EOF
-    [[ -n "$expected_hash" && "$actual_hash" == "$expected_hash" ]] || exit 1
-  elif grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$OVERRIDE_FILE" \
-    && grep -Fq ':/opt/moolias-sender-agent:ro' "$OVERRIDE_FILE" \
-    && grep -Fq ':/state' "$OVERRIDE_FILE" \
-    && grep -Fq ':/postfix-policy' "$OVERRIDE_FILE"; then
-    manage_compose_override=false
-  else
-    cat >&2 <<EOF
-Moolias Mailcow Agent installer:
-  ${OVERRIDE_FILE} already exists and is not managed by Moolias.
-
-The installer intentionally refuses to rewrite custom Docker Compose overrides.
-Merge the service and Postfix read-only policy mount from
-  docs/sender-protection.md
-into that file, then run this installer again.
-EOF
-    exit 1
-  fi
-fi
-
-if [[ -e "$POSTFIX_HOOK" ]] && ! grep -Fq "$HOOK_MARKER" "$POSTFIX_HOOK"; then
-  die "${POSTFIX_HOOK} already exists and is not managed by Moolias."
-fi
-
-if [[ -e "$NGINX_CUSTOM" ]] && ! grep -Fq "$NGINX_MARKER" "$NGINX_CUSTOM"; then
-  die "${NGINX_CUSTOM} already exists and is not managed by Moolias."
-fi
+# Remove the compatible old assignment. It is replaced below with the complete
+# ordered map list, while all unrelated extra.cf settings remain untouched.
+extra_base="$(mktemp "${POSTFIX_DIR}/.extra.cf.base.XXXXXX")"
+awk '
+  /^[[:space:]]*smtpd_sender_login_maps[[:space:]]*=/ {
+    skip = 1
+    next
+  }
+  skip && /^[[:space:]]+/ { next }
+  skip { skip = 0 }
+  { print }
+' "$extra_without_moolias" > "$extra_base"
+rm -f "$extra_without_moolias"
 
 install -d -m 0755 "$AGENT_DIR"
 install -d -m 0755 "$POSTFIX_HOOK_DIR"
 install -d -m 0700 -o 10001 -g 10001 "$STATE_DIR"
 install -d -m 0755 -o 10001 -g 10001 "$POLICY_DIR"
 
-stamp="$(date +%Y%m%d-%H%M%S)"
-backup_file() {
-  local path="$1"
-  if [[ -e "$path" ]]; then
-    cp -a "$path" "${path}.before-moolias-agent-${stamp}.bak"
-  fi
-}
+# Detect simple exact-address rules in an already active manual PCRE map. The
+# administrator can explicitly move these rules under Moolias management. Any
+# rule that is not an unambiguous exact mailbox pattern is always left alone.
+if [[ "$legacy_was_active" == true && -s "$LEGACY_PCRE" && ! -e "${STATE_DIR}/state.json" ]]; then
+  exact_rules="$(mktemp)"
+  active_rules="$(mktemp)"
+  drop_lines="$(mktemp)"
+  trap 'rm -f "${exact_rules:-}" "${active_rules:-}" "${drop_lines:-}" "${extra_base:-}"' EXIT
 
-# Move state from early development installs out of Postfix's configuration
-# tree. Only the known Moolias files are accepted for automatic cleanup.
-if [[ -d "$OLD_AGENT_STATE_DIR" ]]; then
-  unknown_old_file="$(
-    find "$OLD_AGENT_STATE_DIR" -mindepth 1 -maxdepth 1 \
-      ! -name state.json \
-      ! -name blocked_sender_login.pcre \
-      ! -name .lock \
-      -print -quit
-  )"
-  [[ -z "$unknown_old_file" ]] \
-    || die "refusing to remove unknown file from old Moolias state directory: $unknown_old_file"
+  grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PCRE" > "$active_rules" || true
 
-  if [[ -f "${OLD_AGENT_STATE_DIR}/state.json" ]]; then
-    [[ ! -e "${STATE_DIR}/state.json" ]] \
-      || die "old and new Moolias sender state both exist; refusing an unsafe automatic merge."
-    install -m 0600 -o 10001 -g 10001 \
-      "${OLD_AGENT_STATE_DIR}/state.json" "${STATE_DIR}/state.json"
-  fi
-  backup_file "$OLD_AGENT_STATE_DIR"
-  rm -rf "$OLD_AGENT_STATE_DIR"
-fi
+  while IFS=$'\t' read -r line_number line_body; do
+    parsed="$(
+      printf '%s\n' "$line_body" \
+        | sed -n 's#^[[:space:]]*/\^\(.*\)\$/[[:space:]]\+\([^[:space:]]\+\)[[:space:]]*$#\1\t\2#p'
+    )"
+    [[ -n "$parsed" ]] || continue
 
-if [[ "$legacy_sender_map" == true ]]; then
-  [[ ! -e "${STATE_DIR}/state.json" ]] || \
-    die "legacy sender map found together with an existing agent state; refusing an unsafe automatic merge."
-
-  legacy_addresses="$(mktemp)"
-  legacy_patterns="$(mktemp)"
-  legacy_bodies="$(mktemp)"
-  trap 'rm -f "${legacy_addresses:-}" "${legacy_patterns:-}" "${legacy_bodies:-}"' EXIT
-
-  grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PCRE" > "$legacy_patterns" || true
-  sed -n \
-    's#^[[:space:]]*/\^\(.*\)\$/[[:space:]]\+__blocked_hidden_sender__[[:space:]]*$#\1#p' \
-    "$legacy_patterns" > "$legacy_bodies"
-
-  pattern_count="$(wc -l < "$legacy_patterns" | tr -d ' ')"
-  body_count="$(wc -l < "$legacy_bodies" | tr -d ' ')"
-  [[ "$pattern_count" == "$body_count" ]] || \
-    die "legacy blocked_sender_login.pcre contains rules that cannot be migrated safely."
-
-  : > "$legacy_addresses"
-  while IFS= read -r pattern; do
-    [[ "$pattern" =~ ^([A-Za-z0-9_@-]|\\[.+-])+$ ]] \
-      || die "legacy sender rule is not an unambiguous exact mailbox pattern: $pattern"
+    pattern="${parsed%%$'\t'*}"
+    owner="${parsed#*$'\t'}"
+    [[ "$pattern" =~ ^([A-Za-z0-9_@-]|\\[.+-])+$ ]] || continue
 
     address="$(
       printf '%s\n' "$pattern" \
         | sed -E 's/\\([.+-])/\1/g' \
         | tr '[:upper:]' '[:lower:]'
     )"
-    [[ "$address" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+$ ]] \
-      || die "invalid legacy sender address: $address"
-    printf '%s\n' "$address" >> "$legacy_addresses"
-  done < "$legacy_bodies"
+    [[ "$address" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+$ ]] || continue
 
-  sort -u -o "$legacy_addresses" "$legacy_addresses"
-  address_count="$(wc -l < "$legacy_addresses" | tr -d ' ')"
-  [[ "$body_count" == "$address_count" ]] || \
-    die "legacy blocked_sender_login.pcre contains duplicate or ambiguous sender rules."
+    printf '%s\t%s\t%s\n' "$line_number" "$address" "$owner" >> "$exact_rules"
+  done < <(nl -ba -w1 -s $'\t' "$LEGACY_PCRE")
 
-  backup_file "$EXTRA_CF"
-  backup_file "$LEGACY_PCRE"
+  exact_count="$(wc -l < "$exact_rules" | tr -d ' ')"
+  active_count="$(wc -l < "$active_rules" | tr -d ' ')"
+  unknown_count=$((active_count - exact_count))
 
-  {
-    printf '{"blocked":['
-    first=true
-    while IFS= read -r address; do
-      [[ -n "$address" ]] || continue
-      if [[ "$first" == true ]]; then
-        first=false
+  if (( exact_count > 0 )); then
+    echo
+    echo "Existing exact sender rules were found in:"
+    echo "  ${LEGACY_PCRE}"
+    echo
+    while IFS=$'\t' read -r _ address owner; do
+      printf '  %-45s -> %s\n' "$address" "$owner"
+    done < "$exact_rules"
+    echo
+
+    import_existing="${MOOLIAS_IMPORT_EXISTING_SENDER_RULES,,}"
+    if [[ "$import_existing" == "ask" ]]; then
+      if [[ -r /dev/tty && -w /dev/tty ]]; then
+        printf 'Move these exact rules under Moolias management? [y/N] ' > /dev/tty
+        read -r answer < /dev/tty || answer=""
+        case "${answer,,}" in
+          y|yes|j|ja) import_existing="yes" ;;
+          *) import_existing="no" ;;
+        esac
       else
-        printf ','
+        echo "No interactive terminal is available; keeping existing rules external."
+        import_existing="no"
       fi
-      printf '"%s"' "$address"
-    done < "$legacy_addresses"
-    printf '],"last_changed":{},"version":1}\n'
-  } > "${STATE_DIR}/state.json"
-  chown 10001:10001 "${STATE_DIR}/state.json"
-  chmod 0600 "${STATE_DIR}/state.json"
+    fi
 
-  echo "Migrated ${address_count} existing blocked sender address(es) into the Moolias agent state."
-  rm -f "$legacy_addresses" "$legacy_patterns" "$legacy_bodies"
-  trap - EXIT
+    blocked_addresses="$(mktemp)"
+    external_addresses="$(mktemp)"
+    trap 'rm -f "${exact_rules:-}" "${active_rules:-}" "${drop_lines:-}" "${blocked_addresses:-}" "${external_addresses:-}" "${extra_base:-}"' EXIT
+    : > "$blocked_addresses"
+    : > "$external_addresses"
+
+    if [[ "$import_existing" == "yes" ]]; then
+      backup_file "$LEGACY_PCRE"
+      cut -f1 "$exact_rules" > "$drop_lines"
+      cut -f2 "$exact_rules" | sort -u > "$blocked_addresses"
+
+      legacy_new="$(mktemp "${POSTFIX_DIR}/.blocked_sender_login.pcre.XXXXXX")"
+      awk 'NR==FNR { drop[$1] = 1; next } !drop[FNR] { print }' \
+        "$drop_lines" "$LEGACY_PCRE" > "$legacy_new"
+      chmod --reference="$LEGACY_PCRE" "$legacy_new" 2>/dev/null || chmod 0644 "$legacy_new"
+      chown --reference="$LEGACY_PCRE" "$legacy_new" 2>/dev/null || true
+      mv "$legacy_new" "$LEGACY_PCRE"
+      echo "Moved ${exact_count} exact sender rule(s) under Moolias management."
+    else
+      cut -f2 "$exact_rules" | sort -u > "$external_addresses"
+      echo "Kept ${exact_count} exact sender rule(s) under existing Postfix management."
+    fi
+
+    {
+      printf '{"blocked":['
+      first=true
+      while IFS= read -r address; do
+        [[ -n "$address" ]] || continue
+        if [[ "$first" == true ]]; then first=false; else printf ','; fi
+        printf '"%s"' "$address"
+      done < "$blocked_addresses"
+      printf '],"external_blocked":['
+      first=true
+      while IFS= read -r address; do
+        [[ -n "$address" ]] || continue
+        if [[ "$first" == true ]]; then first=false; else printf ','; fi
+        printf '"%s"' "$address"
+      done < "$external_addresses"
+      printf '],"last_changed":{},"version":1}\n'
+    } > "${STATE_DIR}/state.json"
+    chown 10001:10001 "${STATE_DIR}/state.json"
+    chmod 0600 "${STATE_DIR}/state.json"
+
+    rm -f "$blocked_addresses" "$external_addresses"
+  fi
+
+  if (( unknown_count > 0 )); then
+    echo "Keeping ${unknown_count} non-exact or custom PCRE rule(s) unchanged and outside Moolias management."
+  fi
+
+  rm -f "$exact_rules" "$active_rules" "$drop_lines"
+  trap 'rm -f "${extra_base:-}"' EXIT
+fi
+
+legacy_active=false
+if [[ "$legacy_was_active" == true && -f "$LEGACY_PCRE" ]] \
+  && grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PCRE" >/dev/null 2>&1; then
+  legacy_active=true
 fi
 
 if [[ -f "$AGENT_ENV" ]]; then
@@ -243,7 +272,6 @@ if [[ -f "$AGENT_ENV" ]]; then
 else
   secret=""
 fi
-
 if [[ -z "$secret" ]]; then
   secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 fi
@@ -274,16 +302,24 @@ done
 EOF
 chmod 0755 "$POSTFIX_HOOK"
 
-if [[ "$manage_compose_override" == true ]]; then
-  backup_file "$OVERRIDE_FILE"
-  backup_file "$OVERRIDE_HASH"
-  cat > "$OVERRIDE_FILE" <<EOF
-${OVERRIDE_MARKER}
-services:
-  postfix-mailcow:
-    volumes:
-      - ./data/conf/moolias-sender-agent/postfix:/opt/moolias-sender-agent:ro
+# The Compose override is needed only to define the small agent sidecar. Postfix
+# itself receives no additional mount; it already sees POLICY_DIR through
+# Mailcow's normal data/conf/postfix mount.
+compose_base="$(mktemp "${MAILCOW_DIR}/.docker-compose.override.XXXXXX")"
+if [[ -f "$OVERRIDE_FILE" ]]; then
+  strip_managed_block "$OVERRIDE_FILE" "$COMPOSE_BEGIN" "$COMPOSE_END" > "$compose_base"
+else
+  : > "$compose_base"
+fi
 
+if grep -Eq '^[[:space:]]+moolias-sender-agent:[[:space:]]*$' "$compose_base"; then
+  rm -f "$compose_base" "$extra_base"
+  die "docker-compose.override.yml already defines moolias-sender-agent outside the managed block."
+fi
+
+agent_compose="$(mktemp "${MAILCOW_DIR}/.moolias-agent-compose.XXXXXX")"
+cat > "$agent_compose" <<EOF
+  ${COMPOSE_BEGIN}
   moolias-sender-agent:
     image: ${MOOLIAS_AGENT_IMAGE}
     user: "10001:10001"
@@ -303,7 +339,7 @@ services:
       - "*"
     volumes:
       - ./data/conf/moolias-sender-agent/state:/state
-      - ./data/conf/moolias-sender-agent/postfix:/postfix-policy
+      - ./data/conf/postfix/moolias-sender-agent:/postfix-policy
     networks:
       - mailcow-network
     read_only: true
@@ -325,49 +361,60 @@ services:
       timeout: 5s
       start_period: 5s
       retries: 3
+  ${COMPOSE_END}
 EOF
-  chmod 0644 "$OVERRIDE_FILE"
-  sha256sum "$OVERRIDE_FILE" | awk '{print $1}' > "$OVERRIDE_HASH"
-  chmod 0600 "$OVERRIDE_HASH"
-fi
 
-if [[ "$manage_sender_map" == true ]]; then
-  tmp_extra="$(mktemp "${POSTFIX_DIR}/.extra.cf.moolias.XXXXXX")"
-  if [[ "$legacy_sender_map" != true ]]; then
-    backup_file "$EXTRA_CF"
-  fi
-  awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v remove_legacy="$legacy_sender_map" '
-    $0 == begin { skip = 1; next }
-    $0 == end { skip = 0; next }
-    skip { next }
-    remove_legacy == "true" && /^[[:space:]]*smtpd_sender_login_maps[[:space:]]*=/ {
-      skip_sender = 1
+compose_new="$(mktemp "${MAILCOW_DIR}/.docker-compose.override.new.XXXXXX")"
+if grep -Eq '^services:[[:space:]]*$' "$compose_base"; then
+  awk -v fragment="$agent_compose" '
+    BEGIN {
+      while ((getline line < fragment) > 0) {
+        block = block line "\n"
+      }
+      close(fragment)
+    }
+    /^services:[[:space:]]*$/ && !inserted {
+      print
+      printf "%s", block
+      inserted = 1
       next
     }
-    skip_sender && /^[[:space:]]+/ { next }
-    skip_sender { skip_sender = 0 }
     { print }
-  ' "$EXTRA_CF" > "$tmp_extra"
-
-  {
-    cat "$tmp_extra"
-    if [[ -s "$tmp_extra" ]]; then
-      echo
-    fi
-    cat <<EOF
-${BEGIN_MARKER}
-# Block selected primary mailbox addresses before Mailcow's normal sender ACL.
-smtpd_sender_login_maps =
-  ${PCRE_MAP},
-  ${SQL_SENDER_MAP}
-${END_MARKER}
-EOF
-  } > "${tmp_extra}.new"
-  chmod --reference="$EXTRA_CF" "${tmp_extra}.new" 2>/dev/null || chmod 0644 "${tmp_extra}.new"
-  chown --reference="$EXTRA_CF" "${tmp_extra}.new" 2>/dev/null || true
-  mv "${tmp_extra}.new" "$EXTRA_CF"
-  rm -f "$tmp_extra"
+  ' "$compose_base" > "$compose_new"
+else
+  cat "$compose_base" > "$compose_new"
+  [[ ! -s "$compose_new" ]] || echo >> "$compose_new"
+  echo "services:" >> "$compose_new"
+  cat "$agent_compose" >> "$compose_new"
 fi
+rm -f "$agent_compose" "$compose_base"
+
+backup_file "$OVERRIDE_FILE"
+chmod 0644 "$compose_new"
+mv "$compose_new" "$OVERRIDE_FILE"
+
+backup_file "$EXTRA_CF"
+extra_new="$(mktemp "${POSTFIX_DIR}/.extra.cf.new.XXXXXX")"
+cat "$extra_base" > "$extra_new"
+rm -f "$extra_base"
+if [[ -s "$extra_new" ]]; then
+  echo >> "$extra_new"
+fi
+{
+  echo "$BEGIN_MARKER"
+  echo "# Moolias rules are evaluated before Mailcow's normal SQL sender ACL."
+  echo "smtpd_sender_login_maps ="
+  if [[ "$legacy_active" == true ]]; then
+    echo "  ${LEGACY_MAP},"
+  fi
+  echo "  ${PCRE_MAP},"
+  echo "  ${SQL_SENDER_MAP}"
+  echo "$END_MARKER"
+} >> "$extra_new"
+chmod --reference="$EXTRA_CF" "$extra_new" 2>/dev/null || chmod 0644 "$extra_new"
+chown --reference="$EXTRA_CF" "$extra_new" 2>/dev/null || true
+mv "$extra_new" "$EXTRA_CF"
+trap - EXIT
 
 backup_file "$NGINX_CUSTOM"
 cat > "$NGINX_CUSTOM" <<EOF
@@ -445,10 +492,9 @@ expected_agent_mounts="$(printf '%s\n' '/postfix-policy true' '/state true' | so
 docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
-# extra.cf, the read-only policy mount and the Postfix hook are consumed while
-# the container starts. Recreate Postfix once so Docker applies the new mount;
-# normal sender toggles do not restart, recreate or reload Postfix.
-docker compose up -d --force-recreate --no-deps postfix-mailcow
+# extra.cf and the Postfix hook are consumed at container startup. No new
+# Postfix mount is required, so a normal one-time restart is sufficient.
+docker compose restart postfix-mailcow
 
 postfix_ready=false
 active_maps=""
@@ -465,9 +511,13 @@ for _ in $(seq 1 30); do
   fi
   sleep 1
 done
-
 [[ "$postfix_ready" == true ]] \
   || die "Postfix did not load the Moolias sender map within 30 seconds."
+
+if [[ "$legacy_active" == true ]]; then
+  grep -Fq "$LEGACY_MAP" <<<"$active_maps" \
+    || die "Postfix did not retain the existing sender map."
+fi
 
 for service in smtps submission 588; do
   max_use="$(
@@ -480,7 +530,7 @@ for service in smtps submission 588; do
 done
 
 docker compose exec -T postfix-mailcow \
-  test -r /opt/moolias-sender-agent/blocked_sender_login.pcre \
+  test -r /opt/postfix/conf/moolias-sender-agent/blocked_sender_login.pcre \
   || die "Postfix cannot read the Moolias sender policy."
 
 cat <<EOF
@@ -497,12 +547,6 @@ By default Moolias uses:
 
 Only set MOOLIAS_SENDER_AGENT_URL when the agent is reachable at a different URL.
 
-The agent:
-  - runs as uid/gid 10001:10001
-  - has no SSH access
-  - has no Docker socket
-  - has no Mailcow API key
-  - keeps private state outside Postfix configuration
-  - renders only a dedicated policy directory that Postfix mounts read-only
-  - does not restart or reload Postfix when users change the toggle
+The agent uses Mailcow's existing Postfix configuration mount. Existing manual
+blocked_sender_login.pcre rules remain separate unless they were explicitly imported.
 EOF
