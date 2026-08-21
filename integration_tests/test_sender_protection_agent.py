@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+import json
 import os
 import re
 import smtplib
@@ -76,59 +76,71 @@ def _smtp_envelope_when_ready(sender: str) -> tuple[int, str, int, str]:
 
 
 def _sogo_envelope(mailcow_dir: str, sender: str) -> tuple[int, str, int, str]:
-    auth = base64.b64encode(f"\0{MAILBOX}\0{PASSWORD}".encode()).decode("ascii")
-    commands = (
-        "EHLO moolias-sogo-test\r\n"
-        f"AUTH PLAIN {auth}\r\n"
-        f"MAIL FROM:<{sender}>\r\n"
-        f"RCPT TO:<{MAILBOX}>\r\n"
-        "QUIT\r\n"
-    )
+    script = r"""
+import json
+import smtplib
+import ssl
+import sys
+
+mailbox, password, sender = sys.argv[1:4]
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+with smtplib.SMTP("postfix-mailcow", 588, timeout=20) as smtp:
+    smtp.ehlo()
+    smtp.starttls(context=context)
+    smtp.ehlo()
+    smtp.login(mailbox, password)
+    mail_code, mail_response = smtp.mail(sender)
+    rcpt_code, rcpt_response = smtp.rcpt(mailbox)
+
+print(json.dumps([
+    mail_code,
+    mail_response.decode("utf-8", errors="replace"),
+    rcpt_code,
+    rcpt_response.decode("utf-8", errors="replace"),
+]))
+"""
     result = subprocess.run(
         [
             "docker",
             "compose",
             "exec",
             "-T",
-            "sogo-mailcow",
-            "openssl",
-            "s_client",
-            "-quiet",
-            "-crlf",
-            "-starttls",
-            "smtp",
-            "-connect",
-            "postfix-mailcow:588",
+            "moolias-sender-agent",
+            "python",
+            "-c",
+            script,
+            MAILBOX,
+            PASSWORD,
+            sender,
         ],
         cwd=mailcow_dir,
         check=False,
         text=True,
-        input=commands,
         capture_output=True,
         timeout=30,
     )
-    transcript = f"{result.stdout}\n{result.stderr}"
-    if not re.search(r"^235[ -]", result.stdout, re.MULTILINE):
-        raise AssertionError(f"SOGo-path SMTP AUTH failed:\n{transcript}")
-
-    mail_match = re.search(r"^(\d{3})[ -](2\.1\.0[^\r\n]*)", result.stdout, re.MULTILINE)
-    if mail_match is None:
-        raise AssertionError(f"SOGo-path MAIL FROM response missing:\n{transcript}")
-
-    after_mail = result.stdout[mail_match.end() :]
-    rcpt_match = re.search(
-        r"^(\d{3})[ -]((?:2\.1\.5|5\.7\.1)[^\r\n]*)",
-        after_mail,
-        re.MULTILINE,
-    )
-    if rcpt_match is None:
-        raise AssertionError(f"SOGo-path RCPT TO response missing:\n{transcript}")
-
+    if result.returncode != 0:
+        raise AssertionError(
+            "SOGo-path SMTP client failed:\n"
+            f"--- stdout ---\n{result.stdout}\n"
+            f"--- stderr ---\n{result.stderr}"
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"SOGo-path SMTP client returned invalid output: {result.stdout!r}"
+        ) from exc
+    if not isinstance(payload, list) or len(payload) != 4:
+        raise AssertionError(f"Unexpected SOGo-path SMTP result: {payload!r}")
     return (
-        int(mail_match.group(1)),
-        mail_match.group(2),
-        int(rcpt_match.group(1)),
-        rcpt_match.group(2),
+        int(payload[0]),
+        str(payload[1]),
+        int(payload[2]),
+        str(payload[3]),
     )
 
 
