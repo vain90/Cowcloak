@@ -11,6 +11,11 @@ from pathlib import Path
 import pytest
 
 
+class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
 def test_documented_curl_bootstrap_completes_outside_mailcow_dir() -> None:
     mailcow_dir = os.environ.get("MAILCOW_DIR")
     if not mailcow_dir:
@@ -18,7 +23,7 @@ def test_documented_curl_bootstrap_completes_outside_mailcow_dir() -> None:
 
     installer = Path(__file__).resolve().parents[1] / "scripts" / "install-mailcow-agent.sh"
     handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler,
+        _QuietHandler,
         directory=str(installer.parent),
     )
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
