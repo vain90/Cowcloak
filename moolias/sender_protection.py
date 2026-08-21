@@ -42,6 +42,10 @@ class SenderAgentAuthenticationError(SenderProtectionError):
     pass
 
 
+class SenderAgentExternalPolicy(SenderProtectionError):
+    pass
+
+
 class SenderAgentCooldown(SenderProtectionError):
     def __init__(self, retry_after: int) -> None:
         super().__init__(f"Sender protection can be changed again in {retry_after} seconds")
@@ -128,6 +132,7 @@ class SenderAgentClient:
             mailbox=str(payload["mailbox"]),
             blocked=bool(payload["blocked"]),
             retry_after=max(0, int(payload.get("retry_after", 0))),
+            managed=bool(payload.get("managed", True)),
         )
 
     async def set_blocked(self, mailbox: str, blocked: bool) -> tuple[AgentProtectionState, bool]:
@@ -140,6 +145,7 @@ class SenderAgentClient:
                 mailbox=str(payload["mailbox"]),
                 blocked=bool(payload["blocked"]),
                 retry_after=max(0, int(payload.get("retry_after", 0))),
+                managed=bool(payload.get("managed", True)),
             ),
             bool(payload.get("changed", False)),
         )
@@ -178,6 +184,10 @@ class SenderAgentClient:
             raise SenderAgentAuthenticationError("Moolias Mailcow Agent authentication failed")
         if response.status_code == 404:
             raise SenderAgentNotInstalled("Moolias Mailcow Agent endpoint was not found")
+        if response.status_code == 409:
+            raise SenderAgentExternalPolicy(
+                "Sender protection is managed by an existing Postfix rule"
+            )
         if response.status_code == 429:
             retry_after = response.headers.get("Retry-After", "1")
             try:
@@ -240,6 +250,7 @@ async def get_sender_protection(request: Request):
         "enabled": True,
         "available": True,
         "blocked": state.blocked,
+        "managed": state.managed,
         "retry_after": state.retry_after,
     }
 
@@ -293,6 +304,11 @@ async def update_sender_protection(request: Request):
                 detail="Sender protection cooldown is active",
                 headers={"Retry-After": str(exc.retry_after)},
             ) from exc
+        except SenderAgentExternalPolicy as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Sender protection is managed by an existing Mailcow rule",
+            ) from exc
         except SenderAgentAuthenticationError as exc:
             raise HTTPException(
                 status_code=502,
@@ -310,6 +326,7 @@ async def update_sender_protection(request: Request):
 
     return {
         "blocked": state.blocked,
+        "managed": state.managed,
         "retry_after": max(
             state.retry_after,
             settings.sender_protection_cooldown_seconds if changed else 0,
