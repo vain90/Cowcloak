@@ -6,6 +6,8 @@ MOOLIAS_AGENT_IMAGE="${MOOLIAS_AGENT_IMAGE:-ghcr.io/vain90/moolias:edge}"
 MOOLIAS_AGENT_COOLDOWN_SECONDS="${MOOLIAS_AGENT_COOLDOWN_SECONDS:-10}"
 
 POSTFIX_DIR="${MAILCOW_DIR}/data/conf/postfix"
+POSTFIX_HOOK_DIR="${MAILCOW_DIR}/data/hooks/postfix"
+POSTFIX_HOOK="${POSTFIX_HOOK_DIR}/moolias-sender-protection.sh"
 NGINX_DIR="${MAILCOW_DIR}/data/conf/nginx"
 AGENT_DIR="${MAILCOW_DIR}/data/conf/moolias-sender-agent"
 STATE_DIR="${POSTFIX_DIR}/moolias"
@@ -18,6 +20,7 @@ AGENT_ENV="${AGENT_DIR}/agent.env"
 BEGIN_MARKER="# BEGIN MOOLIAS SENDER PROTECTION"
 END_MARKER="# END MOOLIAS SENDER PROTECTION"
 OVERRIDE_MARKER="# Managed by the Moolias Mailcow Agent installer."
+HOOK_MARKER="# Managed by Moolias Sender Protection."
 
 die() {
   echo "Moolias Mailcow Agent installer: $*" >&2
@@ -93,7 +96,12 @@ EOF
   fi
 fi
 
+if [[ -e "$POSTFIX_HOOK" ]] && ! grep -Fq "$HOOK_MARKER" "$POSTFIX_HOOK"; then
+  die "${POSTFIX_HOOK} already exists and is not managed by Moolias."
+fi
+
 install -d -m 0755 "$AGENT_DIR"
+install -d -m 0755 "$POSTFIX_HOOK_DIR"
 install -d -m 0755 -o 10001 -g 10001 "$STATE_DIR"
 
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -174,6 +182,22 @@ MOOLIAS_AGENT_STATE_DIR=/state
 MOOLIAS_AGENT_COOLDOWN_SECONDS=${MOOLIAS_AGENT_COOLDOWN_SECONDS}
 EOF
 chmod 0600 "$AGENT_ENV"
+
+backup_file "$POSTFIX_HOOK"
+cat > "$POSTFIX_HOOK" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+${HOOK_MARKER}
+# Postfix caches PCRE maps in smtpd workers. Limit authenticated submission
+# workers to one client connection so the next connection sees policy changes.
+for service in smtps 10465 submission 10587 588; do
+  if /usr/sbin/postconf -c /opt/postfix/conf -M "\${service}/inet" >/dev/null 2>&1; then
+    /usr/sbin/postconf -c /opt/postfix/conf -P "\${service}/inet/max_use=1"
+  fi
+done
+EOF
+chmod 0755 "$POSTFIX_HOOK"
 
 if [[ "$manage_compose_override" == true ]]; then
   backup_file "$OVERRIDE_FILE"
@@ -301,8 +325,9 @@ done
 docker compose exec -T nginx-mailcow nginx -t
 docker compose exec -T nginx-mailcow nginx -s reload
 
-# extra.cf is consumed while the Postfix container starts. The restart is only
-# required by the one-time installation; normal sender toggles do not restart it.
+# extra.cf and the Postfix hook are consumed while the container starts. This
+# restart is only required by the one-time installation; normal sender toggles
+# do not restart or reload Postfix.
 docker compose restart postfix-mailcow
 
 postfix_ready=false
@@ -324,6 +349,16 @@ done
 [[ "$postfix_ready" == true ]] \
   || die "Postfix did not load the Moolias sender map within 30 seconds."
 
+for service in smtps submission 588; do
+  max_use="$(
+    docker compose exec -T postfix-mailcow \
+      postconf -c /opt/postfix/conf -P "${service}/inet/max_use" 2>/dev/null \
+      || true
+  )"
+  grep -Eq '=[[:space:]]*1[[:space:]]*$' <<<"$max_use" \
+    || die "Postfix service ${service}/inet did not load max_use=1 from the Moolias hook."
+done
+
 cat <<EOF
 
 Moolias Mailcow Agent installed successfully.
@@ -343,5 +378,5 @@ The agent:
   - has no Docker socket
   - has no Mailcow API key
   - can write only data/conf/postfix/moolias/
-  - does not restart Postfix when users change the toggle
+  - does not restart or reload Postfix when users change the toggle
 EOF
