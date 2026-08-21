@@ -155,6 +155,17 @@ def _postfix_container_id(mailcow_dir: str) -> str:
     return result.stdout.strip()
 
 
+def _agent_container_id(mailcow_dir: str) -> str:
+    result = subprocess.run(
+        ["docker", "compose", "ps", "-q", "moolias-sender-agent"],
+        cwd=mailcow_dir,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return result.stdout.strip()
+
+
 def _postfix_map_query(mailcow_dir: str, mailbox: str) -> tuple[str, str]:
     lookup_result = subprocess.run(
         [
@@ -226,14 +237,20 @@ def _prepare_legacy_sender_block(mailcow_dir: str) -> None:
     )
 
 
-def _install_agent(mailcow_dir: str) -> str:
-    image = os.environ.get("MOOLIAS_AGENT_IMAGE", "moolias:sender-agent-ci")
+def _installer_env(mailcow_dir: str) -> dict[str, str]:
     env = os.environ.copy()
     env["MAILCOW_DIR"] = mailcow_dir
-    env["MOOLIAS_AGENT_IMAGE"] = image
+    env["MOOLIAS_AGENT_IMAGE"] = os.environ.get(
+        "MOOLIAS_AGENT_IMAGE",
+        "moolias:sender-agent-ci",
+    )
     env["MOOLIAS_AGENT_COOLDOWN_SECONDS"] = "1"
+    return env
 
-    result = subprocess.run(
+
+def _run_installer(mailcow_dir: str) -> subprocess.CompletedProcess[str]:
+    env = _installer_env(mailcow_dir)
+    return subprocess.run(
         [
             "sudo",
             "--preserve-env=MAILCOW_DIR,MOOLIAS_AGENT_IMAGE,MOOLIAS_AGENT_COOLDOWN_SECONDS",
@@ -245,6 +262,10 @@ def _install_agent(mailcow_dir: str) -> str:
         capture_output=True,
         env=env,
     )
+
+
+def _install_agent(mailcow_dir: str) -> str:
+    result = _run_installer(mailcow_dir)
     if result.returncode != 0:
         raise AssertionError(
             "Moolias Mailcow Agent installer failed:\n"
@@ -309,6 +330,55 @@ def _assert_postfix_policy_is_read_only(mailcow_dir: str) -> None:
     assert old_config_tree.returncode != 0
 
 
+def _assert_agent_runtime_hardening(mailcow_dir: str) -> None:
+    container_id = _agent_container_id(mailcow_dir)
+    assert container_id
+
+    result = subprocess.run(
+        ["docker", "inspect", container_id],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    inspected = json.loads(result.stdout)
+    assert isinstance(inspected, list) and len(inspected) == 1
+    container = inspected[0]
+
+    assert container["Config"]["User"] == "10001:10001"
+    host_config = container["HostConfig"]
+    assert host_config["ReadonlyRootfs"] is True
+    assert "ALL" in (host_config.get("CapDrop") or [])
+    assert any(
+        value.startswith("no-new-privileges")
+        for value in (host_config.get("SecurityOpt") or [])
+    )
+    assert not host_config.get("PortBindings")
+
+    mounts = {mount["Destination"]: mount for mount in container.get("Mounts", [])}
+    assert set(mounts) == {"/state", "/postfix-policy"}, mounts
+    assert mounts["/state"]["RW"] is True
+    assert mounts["/postfix-policy"]["RW"] is True
+    assert "/var/run/docker.sock" not in mounts
+
+
+def _assert_modified_managed_override_is_not_overwritten(mailcow_dir: str) -> None:
+    override_file = os.path.join(mailcow_dir, "docker-compose.override.yml")
+    marker = "# administrator custom change that must survive\n"
+    subprocess.run(
+        ["sudo", "tee", "-a", override_file],
+        input=marker,
+        check=True,
+        text=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+    rerun = _run_installer(mailcow_dir)
+    assert rerun.returncode != 0, rerun.stdout
+    assert "was changed after Moolias created it" in rerun.stderr
+    with open(override_file, encoding="utf-8") as handle:
+        assert marker.strip() in handle.read()
+
+
 async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() -> None:
     base_url = os.environ.get("MAILCOW_URL")
     api_key = os.environ.get("MAILCOW_API_KEY")
@@ -318,6 +388,7 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
 
     _prepare_legacy_sender_block(mailcow_dir)
     secret = _install_agent(mailcow_dir)
+    _assert_agent_runtime_hardening(mailcow_dir)
 
     async with httpx.AsyncClient(
         base_url=base_url,
@@ -513,3 +584,5 @@ async def test_bootstrap_agent_blocks_primary_sender_on_submission_and_sogo() ->
         capture_output=True,
     ).stdout
     assert "not owned by root: /opt/postfix/conf/./moolias" not in postfix_logs
+
+    _assert_modified_managed_override_is_not_overwritten(mailcow_dir)
