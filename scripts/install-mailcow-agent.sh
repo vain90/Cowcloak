@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Parse the complete installer before executing Docker commands. When this script
+# is supplied through stdin (for example, curl | bash), child processes must not
+# be able to consume installer bytes that Bash has not parsed yet.
+main() {
 MAILCOW_DIR="${MAILCOW_DIR:-/opt/mailcow-dockerized}"
 MOOLIAS_AGENT_IMAGE="${MOOLIAS_AGENT_IMAGE:-ghcr.io/vain90/moolias:edge}"
 MOOLIAS_AGENT_COOLDOWN_SECONDS="${MOOLIAS_AGENT_COOLDOWN_SECONDS:-10}"
@@ -597,3 +601,6 @@ blocked_sender_login.pcre rules remain separate unless they were explicitly impo
 
 ============================================================
 EOF
+}
+
+main "$@"
