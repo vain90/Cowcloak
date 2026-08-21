@@ -42,7 +42,7 @@ async def _post_success(
         raise AssertionError(f"Mailcow {path} did not report success: {body!r}")
 
 
-def _smtp_mail_from(sender: str) -> tuple[int, str]:
+def _smtp_envelope(sender: str) -> tuple[int, str, int, str]:
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
@@ -52,15 +52,21 @@ def _smtp_mail_from(sender: str) -> tuple[int, str]:
         smtp.starttls(context=context)
         smtp.ehlo()
         smtp.login(MAILBOX, PASSWORD)
-        code, response = smtp.mail(sender)
-        return code, response.decode("utf-8", errors="replace")
+        mail_code, mail_response = smtp.mail(sender)
+        rcpt_code, rcpt_response = smtp.rcpt(MAILBOX)
+        return (
+            mail_code,
+            mail_response.decode("utf-8", errors="replace"),
+            rcpt_code,
+            rcpt_response.decode("utf-8", errors="replace"),
+        )
 
 
-def _smtp_mail_from_when_ready(sender: str) -> tuple[int, str]:
+def _smtp_envelope_when_ready(sender: str) -> tuple[int, str, int, str]:
     last_error: Exception | None = None
     for _ in range(30):
         try:
-            return _smtp_mail_from(sender)
+            return _smtp_envelope(sender)
         except (OSError, smtplib.SMTPException) as exc:
             last_error = exc
             time.sleep(1)
@@ -239,10 +245,12 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
             },
         )
 
-    baseline_primary = _smtp_mail_from_when_ready(MAILBOX)
-    baseline_alias = _smtp_mail_from_when_ready(ALIAS)
+    baseline_primary = _smtp_envelope_when_ready(MAILBOX)
+    baseline_alias = _smtp_envelope_when_ready(ALIAS)
     assert baseline_primary[0] == 250, baseline_primary
+    assert baseline_primary[2] == 250, baseline_primary
     assert baseline_alias[0] == 250, baseline_alias
+    assert baseline_alias[2] == 250, baseline_alias
 
     public_agent_url = f"{base_url.rstrip('/')}/moolias-agent"
 
@@ -325,10 +333,14 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
             f"Postfix PCRE lookup returned {lookup!r}; rendered map:\n{rendered}"
         )
 
-        blocked_primary = _smtp_mail_from_when_ready(MAILBOX)
-        allowed_alias = _smtp_mail_from_when_ready(ALIAS)
-        assert blocked_primary[0] >= 500, blocked_primary
+        blocked_primary = _smtp_envelope_when_ready(MAILBOX)
+        allowed_alias = _smtp_envelope_when_ready(ALIAS)
+        # Mailcow keeps smtpd_delay_reject enabled, so sender restrictions are
+        # evaluated at RCPT TO rather than at MAIL FROM.
+        assert blocked_primary[0] == 250, blocked_primary
+        assert blocked_primary[2] >= 500, blocked_primary
         assert allowed_alias[0] == 250, allowed_alias
+        assert allowed_alias[2] == 250, allowed_alias
         assert _postfix_container_id(mailcow_dir) == postfix_id
 
         time.sleep(1.1)
@@ -341,6 +353,7 @@ async def test_bootstrap_agent_blocks_only_primary_sender_without_runtime_restar
             f"Postfix PCRE lookup still returned {lookup!r}; rendered map:\n{rendered}"
         )
 
-    allowed_primary = _smtp_mail_from_when_ready(MAILBOX)
+    allowed_primary = _smtp_envelope_when_ready(MAILBOX)
     assert allowed_primary[0] == 250, allowed_primary
+    assert allowed_primary[2] == 250, allowed_primary
     assert _postfix_container_id(mailcow_dir) == postfix_id
