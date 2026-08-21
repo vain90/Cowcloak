@@ -51,19 +51,34 @@ def test_stale_poll_default_is_three_and_configurable():
     assert custom.usage_stale_polls == 5
 
 
-def test_collector_health_assets_cover_german_and_english_ui():
+def test_collector_health_assets_keep_the_dashboard_compact():
     script = (ROOT / "moolias/static/collector-health.js").read_text()
     base = (ROOT / "moolias/templates/base.html").read_text()
 
     assert "Puffer niedrig" in script
     assert "mögliche Lücke" in script
-    assert "low headroom" in script
+    assert "low buffer" in script
     assert "possible gap" in script
-    assert "3 Einträge geprüft" in script
-    assert "3 entries checked" in script
-    assert "healthy-probe" in script
-    assert "letzten vollständigen Historienfenster" in script
-    assert "last full adaptive history window" in script
-    assert "not CPU or server utilization" in script
+    assert "History-Puffer" in script
+    assert "History buffer" in script
+    assert "History-Abruf" in script
+    assert "History fetch" in script
+    assert "3 Einträge geprüft · unverändert" in script
+    assert "3 entries checked · unchanged" in script
+    assert "history_buffer_percent" in script
+
+    assert "Vorheriger Watermark" not in script
+    assert "Previous watermark" not in script
+    assert "Aktueller Watermark" not in script
+    assert "Current watermark" not in script
+    assert "Ältester Eintrag" not in script
+    assert "Oldest entry" not in script
+    assert "Neuester Eintrag" not in script
+    assert "Newest entry" not in script
+    assert "Dauer des letzten Laufs" not in script
+    assert "Last collection duration" not in script
+    assert "Veraltet nach" not in script
+    assert "Stale after" not in script
+
     assert "/static/collector-health.js" in base
     assert "/static/collector-health.css" in base
