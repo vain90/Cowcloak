@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-UPDATER_VERSION="0.1.1"
+UPDATER_VERSION="0.1.2"
 REPOSITORY="vain90/Moolias"
 IMAGE="ghcr.io/vain90/moolias"
 LATEST_RELEASE_URL="https://github.com/${REPOSITORY}/releases/latest"
@@ -118,10 +118,9 @@ else
 fi
 
 self_update() {
-  local remote_url tmp_file backup_file source_label
+  local remote_url tmp_file source_label
   remote_url="${RAW_BASE_URL}/${SELF_UPDATE_REF}/update.sh"
   tmp_file="$(mktemp)"
-  backup_file="${SCRIPT_PATH}.previous"
   source_label="${SELF_UPDATE_REF}"
   trap 'rm -f "${tmp_file}"' RETURN
 
@@ -134,11 +133,13 @@ self_update() {
     die "Downloaded updater from ${source_label} failed syntax validation"
   fi
 
+  # Older updater versions created this unused backup next to the script.
+  rm -f "${SCRIPT_PATH}.previous"
+
   if cmp -s "${SCRIPT_PATH}" "${tmp_file}"; then
     return 0
   fi
 
-  cp -a "${SCRIPT_PATH}" "${backup_file}"
   install -m 0755 "${tmp_file}" "${SCRIPT_PATH}"
   log "Updater refreshed from ${source_label}. Restarting..."
   exec "${SCRIPT_PATH}" --skip-self-update "${ORIGINAL_ARGS[@]}"
