@@ -79,3 +79,32 @@ def test_service_icon_picker_shows_logos_search_and_updates_alias(
         "/static/service-icons.svg#service-paypal",
     )
     expect(trigger).to_contain_text("PayPal")
+
+
+def test_generated_service_logo_renders_from_local_sprite(page: Page, base_url: str) -> None:
+    _login(page, base_url)
+
+    amazon_row = _alias_row(page, "amazon-k7@example.org")
+    amazon_row.locator("details.alias-edit-action > summary").click()
+    trigger = amazon_row.locator("[data-icon-picker-trigger]")
+    expect(trigger).to_be_visible(timeout=5000)
+    trigger.click()
+
+    dialog = page.locator("dialog[data-service-icon-picker-dialog]")
+    search = dialog.locator("[data-icon-picker-search]")
+    search.fill("Lufthansa")
+    lufthansa = dialog.locator('[data-icon-picker-option="lufthansa"]')
+    expect(lufthansa).to_be_visible()
+    expect(dialog.locator("[data-icon-picker-option]:visible")).to_have_count(1)
+    lufthansa.click()
+
+    expect(dialog).not_to_be_visible(timeout=5000)
+    badge = _service_badge(page, "amazon-k7@example.org")
+    logo = badge.locator("svg.service-logo")
+    expect(logo.locator("use")).to_have_attribute(
+        "href",
+        "/static/service-icons.generated.svg#service-lufthansa",
+    )
+    assert logo.evaluate(
+        "element => { const box = element.getBBox(); return box.width > 0 && box.height > 0; }"
+    )
