@@ -64,10 +64,11 @@ def test_sender_protection_lives_in_settings_and_updates_overview(
     expect(protection).to_be_visible()
 
     switch = protection.locator('input[role="switch"]')
+    switch_control = protection.locator(".switch-control")
     expect(switch).not_to_be_checked()
     expect(protection.locator("[data-sender-protection-state]")).to_have_text("Not protected")
 
-    switch.check()
+    switch_control.click()
 
     expect(switch).to_be_checked()
     expect(switch).to_be_disabled()
@@ -84,9 +85,11 @@ def test_sender_protection_lives_in_settings_and_updates_overview(
 
     page.locator('[data-open-settings-section="protection"]').first.click()
     settings_drawer = page.locator("[data-settings-drawer]")
-    switch = settings_drawer.locator('input[role="switch"]')
+    protection = settings_drawer.locator("[data-sender-protection-settings]")
+    switch = protection.locator('input[role="switch"]')
+    switch_control = protection.locator(".switch-control")
     expect(switch).to_be_checked()
-    switch.uncheck()
+    switch_control.click()
 
     expect(switch).not_to_be_checked()
     expect(page.locator("[data-primary-protection-state]")).to_have_text("Not protected")
