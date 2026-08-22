@@ -51,7 +51,7 @@
       <div><span class="detection-dot unresolved"></span><span>{% if language == 'de' %}Nicht erkannt{% else %}Not detected{% endif %}</span><strong>{{ stats_summary.unrecognized_senders }}</strong><small>{{ stats_summary.unrecognized_messages }} {% if language == 'de' %}Nachrichten{% else %}messages{% endif %}</small></div>
     </div>
     {% if unexpected_aliases %}
-    <a class="button compact top-gap" href="/aliases?status=unexpected">{{ unexpected_aliases|length }} {% if language == 'de' %}auffällige Aliase prüfen{% else %}aliases to review{% endif %}</a>
+    <a class="button compact top-gap" href="/aliases?status=unexpected">{{ unexpected_aliases|length }} {% if language == 'de' %}nicht erkannte Aliase prüfen{% else %}unrecognized aliases to review{% endif %}</a>
     {% endif %}
     {% else %}
     <div class="overview-empty"><strong>{% if language == 'de' %}Mehr Details sind verfügbar{% else %}More detail is available{% endif %}</strong><p class="muted">{% if language == 'de' %}Die automatische Absender-Erkennung wird in den Statistikmodi „Domain“ und „Vollständig“ ausgewertet.{% else %}Automatic sender detection is evaluated in Domain and Full statistics modes.{% endif %}</p><button class="button compact" type="button" data-open-settings>{% if language == 'de' %}Modus ändern{% else %}Change mode{% endif %}</button></div>
