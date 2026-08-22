@@ -11,40 +11,44 @@ class ServiceIcon:
     glyph: str
     tone: str
     keywords: tuple[str, ...] = ()
+    has_logo: bool = False
 
 
 _GENERIC = ServiceIcon("generic", "Allgemein", "?", "neutral")
 
+# Only enable a real logo when a local asset is bundled with Moolias. Brands that
+# Simple Icons marks as forbidden or whose usage is still unclear intentionally
+# keep the neutral monogram fallback.
 SERVICE_ICONS: tuple[ServiceIcon, ...] = (
     ServiceIcon("amazon", "Amazon", "A", "orange", ("amazon", "aws")),
-    ServiceIcon("apple", "Apple", "A", "dark", ("apple", "icloud", "appstore")),
-    ServiceIcon("booking", "Booking.com", "B", "blue", ("booking", "bookingcom")),
-    ServiceIcon("discord", "Discord", "D", "violet", ("discord",)),
-    ServiceIcon("dropbox", "Dropbox", "D", "blue", ("dropbox",)),
-    ServiceIcon("ebay", "eBay", "e", "multi", ("ebay",)),
-    ServiceIcon("facebook", "Facebook", "f", "blue", ("facebook", "meta")),
-    ServiceIcon("github", "GitHub", "G", "dark", ("github",)),
-    ServiceIcon("gitlab", "GitLab", "G", "orange", ("gitlab",)),
-    ServiceIcon("google", "Google", "G", "multi", ("google", "gmail", "youtube")),
-    ServiceIcon("instagram", "Instagram", "I", "pink", ("instagram",)),
+    ServiceIcon("apple", "Apple", "A", "dark", ("apple", "icloud", "appstore"), True),
+    ServiceIcon("booking", "Booking.com", "B", "blue", ("booking", "bookingcom"), True),
+    ServiceIcon("discord", "Discord", "D", "violet", ("discord",), True),
+    ServiceIcon("dropbox", "Dropbox", "D", "blue", ("dropbox",), True),
+    ServiceIcon("ebay", "eBay", "e", "multi", ("ebay",), True),
+    ServiceIcon("facebook", "Facebook", "f", "blue", ("facebook", "meta"), True),
+    ServiceIcon("github", "GitHub", "G", "dark", ("github",), True),
+    ServiceIcon("gitlab", "GitLab", "G", "orange", ("gitlab",), True),
+    ServiceIcon("google", "Google", "G", "multi", ("google", "gmail", "youtube"), True),
+    ServiceIcon("instagram", "Instagram", "I", "pink", ("instagram",), True),
     ServiceIcon("linkedin", "LinkedIn", "in", "blue", ("linkedin",)),
     ServiceIcon("microsoft", "Microsoft", "M", "blue", ("microsoft", "office", "outlook", "azure")),
-    ServiceIcon("netflix", "Netflix", "N", "red", ("netflix",)),
-    ServiceIcon("notion", "Notion", "N", "dark", ("notion",)),
+    ServiceIcon("netflix", "Netflix", "N", "red", ("netflix",), True),
+    ServiceIcon("notion", "Notion", "N", "dark", ("notion",), True),
     ServiceIcon("openai", "OpenAI", "O", "teal", ("openai", "chatgpt")),
-    ServiceIcon("paypal", "PayPal", "P", "blue", ("paypal",)),
-    ServiceIcon("reddit", "Reddit", "r", "orange", ("reddit",)),
-    ServiceIcon("signal", "Signal", "S", "blue", ("signal",)),
+    ServiceIcon("paypal", "PayPal", "P", "blue", ("paypal",), True),
+    ServiceIcon("reddit", "Reddit", "r", "orange", ("reddit",), True),
+    ServiceIcon("signal", "Signal", "S", "blue", ("signal",), True),
     ServiceIcon("slack", "Slack", "S", "multi", ("slack",)),
-    ServiceIcon("spotify", "Spotify", "S", "green", ("spotify",)),
-    ServiceIcon("steam", "Steam", "S", "blue", ("steam",)),
-    ServiceIcon("stripe", "Stripe", "S", "violet", ("stripe",)),
-    ServiceIcon("telegram", "Telegram", "T", "blue", ("telegram",)),
-    ServiceIcon("tiktok", "TikTok", "T", "dark", ("tiktok",)),
-    ServiceIcon("twitch", "Twitch", "T", "violet", ("twitch",)),
-    ServiceIcon("x", "X / Twitter", "X", "dark", ("twitter", "xcom")),
-    ServiceIcon("zalando", "Zalando", "Z", "orange", ("zalando",)),
-    ServiceIcon("zoom", "Zoom", "Z", "blue", ("zoom",)),
+    ServiceIcon("spotify", "Spotify", "S", "green", ("spotify",), True),
+    ServiceIcon("steam", "Steam", "S", "blue", ("steam",), True),
+    ServiceIcon("stripe", "Stripe", "S", "violet", ("stripe",), True),
+    ServiceIcon("telegram", "Telegram", "T", "blue", ("telegram",), True),
+    ServiceIcon("tiktok", "TikTok", "T", "dark", ("tiktok",), True),
+    ServiceIcon("twitch", "Twitch", "T", "violet", ("twitch",), True),
+    ServiceIcon("x", "X / Twitter", "X", "dark", ("twitter", "xcom"), True),
+    ServiceIcon("zalando", "Zalando", "Z", "orange", ("zalando",), True),
+    ServiceIcon("zoom", "Zoom", "Z", "blue", ("zoom",), True),
 )
 
 _ICON_BY_KEY = {icon.key: icon for icon in SERVICE_ICONS}
