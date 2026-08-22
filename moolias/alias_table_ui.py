@@ -87,16 +87,21 @@ async def aliases_page(
         purpose_key, address_key = purpose(alias)
         return (rank, purpose_key, address_key)
 
-    if sort == "purpose":
-        sort_key = purpose
-    elif sort == "status":
-        sort_key = status_rank
-    elif sort == "usage":
-        sort_key = lambda alias: (usage_total(alias), last_used(alias), *purpose(alias))
-    else:
-        sort_key = lambda alias: (last_used(alias), usage_total(alias), *purpose(alias))
+    def usage_sort_key(alias) -> tuple[int, int, str, str]:
+        purpose_key, address_key = purpose(alias)
+        return (usage_total(alias), last_used(alias), purpose_key, address_key)
 
-    filtered.sort(key=sort_key, reverse=direction == "desc")
+    def last_used_sort_key(alias) -> tuple[int, int, str, str]:
+        purpose_key, address_key = purpose(alias)
+        return (last_used(alias), usage_total(alias), purpose_key, address_key)
+
+    sort_keys = {
+        "purpose": purpose,
+        "status": status_rank,
+        "usage": usage_sort_key,
+        "last_used": last_used_sort_key,
+    }
+    filtered.sort(key=sort_keys[sort], reverse=direction == "desc")
 
     filtered_total = len(filtered)
     total_pages = max(1, (filtered_total + per_page - 1) // per_page)
