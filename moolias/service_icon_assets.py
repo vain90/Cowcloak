@@ -23,7 +23,6 @@ EXTRA_SERVICE_ICON_SLUGS: dict[str, str] = {
     "fiverr": "fiverr",
     "gitea": "gitea",
     "glassdoor": "glassdoor",
-    "heroku": "heroku",
     "ikea": "ikea",
     "kickstarter": "kickstarter",
     "lastpass": "lastpass",
@@ -52,7 +51,6 @@ EXTRA_SERVICE_ICON_SLUGS: dict[str, str] = {
     "stackoverflow": "stackoverflow",
     "strava": "strava",
     "teamviewer": "teamviewer",
-    "temu": "temu",
     "threads": "threads",
     "trello": "trello",
     "tripadvisor": "tripadvisor",
@@ -90,14 +88,12 @@ def _symbol_from_svg(key: str, svg: str) -> str:
         if _local_name(child.tag) == "title":
             continue
         _strip_namespaces(child)
+        child.set("fill", "currentColor")
         children.append(ElementTree.tostring(child, encoding="unicode", short_empty_elements=True))
     if not children:
         raise RuntimeError(f"Simple Icons asset {key!r} did not contain drawable SVG content")
     body = "".join(children)
-    return (
-        f'<symbol id="service-{key}" viewBox="{view_box}" fill="currentColor">'
-        f"{body}</symbol>"
-    )
+    return f'<symbol id="service-{key}" viewBox="{view_box}">{body}</symbol>'
 
 
 def build_service_icon_sprite(output_path: Path = DEFAULT_OUTPUT_PATH) -> Path:
