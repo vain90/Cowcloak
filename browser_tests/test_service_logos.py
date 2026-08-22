@@ -11,6 +11,10 @@ def _alias_row(page: Page, address: str):
     )
 
 
+def _service_badge(page: Page, address: str):
+    return _alias_row(page, address).locator("[data-service-icon-for]")
+
+
 def _login(page: Page, base_url: str) -> None:
     page.goto(f"{base_url}/oauth/callback?code=e2e&state=e2e")
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"))
@@ -19,7 +23,7 @@ def _login(page: Page, base_url: str) -> None:
 def test_bundled_service_logo_and_restricted_fallback(page: Page, base_url: str) -> None:
     _login(page, base_url)
 
-    github_badge = _alias_row(page, "github-m4@example.org").locator(".service-badge")
+    github_badge = _service_badge(page, "github-m4@example.org")
     github_svg = github_badge.locator("svg.service-logo")
     github_logo = github_svg.locator("use")
     expect(github_logo).to_have_count(1)
@@ -31,7 +35,7 @@ def test_bundled_service_logo_and_restricted_fallback(page: Page, base_url: str)
         "element => { const box = element.getBBox(); return box.width > 0 && box.height > 0; }"
     )
 
-    amazon_badge = _alias_row(page, "amazon-k7@example.org").locator(".service-badge")
+    amazon_badge = _service_badge(page, "amazon-k7@example.org")
     expect(amazon_badge.locator("svg.service-logo")).to_have_count(0)
     expect(amazon_badge).to_have_text("A")
 
@@ -69,7 +73,7 @@ def test_service_icon_picker_shows_logos_search_and_updates_alias(
     expect(dialog).not_to_be_visible(timeout=5000)
     expect(select).to_have_value("paypal")
 
-    amazon_badge = amazon_row.locator(".service-badge")
+    amazon_badge = _service_badge(page, "amazon-k7@example.org")
     expect(amazon_badge.locator("svg.service-logo use")).to_have_attribute(
         "href",
         "/static/service-icons.svg#service-paypal",
