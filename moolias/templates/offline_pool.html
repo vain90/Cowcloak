@@ -25,7 +25,7 @@
       <form method="post" action="/offline-pool/create">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="count" value="{{ amount }}">
-        <button class="button compact {% if amount == 1 %}primary{% endif %}" type="submit">+{{ amount }}</button>
+        <button class="button compact" type="submit">+{{ amount }}</button>
       </form>
       {% endfor %}
     </div>
@@ -112,10 +112,11 @@
       {% endif %}
     </div>
     {% endif %}
-    <label>{{ t.purpose }}<input name="description" maxlength="160" required placeholder="{{ t.used_for_placeholder }}"></label>
+    <label>{% if language == 'de' %}Alias Name / Zweck{% else %}Alias name / purpose{% endif %}<input name="description" maxlength="160" required placeholder="{{ t.used_for_placeholder }}"></label>
     <label class="check-row"><input type="checkbox" name="sogo_visible" value="1"><span>{{ t.show_in_sogo }}</span></label>
     <button class="button primary" type="submit">{{ t.assign }}</button>
   </form>
 </dialog>
 {% endfor %}
+<script src="/static/pool-inline-assign.js?v=20260822-1" defer></script>
 {% endblock %}
