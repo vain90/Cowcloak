@@ -1,5 +1,3 @@
-import re
-
 from playwright.sync_api import Page, expect
 
 
@@ -8,7 +6,7 @@ UNUSED_POOL = "feder-hafen-27@example.org"
 
 def _login(page: Page, base_url: str) -> None:
     page.goto(f"{base_url}/oauth/callback?code=e2e&state=e2e")
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"))
+    expect(page).to_have_url(f"{base_url}/aliases")
 
 
 def test_offline_pool_uses_neutral_create_buttons_and_inline_assignment(
