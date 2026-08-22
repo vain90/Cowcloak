@@ -7,6 +7,87 @@
   const accountPopover = document.querySelector("[data-account-popover]");
   const sidebar = document.querySelector("[data-app-sidebar]");
 
+  const serviceLogoKeys = new Set([
+    "apple",
+    "booking",
+    "discord",
+    "dropbox",
+    "ebay",
+    "facebook",
+    "github",
+    "gitlab",
+    "google",
+    "instagram",
+    "netflix",
+    "notion",
+    "paypal",
+    "reddit",
+    "signal",
+    "spotify",
+    "steam",
+    "stripe",
+    "telegram",
+    "tiktok",
+    "twitch",
+    "x",
+    "zalando",
+    "zoom",
+  ]);
+  const serviceLogoKeysByLabel = new Map([
+    ["Apple", "apple"],
+    ["Booking.com", "booking"],
+    ["Discord", "discord"],
+    ["Dropbox", "dropbox"],
+    ["eBay", "ebay"],
+    ["Facebook", "facebook"],
+    ["GitHub", "github"],
+    ["GitLab", "gitlab"],
+    ["Google", "google"],
+    ["Instagram", "instagram"],
+    ["Netflix", "netflix"],
+    ["Notion", "notion"],
+    ["PayPal", "paypal"],
+    ["Reddit", "reddit"],
+    ["Signal", "signal"],
+    ["Spotify", "spotify"],
+    ["Steam", "steam"],
+    ["Stripe", "stripe"],
+    ["Telegram", "telegram"],
+    ["TikTok", "tiktok"],
+    ["Twitch", "twitch"],
+    ["X / Twitter", "x"],
+    ["Zalando", "zalando"],
+    ["Zoom", "zoom"],
+  ]);
+
+  const renderServiceBadge = (badge, key, glyph) => {
+    if (!badge) return;
+    const fallback = glyph || badge.dataset.serviceIconGlyph || badge.textContent.trim() || "?";
+    badge.dataset.serviceIconGlyph = fallback;
+    badge.dataset.serviceIconKey = key || "generic";
+    badge.replaceChildren();
+
+    if (!key || !serviceLogoKeys.has(key)) {
+      badge.textContent = fallback;
+      return;
+    }
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("service-logo");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `/static/service-icons.svg#service-${key}`);
+    svg.append(use);
+    badge.append(svg);
+  };
+
+  document.querySelectorAll(".service-badge").forEach((badge) => {
+    const key = badge.dataset.serviceIconKey || serviceLogoKeysByLabel.get(badge.title) || null;
+    renderServiceBadge(badge, key, badge.textContent.trim());
+  });
+
   const openDrawer = (section = null) => {
     if (!drawer) return;
     drawer.classList.add("open");
@@ -124,8 +205,8 @@
       .filter((className) => className.startsWith("tone-"))
       .forEach((className) => badge.classList.remove(className));
     badge.classList.add(`tone-${icon.tone || "neutral"}`);
-    badge.textContent = icon.glyph || "?";
     badge.title = icon.label || "";
+    renderServiceBadge(badge, icon.key, icon.glyph || "?");
   };
 
   document.querySelectorAll("[data-alias-icon-select]").forEach((select) => {
