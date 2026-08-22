@@ -21,22 +21,28 @@
   const german = (document.documentElement.lang || "").toLowerCase().startsWith("de");
   const text = german
     ? {
-        title: "Dienstsymbol auswählen",
+        title: "Alias-Logo auswählen",
+        aliasLogo: "Alias-Logo",
+        aliasPurpose: "Alias Name / Zweck",
         search: "Logo suchen…",
         close: "Schließen",
-        automatic: "Automatisch erkannt",
-        manual: "Manuell ausgewählt",
         noResults: "Keine passenden Logos gefunden.",
-        results: (count) => `${count} ${count === 1 ? "Treffer" : "Treffer"}`,
+        results: (count) => `${count} Treffer`,
+        replace: "Alias ersetzen",
+        disable: "Alias deaktivieren",
+        enable: "Alias aktivieren",
       }
     : {
-        title: "Choose service icon",
+        title: "Choose alias logo",
+        aliasLogo: "Alias logo",
+        aliasPurpose: "Alias name / purpose",
         search: "Search logos…",
         close: "Close",
-        automatic: "Detected automatically",
-        manual: "Selected manually",
         noResults: "No matching logos found.",
         results: (count) => `${count} ${count === 1 ? "result" : "results"}`,
+        replace: "Replace alias",
+        disable: "Disable alias",
+        enable: "Enable alias",
       };
 
   const optionSource = selects[0];
@@ -86,7 +92,10 @@
         <button class="dialog-close" type="button" aria-label="${text.close}" data-icon-picker-close>×</button>
       </header>
       <div class="service-icon-picker-search">
-        <span aria-hidden="true">⌕</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="6.5"></circle>
+          <path d="m16 16 4 4"></path>
+        </svg>
         <input type="search" autocomplete="off" placeholder="${text.search}" aria-label="${text.search}" data-icon-picker-search>
       </div>
       <div class="service-icon-picker-grid" data-icon-picker-grid></div>
@@ -163,26 +172,26 @@
     if (!trigger) return;
     const badge = badgeFor(select);
     const preview = trigger.querySelector("[data-icon-picker-preview]");
-    const name = trigger.querySelector("[data-icon-picker-current-name]");
-    const mode = trigger.querySelector("[data-icon-picker-current-mode]");
-    if (!preview || !name || !mode) return;
+    if (!preview) return;
 
     preview.replaceChildren();
     preview.className = "service-badge service-icon-picker-current-mark";
 
+    let currentName = select.selectedOptions[0]?.textContent?.trim() || text.aliasLogo;
     if (badge) {
       [...badge.classList]
         .filter((className) => className.startsWith("tone-"))
         .forEach((className) => preview.classList.add(className));
       [...badge.childNodes].forEach((node) => preview.append(node.cloneNode(true)));
-      name.textContent = badge.title || select.selectedOptions[0]?.textContent || "";
+      currentName = badge.title || currentName;
     } else {
       const selected = iconOptions.find((option) => option.key === select.value);
       preview.append(createLogo(select.value, selected?.label || "?"));
-      name.textContent = selected?.label || "";
+      currentName = selected?.label || currentName;
     }
 
-    mode.textContent = select.value === "auto" ? text.automatic : text.manual;
+    trigger.setAttribute("aria-label", `${text.aliasLogo}: ${currentName}`);
+    trigger.title = `${text.aliasLogo}: ${currentName}`;
   };
 
   const waitForSave = (select) => {
@@ -227,10 +236,56 @@
     window.requestAnimationFrame(() => search.focus());
   };
 
+  const replaceLabelText = (label, value) => {
+    if (!label) return;
+    [...label.childNodes]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .forEach((node) => node.remove());
+    let caption = label.querySelector(":scope > span.alias-field-caption");
+    if (!caption) {
+      caption = document.createElement("span");
+      caption.className = "alias-field-caption";
+      label.prepend(caption);
+    }
+    caption.textContent = value;
+  };
+
+  const polishEditPanel = (select) => {
+    const panel = select.closest(".edit-panel");
+    const iconPreference = select.closest(".icon-preference");
+    if (!panel || !iconPreference) return;
+
+    iconPreference.querySelector(".hint")?.remove();
+    panel.prepend(iconPreference);
+
+    const description = panel.querySelector('form[action$="/metadata"] input[name="description"]');
+    replaceLabelText(description?.closest("label"), text.aliasPurpose);
+
+    const replaceButton = panel.querySelector("[data-replace-alias]");
+    const toggleForm = panel.querySelector(".alias-toggle-action");
+    const toggleButton = toggleForm?.querySelector("button");
+    const aliasRow = panel.closest(".alias-row");
+    const active = aliasRow?.querySelector("[data-alias-select]")?.dataset.active !== "0";
+
+    if (replaceButton) {
+      const previous = replaceButton.previousElementSibling;
+      if (previous?.matches(".hint")) previous.remove();
+      replaceButton.textContent = text.replace;
+      replaceButton.className = "button compact alias-replace-action";
+      if (toggleForm) toggleForm.insertAdjacentElement("beforebegin", replaceButton);
+    }
+
+    if (toggleButton) {
+      toggleButton.textContent = active ? text.disable : text.enable;
+    }
+  };
+
   selects.forEach((select) => {
     select.hidden = true;
     const label = select.closest("label");
     label?.classList.add("service-icon-picker-label");
+    const labelText = label?.querySelector(":scope > span");
+    if (labelText) labelText.textContent = text.aliasLogo;
 
     const trigger = document.createElement("button");
     trigger.type = "button";
@@ -239,15 +294,11 @@
     trigger.dataset.aliasId = select.dataset.aliasId || "";
     trigger.innerHTML = `
       <span class="service-badge service-icon-picker-current-mark" data-icon-picker-preview></span>
-      <span class="service-icon-picker-current-copy">
-        <strong data-icon-picker-current-name></strong>
-        <small data-icon-picker-current-mode></small>
-      </span>
-      <span class="service-icon-picker-chevron" aria-hidden="true">⌄</span>
     `;
     select._serviceIconPickerTrigger = trigger;
     label?.insertAdjacentElement("afterend", trigger);
     syncTrigger(select);
+    polishEditPanel(select);
 
     trigger.addEventListener("click", () => openPicker(select));
 
