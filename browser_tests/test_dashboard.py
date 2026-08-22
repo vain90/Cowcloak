@@ -20,6 +20,17 @@ def _pool_item(page: Page, address: str):
     return page.locator(".pool-item").filter(has_text=address)
 
 
+def _open_sender_dialog(page: Page, owner):
+    trigger = owner.locator("button.sender-stats-trigger")
+    expect(trigger).to_be_visible()
+    dialog_id = trigger.get_attribute("aria-controls")
+    assert dialog_id
+    trigger.click()
+    dialog = page.locator(f"#{dialog_id}")
+    expect(dialog).to_be_visible()
+    return dialog
+
+
 def _login(page: Page, base_url: str) -> None:
     page.goto(f"{base_url}/oauth/callback?code=e2e&state=e2e")
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/aliases(?:[?#].*)?$"))
@@ -100,18 +111,15 @@ def test_live_search_keeps_server_unexpected_filter_and_filtering_works(
     )
 
 
-def test_inline_sender_review_updates_action_required_with_fresh_state(
+def test_sender_review_updates_action_required_with_fresh_state(
     page: Page,
     base_url: str,
 ) -> None:
     _login(page, base_url)
 
-    amazon_row = _alias_row(page, AMAZON)
-    sender_details = amazon_row.locator("details.sender-stats")
-    expect(sender_details).to_be_visible()
-    sender_details.locator("summary").click()
-    expect(sender_details).to_contain_text("news@amazon.de")
-    unexpected_sender = sender_details.locator(".sender-stats-row.unexpected")
+    sender_dialog = _open_sender_dialog(page, _alias_row(page, AMAZON))
+    expect(sender_dialog).to_contain_text("news@amazon.de")
+    unexpected_sender = sender_dialog.locator(".sender-stats-row.unexpected")
     expect(unexpected_sender).to_contain_text("odd@unexpected.example")
 
     unexpected_sender.locator('.sender-review-form button[type="submit"]').click()
@@ -202,9 +210,9 @@ def test_used_offline_alias_stays_protected_and_pool_export_excludes_it(
     assert abs(used_assign_box["x"] - unused_assign_box["x"]) <= 1
     assert abs(used_copy_box["x"] - unused_copy_box["x"]) <= 1
 
-    sender_details = used.locator("details.sender-stats")
-    sender_details.locator("summary").click()
-    expect(sender_details).to_contain_text("booking@example.net")
+    sender_dialog = _open_sender_dialog(page, used)
+    expect(sender_dialog).to_contain_text("booking@example.net")
+    sender_dialog.locator(".dialog-close").click()
 
     page.context.grant_permissions(
         ["clipboard-read", "clipboard-write"],
