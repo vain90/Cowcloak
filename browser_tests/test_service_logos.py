@@ -55,11 +55,13 @@ def test_service_icon_picker_shows_logos_search_and_updates_alias(
 
     trigger = amazon_row.locator("[data-icon-picker-trigger]")
     expect(trigger).to_be_visible(timeout=5000)
-    expect(trigger).to_contain_text("Amazon")
+    expect(trigger).to_have_attribute("aria-label", re.compile(r"Alias logo: Amazon"))
+    expect(trigger).not_to_contain_text("Amazon")
     trigger.click()
 
     dialog = page.locator("dialog[data-service-icon-picker-dialog]")
     expect(dialog).to_be_visible()
+    expect(dialog.locator("h2")).to_have_text("Choose alias logo")
     search = dialog.locator("[data-icon-picker-search]")
     expect(search).to_be_focused()
     search.fill("PayPal")
@@ -78,7 +80,44 @@ def test_service_icon_picker_shows_logos_search_and_updates_alias(
         "href",
         "/static/service-icons.svg#service-paypal",
     )
-    expect(trigger).to_contain_text("PayPal")
+    expect(trigger).to_have_attribute("aria-label", re.compile(r"Alias logo: PayPal"))
+    expect(trigger).not_to_contain_text("PayPal")
+
+
+def test_alias_edit_panel_uses_compact_logo_and_bottom_actions(
+    page: Page,
+    base_url: str,
+) -> None:
+    _login(page, base_url)
+
+    row = _alias_row(page, "amazon-k7@example.org")
+    edit = row.locator("details.alias-edit-action")
+    edit.locator("summary").click()
+
+    panel = edit.locator(".edit-panel")
+    trigger = panel.locator("[data-icon-picker-trigger]")
+    expect(trigger).to_be_visible(timeout=5000)
+    expect(panel.locator(".service-icon-picker-label > span")).to_have_text("Alias logo")
+
+    purpose = panel.locator('input[name="description"]')
+    expect(purpose.locator("xpath=..").locator(".alias-field-caption")).to_have_text(
+        "Alias name / purpose"
+    )
+
+    replace = panel.locator("[data-replace-alias]")
+    disable = panel.locator(".alias-toggle-action button")
+    expect(replace).to_have_text("Replace alias")
+    expect(disable).to_have_text("Disable alias")
+
+    trigger_box = trigger.bounding_box()
+    purpose_box = purpose.bounding_box()
+    replace_box = replace.bounding_box()
+    disable_box = disable.bounding_box()
+    assert trigger_box and purpose_box and replace_box and disable_box
+    assert trigger_box["y"] < purpose_box["y"]
+    assert replace_box["y"] < disable_box["y"]
+    assert abs(replace_box["width"] - disable_box["width"]) <= 1
+    expect(panel.locator(".hint").filter(has_text="Creates a new alias")).to_have_count(0)
 
 
 def test_generated_service_logo_renders_from_local_sprite(page: Page, base_url: str) -> None:
