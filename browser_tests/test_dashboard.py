@@ -175,7 +175,8 @@ def test_action_required_can_replace_alias_and_continue(
     )
     expect(result_dialog).to_be_visible(timeout=5000)
     expect(result_dialog).to_contain_text("amazon-safe@example.org")
-    result_dialog.locator(".dialog-close").click()
+    with page.expect_navigation(wait_until="load"):
+        result_dialog.locator(".dialog-close").click()
 
     page.goto(f"{base_url}/aliases")
     old_alias = _alias_row(page, AMAZON)
