@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
+from moolias.alias_table_ui import router as alias_table_router
 from moolias.aliases import (
     RESERVED_COMMENT,
     is_owned_alias,
@@ -15,6 +16,7 @@ from moolias.mailcow import MailcowError
 from moolias.security import require_user, validate_csrf
 
 router = APIRouter()
+router.include_router(alias_table_router)
 
 
 def _language(request: Request) -> str:
