@@ -59,6 +59,43 @@
     ["Zalando", "zalando"],
     ["Zoom", "zoom"],
   ]);
+  const serviceLogoHints = [
+    ["apple", ["apple", "icloud", "appstore"]],
+    ["booking", ["booking", "booking.com"]],
+    ["discord", ["discord"]],
+    ["dropbox", ["dropbox"]],
+    ["ebay", ["ebay"]],
+    ["facebook", ["facebook", "meta"]],
+    ["github", ["github"]],
+    ["gitlab", ["gitlab"]],
+    ["google", ["google", "gmail", "youtube"]],
+    ["instagram", ["instagram"]],
+    ["netflix", ["netflix"]],
+    ["notion", ["notion"]],
+    ["paypal", ["paypal"]],
+    ["reddit", ["reddit"]],
+    ["signal", ["signal"]],
+    ["spotify", ["spotify"]],
+    ["steam", ["steam"]],
+    ["stripe", ["stripe"]],
+    ["telegram", ["telegram"]],
+    ["tiktok", ["tiktok"]],
+    ["twitch", ["twitch"]],
+    ["x", ["twitter", "x.com", "xcom"]],
+    ["zalando", ["zalando"]],
+    ["zoom", ["zoom"]],
+  ];
+
+  const inferServiceLogoKey = (badge) => {
+    const explicit = badge.dataset.serviceIconKey || serviceLogoKeysByLabel.get(badge.title);
+    if (explicit) return explicit;
+    const row = badge.closest(".recent-alias-row");
+    const haystack = row?.textContent?.toLowerCase() || "";
+    for (const [key, hints] of serviceLogoHints) {
+      if (hints.some((hint) => haystack.includes(hint))) return key;
+    }
+    return null;
+  };
 
   const renderServiceBadge = (badge, key, glyph) => {
     if (!badge) return;
@@ -75,6 +112,8 @@
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("service-logo");
     svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "18");
+    svg.setAttribute("height", "18");
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
@@ -84,8 +123,7 @@
   };
 
   document.querySelectorAll(".service-badge").forEach((badge) => {
-    const key = badge.dataset.serviceIconKey || serviceLogoKeysByLabel.get(badge.title) || null;
-    renderServiceBadge(badge, key, badge.textContent.trim());
+    renderServiceBadge(badge, inferServiceLogoKey(badge), badge.textContent.trim());
   });
 
   const openDrawer = (section = null) => {
