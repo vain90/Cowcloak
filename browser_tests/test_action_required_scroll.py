@@ -16,7 +16,7 @@ def _open_action_required(page: Page, base_url: str) -> None:
     expect(action).to_be_visible()
     action.click()
 
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/offline-pool(?:[?#].*)?$"))
+    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"))
     expect(page.locator("dialog[data-action-required-dialog]")).to_be_visible(timeout=5000)
 
 
