@@ -22,16 +22,18 @@ def _login(page: Page, base_url: str) -> None:
 
 
 def _open_amazon_senders(page: Page):
-    details = _alias_row(page, AMAZON).locator("details.sender-stats")
-    expect(details).to_be_visible()
-    if details.get_attribute("open") is None:
-        details.locator("summary").click()
-    expect(details).to_have_attribute("open", "")
-    return details
+    trigger = _alias_row(page, AMAZON).locator("button.sender-stats-trigger")
+    expect(trigger).to_be_visible()
+    dialog_id = trigger.get_attribute("aria-controls")
+    assert dialog_id
+    trigger.click()
+    dialog = page.locator(f"#{dialog_id}")
+    expect(dialog).to_be_visible()
+    return dialog
 
 
-def _sender_row(details, sender: str):
-    return details.locator(".sender-stats-row").filter(has_text=sender)
+def _sender_row(dialog, sender: str):
+    return dialog.locator(".sender-stats-row").filter(has_text=sender)
 
 
 def _expect_alias_url(page: Page, base_url: str) -> None:
@@ -45,8 +47,8 @@ def test_full_mode_domain_approval_warns_and_can_be_overridden_per_address(
 ) -> None:
     _login(page, base_url)
 
-    details = _open_amazon_senders(page)
-    sender = _sender_row(details, UNEXPECTED_SENDER)
+    dialog = _open_amazon_senders(page)
+    sender = _sender_row(dialog, UNEXPECTED_SENDER)
     expect(sender).to_have_class(re.compile(r"\bunexpected\b"))
     expect(sender.locator('[data-expect-domain]')).to_be_visible()
 
@@ -63,16 +65,16 @@ def test_full_mode_domain_approval_warns_and_can_be_overridden_per_address(
     confirmation.locator('[data-moolias-dialog-confirm]').click()
 
     _expect_alias_url(page, base_url)
-    details = _open_amazon_senders(page)
-    sender = _sender_row(details, UNEXPECTED_SENDER)
+    dialog = _open_amazon_senders(page)
+    sender = _sender_row(dialog, UNEXPECTED_SENDER)
     expect(sender).to_have_class(re.compile(r"\bexpected\b"))
     expect(sender.locator('[data-specific-unexpected]')).to_be_visible()
 
     sender.locator('[data-specific-unexpected]').click()
     _expect_alias_url(page, base_url)
 
-    details = _open_amazon_senders(page)
-    sender = _sender_row(details, UNEXPECTED_SENDER)
+    dialog = _open_amazon_senders(page)
+    sender = _sender_row(dialog, UNEXPECTED_SENDER)
     expect(sender).to_have_class(re.compile(r"\bunexpected\b"))
     expect(sender.locator('[data-specific-unexpected]')).to_be_visible()
     expect(sender.locator('[data-expect-domain]')).to_have_count(0)
