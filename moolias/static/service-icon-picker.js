@@ -4,41 +4,19 @@
   const selects = [...document.querySelectorAll("[data-alias-icon-select]")];
   if (!selects.length) return;
 
-  const serviceLogoKeys = new Set([
-    "apple",
-    "booking",
-    "discord",
-    "dropbox",
-    "ebay",
-    "facebook",
-    "github",
-    "gitlab",
-    "google",
-    "instagram",
-    "netflix",
-    "notion",
-    "paypal",
-    "reddit",
-    "signal",
-    "spotify",
-    "steam",
-    "stripe",
-    "telegram",
-    "tiktok",
-    "twitch",
-    "x",
-    "zalando",
-    "zoom",
-  ]);
-
   const fallbackGlyphs = new Map([
     ["generic", "?"],
     ["amazon", "A"],
+    ["check24", "C"],
     ["linkedin", "in"],
     ["microsoft", "M"],
     ["openai", "O"],
     ["slack", "S"],
+    ["takko", "T"],
+    ["tkmaxx", "TK"],
   ]);
+
+  const logoHref = (key) => window.MooliasServiceLogos?.href(key) || null;
 
   const german = (document.documentElement.lang || "").toLowerCase().startsWith("de");
   const text = german
@@ -77,7 +55,8 @@
       return mark;
     }
 
-    if (!serviceLogoKeys.has(key)) {
+    const href = logoHref(key);
+    if (!href) {
       mark.textContent = fallbackGlyphs.get(key) || label.slice(0, 1) || "?";
       return mark;
     }
@@ -88,7 +67,7 @@
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", `/static/service-icons.svg#service-${key}`);
+    use.setAttribute("href", href);
     svg.append(use);
     mark.append(svg);
     return mark;
