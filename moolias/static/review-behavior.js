@@ -13,6 +13,7 @@
       };
 
   let explicitQueryHandled = false;
+  let poolSourcePromise = null;
 
   const ensureAliasAction = () => {
     const filters = document.querySelector(".status-filters");
@@ -36,17 +37,71 @@
     return actions.querySelector("[data-action-required-open]");
   };
 
+  const ensureOfflinePoolSource = async () => {
+    if (document.querySelector(".pool-item")) return;
+    if (document.querySelector("[data-action-required-pool-source]")) return;
+    if (poolSourcePromise) return poolSourcePromise;
+
+    poolSourcePromise = (async () => {
+      try {
+        const response = await fetch("/offline-pool", {
+          headers: { Accept: "text/html" },
+          credentials: "same-origin",
+        });
+        if (response.status === 401) {
+          window.location.assign("/");
+          return;
+        }
+        if (!response.ok) return;
+
+        const sourceDocument = new DOMParser().parseFromString(
+          await response.text(),
+          "text/html",
+        );
+        const usedItems = [...sourceDocument.querySelectorAll(".pool-item.pool-item-used")];
+        if (!usedItems.length) return;
+
+        const source = document.createElement("div");
+        source.hidden = true;
+        source.dataset.actionRequiredPoolSource = "1";
+
+        usedItems.forEach((item) => {
+          const importedItem = document.importNode(item, true);
+          source.append(importedItem);
+
+          const aliasId = item.querySelector("[data-open-assign-dialog]")?.dataset.openAssignDialog;
+          if (!aliasId) return;
+          const dialog = sourceDocument.querySelector(
+            `[data-assign-dialog="${CSS.escape(aliasId)}"]`,
+          );
+          if (dialog) source.append(document.importNode(dialog, true));
+        });
+
+        document.body.append(source);
+      } catch (error) {
+        console.error("Could not preload offline aliases for action required", error);
+      }
+    })();
+
+    try {
+      await poolSourcePromise;
+    } finally {
+      poolSourcePromise = null;
+    }
+  };
+
+  const openActionRequired = async () => {
+    const api = window.MooliasActionRequired;
+    if (!api?.open) return;
+    await ensureOfflinePoolSource();
+    await api.open();
+  };
+
   const bindActionButtons = () => {
     document.querySelectorAll("[data-action-required-open]").forEach((button) => {
       if (button.dataset.actionRequiredBound === "1") return;
       button.dataset.actionRequiredBound = "1";
-      button.addEventListener("click", async () => {
-        if (!document.querySelector(".pool-item")) {
-          window.location.assign("/offline-pool?action=required");
-          return;
-        }
-        await window.MooliasActionRequired?.open();
-      });
+      button.addEventListener("click", openActionRequired);
     });
   };
 
@@ -56,6 +111,7 @@
     if (params.get("action") !== "required") return;
 
     explicitQueryHandled = true;
+    await ensureOfflinePoolSource();
     await api.open();
     params.delete("action");
     const query = params.toString();
