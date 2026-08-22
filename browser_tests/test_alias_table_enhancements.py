@@ -21,7 +21,7 @@ def test_alias_table_headers_control_sorting(page: Page, base_url: str) -> None:
     expect(purpose).to_be_visible()
     purpose.click()
     expect(page).to_have_url(re.compile(r"sort=purpose.*direction=asc|direction=asc.*sort=purpose"))
-    assert _purposes(page) == ["Archive", "Amazon", "GitHub"]
+    assert _purposes(page) == ["Amazon", "Archive", "GitHub"]
 
     status = page.locator('.alias-sort-link[href*="sort=status"]')
     status.click()
