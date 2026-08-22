@@ -204,8 +204,8 @@ def test_used_offline_alias_stays_protected_and_pool_export_excludes_it(
     expect(used.locator('form[action$="/delete"]')).to_have_count(0)
     expect(unused.locator('form[action$="/delete"]')).to_have_count(1)
 
-    used_assign_box = used.locator("[data-open-assign-dialog]").bounding_box()
-    unused_assign_box = unused.locator("[data-open-assign-dialog]").bounding_box()
+    used_assign_box = used.locator("details.pool-assign-action > summary").bounding_box()
+    unused_assign_box = unused.locator("details.pool-assign-action > summary").bounding_box()
     used_copy_box = used.locator("[data-copy]").bounding_box()
     unused_copy_box = unused.locator("[data-copy]").bounding_box()
     assert used_assign_box and unused_assign_box and used_copy_box and unused_copy_box
@@ -239,7 +239,8 @@ def test_action_required_assigns_used_offline_alias(page: Page, base_url: str) -
     row = dialog.locator('[data-pool-alias-id="11"]')
     expect(row).to_be_visible()
     row.locator(".used-pool-purpose input").fill("Hotel booking")
-    dialog.locator(".used-pool-actions .primary").click()
+    with page.expect_navigation(wait_until="load"):
+        dialog.locator(".used-pool-actions .primary").click()
 
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"))
     page.goto(f"{base_url}/aliases")
