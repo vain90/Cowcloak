@@ -238,8 +238,7 @@ async def set_sender_domain_expectation(
     }
 
 
-# The UI router is included here so its GET routes are registered before the
-# legacy dashboard route in main.py. Existing POST endpoints stay untouched.
-from moolias.ui import router as ui_router
+# Keep this import late to avoid a module cycle: ui.py uses AliasReviewSettingsStore.
+from moolias.ui import router as ui_router  # noqa: E402
 
 router.include_router(ui_router)
