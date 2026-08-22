@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from moolias.service_icon_assets import EXTRA_SERVICE_ICON_KEYS, build_service_icon_sprite
 from moolias.service_icons import detect_service_icon, resolve_service_icon
 
 
@@ -42,3 +45,29 @@ def test_paypal_uses_bundled_logo() -> None:
 
     assert icon.key == "paypal"
     assert icon.has_logo is True
+
+
+def test_requested_services_are_detected() -> None:
+    expected = {
+        "dm": True,
+        "lufthansa": True,
+        "sonos": True,
+        "vodafone": True,
+        "check24": False,
+        "takko": False,
+        "tkmaxx": False,
+    }
+
+    for service, has_logo in expected.items():
+        icon = detect_service_icon(f"{service}-k7@example.org", service)
+        assert icon.key == service
+        assert icon.has_logo is has_logo
+
+
+def test_generated_sprite_contains_every_expanded_logo(tmp_path: Path) -> None:
+    output = build_service_icon_sprite(tmp_path / "service-icons.generated.svg")
+    sprite = output.read_text(encoding="utf-8")
+
+    assert len(EXTRA_SERVICE_ICON_KEYS) >= 50
+    for key in EXTRA_SERVICE_ICON_KEYS:
+        assert f'id="service-{key}"' in sprite
