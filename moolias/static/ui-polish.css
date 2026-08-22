@@ -1,0 +1,87 @@
+.header-icon-button[data-open-settings] {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.account-chevron {
+  display: inline-block;
+  transform: rotate(180deg);
+  transform-origin: center;
+  transition: transform .15s ease;
+}
+
+.account-button[aria-expanded="true"] .account-chevron {
+  transform: rotate(0deg);
+}
+
+.alias-edit-action .alias-replace-action {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 12px;
+  border-color: #fec84b;
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.alias-edit-action .alias-replace-action:hover {
+  border-color: #fdb022;
+  background: #fff4cc;
+  color: #93370d;
+}
+
+.alias-edit-action .alias-toggle-action {
+  margin-top: 8px;
+}
+
+.alias-edit-action .alias-toggle-action > button {
+  min-height: 36px;
+}
+
+.pool-assign-action {
+  position: relative;
+}
+
+.pool-assign-action > summary {
+  list-style: none;
+}
+
+.pool-assign-action > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pool-assign-action .edit-panel {
+  width: min(370px, 88vw);
+  text-align: left;
+}
+
+.pool-assign-action .assign-address {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: 2px;
+}
+
+.pool-assign-action .pool-assignment-usage {
+  margin: 2px 0;
+}
+
+@media (max-width: 720px) {
+  .pool-assign-action .edit-panel {
+    position: fixed;
+    z-index: 95;
+    inset: auto 10px 10px 10px;
+    width: auto;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+  }
+}
+
+:root[data-theme="dark"] .alias-edit-action .alias-replace-action {
+  border-color: #9f6a16;
+  background: #35270f;
+  color: #fdb022;
+}
+
+:root[data-theme="dark"] .alias-edit-action .alias-replace-action:hover {
+  border-color: #d6941d;
+  background: #443311;
+}

@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from moolias.service_icon_assets import EXTRA_SERVICE_ICON_KEYS, ensure_service_icon_sprite
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceIcon:
+    key: str
+    label: str
+    glyph: str
+    tone: str
+    keywords: tuple[str, ...] = ()
+    has_logo: bool = False
+
+
+_GENERIC = ServiceIcon("generic", "Allgemein", "?", "neutral")
+
+
+def _icon(
+    key: str,
+    label: str,
+    glyph: str,
+    tone: str,
+    keywords: tuple[str, ...],
+    has_logo: bool | None = None,
+) -> ServiceIcon:
+    if has_logo is None:
+        has_logo = key in EXTRA_SERVICE_ICON_KEYS
+    return ServiceIcon(key, label, glyph, tone, keywords, has_logo)
+
+
+# A real logo is enabled only when Moolias has a local asset for it. Brands that
+# Simple Icons marks as forbidden or whose usage remains unclear intentionally
+# keep the neutral monogram fallback.
+SERVICE_ICONS: tuple[ServiceIcon, ...] = (
+    _icon("airbnb", "Airbnb", "A", "pink", ("airbnb",)),
+    _icon("adidas", "Adidas", "A", "dark", ("adidas",)),
+    _icon("aliexpress", "AliExpress", "A", "red", ("aliexpress", "ali express")),
+    _icon("alipay", "Alipay", "A", "blue", ("alipay",)),
+    _icon("amazon", "Amazon", "A", "orange", ("amazon", "aws"), False),
+    _icon("apple", "Apple", "A", "dark", ("apple", "icloud", "appstore"), True),
+    _icon("bitwarden", "Bitwarden", "B", "blue", ("bitwarden",)),
+    _icon("booking", "Booking.com", "B", "blue", ("booking", "bookingcom"), True),
+    _icon("check24", "CHECK24", "C", "blue", ("check24", "check 24"), False),
+    _icon("cloudflare", "Cloudflare", "C", "orange", ("cloudflare",)),
+    _icon("deezer", "Deezer", "D", "violet", ("deezer",)),
+    _icon(
+        "deutschebahn",
+        "Deutsche Bahn",
+        "DB",
+        "red",
+        ("deutschebahn", "deutsche bahn", "bahn"),
+    ),
+    _icon("dhl", "DHL", "D", "red", ("dhl",)),
+    _icon("digitalocean", "DigitalOcean", "D", "blue", ("digitalocean", "digital ocean")),
+    _icon("discord", "Discord", "D", "violet", ("discord",), True),
+    _icon("dm", "dm", "dm", "blue", ("dm", "drogeriemarkt")),
+    _icon("docker", "Docker", "D", "blue", ("docker",)),
+    _icon("dropbox", "Dropbox", "D", "blue", ("dropbox",), True),
+    _icon("duolingo", "Duolingo", "D", "green", ("duolingo",)),
+    _icon("ebay", "eBay", "e", "multi", ("ebay",), True),
+    _icon("etsy", "Etsy", "E", "orange", ("etsy",)),
+    _icon("facebook", "Facebook", "f", "blue", ("facebook", "meta"), True),
+    _icon("fedex", "FedEx", "F", "violet", ("fedex", "fed ex")),
+    _icon("figma", "Figma", "F", "multi", ("figma",)),
+    _icon("fiverr", "Fiverr", "F", "green", ("fiverr",)),
+    _icon("gitea", "Gitea", "G", "green", ("gitea",)),
+    _icon("github", "GitHub", "G", "dark", ("github",), True),
+    _icon("gitlab", "GitLab", "G", "orange", ("gitlab",), True),
+    _icon("glassdoor", "Glassdoor", "G", "green", ("glassdoor",)),
+    _icon("google", "Google", "G", "multi", ("google", "gmail"), True),
+    _icon("ikea", "IKEA", "I", "blue", ("ikea",)),
+    _icon("instagram", "Instagram", "I", "pink", ("instagram",), True),
+    _icon("kickstarter", "Kickstarter", "K", "green", ("kickstarter",)),
+    _icon("lastpass", "LastPass", "L", "red", ("lastpass", "last pass")),
+    _icon("line", "LINE", "L", "green", ("line",)),
+    _icon("linkedin", "LinkedIn", "in", "blue", ("linkedin",), False),
+    _icon("linktree", "Linktree", "L", "green", ("linktree",)),
+    _icon(
+        "lufthansa",
+        "Lufthansa",
+        "L",
+        "blue",
+        ("lufthansa", "milesandmore", "miles and more"),
+    ),
+    _icon("mailchimp", "Mailchimp", "M", "orange", ("mailchimp", "mail chimp")),
+    _icon("mastodon", "Mastodon", "M", "violet", ("mastodon",)),
+    _icon("medium", "Medium", "M", "dark", ("medium",)),
+    _icon("messenger", "Messenger", "M", "blue", ("messenger", "facebook messenger")),
+    _icon(
+        "microsoft",
+        "Microsoft",
+        "M",
+        "blue",
+        ("microsoft", "office", "outlook", "azure"),
+        False,
+    ),
+    _icon("netflix", "Netflix", "N", "red", ("netflix",), True),
+    _icon("nextcloud", "Nextcloud", "N", "blue", ("nextcloud", "next cloud")),
+    _icon("nordvpn", "NordVPN", "N", "blue", ("nordvpn", "nord vpn")),
+    _icon("notion", "Notion", "N", "dark", ("notion",), True),
+    _icon("openai", "OpenAI", "O", "teal", ("openai", "chatgpt"), False),
+    _icon("patreon", "Patreon", "P", "orange", ("patreon",)),
+    _icon("paypal", "PayPal", "P", "blue", ("paypal",), True),
+    _icon("pinterest", "Pinterest", "P", "red", ("pinterest",)),
+    _icon("plex", "Plex", "P", "orange", ("plex",)),
+    _icon(
+        "protonmail",
+        "Proton Mail",
+        "P",
+        "violet",
+        ("protonmail", "proton mail", "proton"),
+    ),
+    _icon("quora", "Quora", "Q", "red", ("quora",)),
+    _icon("reddit", "Reddit", "r", "orange", ("reddit",), True),
+    _icon("revolut", "Revolut", "R", "dark", ("revolut",)),
+    _icon("samsung", "Samsung", "S", "blue", ("samsung",)),
+    _icon("shazam", "Shazam", "S", "blue", ("shazam",)),
+    _icon("shopify", "Shopify", "S", "green", ("shopify",)),
+    _icon("signal", "Signal", "S", "blue", ("signal",), True),
+    _icon("slack", "Slack", "S", "multi", ("slack",), False),
+    _icon("snapchat", "Snapchat", "S", "orange", ("snapchat",)),
+    _icon("sonos", "Sonos", "S", "dark", ("sonos",)),
+    _icon("soundcloud", "SoundCloud", "S", "orange", ("soundcloud", "sound cloud")),
+    _icon("spotify", "Spotify", "S", "green", ("spotify",), True),
+    _icon("squarespace", "Squarespace", "S", "dark", ("squarespace",)),
+    _icon(
+        "stackoverflow",
+        "Stack Overflow",
+        "SO",
+        "orange",
+        ("stackoverflow", "stack overflow"),
+    ),
+    _icon("steam", "Steam", "S", "blue", ("steam",), True),
+    _icon("strava", "Strava", "S", "orange", ("strava",)),
+    _icon("stripe", "Stripe", "S", "violet", ("stripe",), True),
+    _icon(
+        "takko",
+        "Takko Fashion",
+        "T",
+        "red",
+        ("takko", "takkofashion", "takko fashion"),
+        False,
+    ),
+    _icon("teamviewer", "TeamViewer", "T", "blue", ("teamviewer", "team viewer")),
+    _icon("telegram", "Telegram", "T", "blue", ("telegram",), True),
+    _icon("threads", "Threads", "T", "dark", ("threads",)),
+    _icon("tiktok", "TikTok", "T", "dark", ("tiktok",), True),
+    _icon("tkmaxx", "TK Maxx", "TK", "red", ("tkmaxx", "tk maxx"), False),
+    _icon("trello", "Trello", "T", "blue", ("trello",)),
+    _icon("tripadvisor", "Tripadvisor", "T", "green", ("tripadvisor", "trip advisor")),
+    _icon("tumblr", "Tumblr", "T", "blue", ("tumblr",)),
+    _icon("twitch", "Twitch", "T", "violet", ("twitch",), True),
+    _icon("uber", "Uber", "U", "dark", ("uber",)),
+    _icon("vimeo", "Vimeo", "V", "blue", ("vimeo",)),
+    _icon("vinted", "Vinted", "V", "teal", ("vinted",)),
+    _icon("vodafone", "Vodafone", "V", "red", ("vodafone",)),
+    _icon("whatsapp", "WhatsApp", "W", "green", ("whatsapp", "whats app")),
+    _icon("wise", "Wise", "W", "green", ("wise", "transferwise")),
+    _icon("wordpress", "WordPress", "W", "blue", ("wordpress", "word press")),
+    _icon("x", "X / Twitter", "X", "dark", ("twitter", "xcom"), True),
+    _icon("yelp", "Yelp", "Y", "red", ("yelp",)),
+    _icon("youtube", "YouTube", "Y", "red", ("youtube", "you tube")),
+    _icon("zalando", "Zalando", "Z", "orange", ("zalando",), True),
+    _icon("zoom", "Zoom", "Z", "blue", ("zoom",), True),
+)
+
+_ICON_BY_KEY = {icon.key: icon for icon in SERVICE_ICONS}
+
+# Source checkouts can generate the extended sprite lazily. Docker images generate
+# it during the build so runtime containers do not need write access to /app.
+ensure_service_icon_sprite()
+
+
+def icon_catalog() -> tuple[ServiceIcon, ...]:
+    return (_GENERIC, *SERVICE_ICONS)
+
+
+def icon_by_key(key: str | None) -> ServiceIcon:
+    if not key:
+        return _GENERIC
+    return _ICON_BY_KEY.get(key.strip().lower(), _GENERIC)
+
+
+def detect_service_icon(address: str, description: str = "") -> ServiceIcon:
+    local_part = address.partition("@")[0]
+    haystack = f"{description} {local_part}".casefold()
+    normalized = re.sub(r"[^a-z0-9]+", " ", haystack)
+    tokens = set(normalized.split())
+    compact = normalized.replace(" ", "")
+
+    for icon in SERVICE_ICONS:
+        for keyword in icon.keywords:
+            folded = keyword.casefold()
+            if folded in tokens or (len(folded) >= 4 and folded in compact):
+                return icon
+    return _GENERIC
+
+
+def resolve_service_icon(
+    address: str,
+    description: str,
+    override: str | None,
+) -> ServiceIcon:
+    if override and override != "auto":
+        return icon_by_key(override)
+    return detect_service_icon(address, description)
