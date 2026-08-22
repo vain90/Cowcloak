@@ -44,7 +44,7 @@ def _open_action_required(page: Page, base_url: str):
     expect(trigger).to_be_visible()
     trigger.click()
     expect(page).to_have_url(
-        re.compile(rf"{re.escape(base_url)}/offline-pool(?:[?#].*)?$"),
+        re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"),
         timeout=5000,
     )
     dialog = page.locator("dialog[data-action-required-dialog]")
@@ -143,7 +143,7 @@ def test_action_required_can_disable_per_alias_unexpected_review(
     expect(checkbox).not_to_be_checked()
     checkbox.check()
 
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/offline-pool(?:[?#].*)?$"))
+    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"))
     page.goto(f"{base_url}/aliases")
     expect(page.locator("[data-unexpected-filter] span")).to_have_text("0", timeout=5000)
 
@@ -239,7 +239,7 @@ def test_action_required_assigns_used_offline_alias(page: Page, base_url: str) -
     row.locator(".used-pool-purpose input").fill("Hotel booking")
     dialog.locator(".used-pool-actions .primary").click()
 
-    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/offline-pool(?:[?#].*)?$"))
+    expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"))
     page.goto(f"{base_url}/aliases")
     assigned = _alias_row(page, USED_POOL)
     expect(assigned).to_have_count(1)
