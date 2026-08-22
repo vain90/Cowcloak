@@ -1,4 +1,6 @@
 (() => {
+  "use strict";
+
   const language = document.documentElement.lang?.toLowerCase().startsWith("de") ? "de" : "en";
   const text = language === "de"
     ? {
@@ -10,41 +12,9 @@
         actionRequiredCount: (count) => `Action required (${count})`,
       };
 
-  const LOGIN_PROMPT_PREFIX = "moolias-action-required-login:";
-  let loginPromptEvaluated = false;
+  let explicitQueryHandled = false;
 
-  const csrfToken = () => document.querySelector('input[name="csrf_token"]')?.value || "";
-
-  const loginPromptKey = () => {
-    const csrf = csrfToken();
-    return csrf ? `${LOGIN_PROMPT_PREFIX}${csrf}` : null;
-  };
-
-  const wasLoginPromptEvaluated = () => {
-    const key = loginPromptKey();
-    if (!key) return true;
-    try {
-      return sessionStorage.getItem(key) === "1";
-    } catch (error) {
-      console.debug("sessionStorage is unavailable", error);
-      return true;
-    }
-  };
-
-  const markLoginPromptEvaluated = () => {
-    const key = loginPromptKey();
-    if (!key) return;
-    try {
-      sessionStorage.setItem(key, "1");
-    } catch (error) {
-      console.debug("sessionStorage is unavailable", error);
-    }
-  };
-
-  const hasBlockingDialog = () =>
-    Boolean(document.querySelector("dialog[open]:not([data-action-required-dialog])"));
-
-  const ensureAction = () => {
+  const ensureAliasAction = () => {
     const filters = document.querySelector(".status-filters");
     if (!filters) return null;
 
@@ -60,46 +30,59 @@
       button.dataset.unexpectedReviewAll = "1";
       button.dataset.actionRequiredOpen = "1";
       button.textContent = text.actionRequired;
-      button.addEventListener("click", () => window.MooliasActionRequired?.open());
       actions.append(button);
       filters.insertAdjacentElement("beforebegin", actions);
     }
     return actions.querySelector("[data-action-required-open]");
   };
 
+  const bindActionButtons = () => {
+    document.querySelectorAll("[data-action-required-open]").forEach((button) => {
+      if (button.dataset.actionRequiredBound === "1") return;
+      button.dataset.actionRequiredBound = "1";
+      button.addEventListener("click", async () => {
+        if (!document.querySelector(".status-filters")) {
+          window.location.assign("/aliases?action=required");
+          return;
+        }
+        await window.MooliasActionRequired?.open();
+      });
+    });
+  };
+
   const refresh = async () => {
-    const action = ensureAction();
+    const aliasAction = ensureAliasAction();
+    bindActionButtons();
     const api = window.MooliasActionRequired;
-    if (!action || !api?.summary) return;
+    if (!aliasAction || !api?.summary) return;
 
     const summary = await api.summary();
-    action.textContent = summary.total > 0
+    aliasAction.textContent = summary.total > 0
       ? text.actionRequiredCount(summary.total)
       : text.actionRequired;
-    action.classList.toggle("has-action-required", summary.total > 0);
+    aliasAction.classList.toggle("has-action-required", summary.total > 0);
 
-    if (loginPromptEvaluated || wasLoginPromptEvaluated()) return;
-    if (hasBlockingDialog()) return;
+    if (explicitQueryHandled) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") !== "required") return;
 
-    loginPromptEvaluated = true;
-    markLoginPromptEvaluated();
-    if (summary.total > 0) await api.open();
+    explicitQueryHandled = true;
+    await api.open();
+    params.delete("action");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   };
 
   const start = () => {
-    if (!document.querySelector(".status-filters")) return;
-    ensureAction();
+    ensureAliasAction();
+    bindActionButtons();
     refresh();
 
-    const observer = new MutationObserver(() => ensureAction());
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
+    const observer = new MutationObserver(() => {
+      ensureAliasAction();
+      bindActionButtons();
     });
-
-    document.addEventListener("close", () => {
-      if (!loginPromptEvaluated && !wasLoginPromptEvaluated()) refresh();
-    }, true);
+    observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("moolias:action-required-ready", refresh);
   };
 
