@@ -7,7 +7,7 @@
   const accountPopover = document.querySelector("[data-account-popover]");
   const sidebar = document.querySelector("[data-app-sidebar]");
 
-  const serviceLogoKeys = new Set([
+  const bundledLogoKeys = new Set([
     "apple",
     "booking",
     "discord",
@@ -33,66 +33,119 @@
     "zalando",
     "zoom",
   ]);
-  const serviceLogoKeysByLabel = new Map([
-    ["Apple", "apple"],
-    ["Booking.com", "booking"],
-    ["Discord", "discord"],
-    ["Dropbox", "dropbox"],
-    ["eBay", "ebay"],
-    ["Facebook", "facebook"],
-    ["GitHub", "github"],
-    ["GitLab", "gitlab"],
-    ["Google", "google"],
-    ["Instagram", "instagram"],
-    ["Netflix", "netflix"],
-    ["Notion", "notion"],
-    ["PayPal", "paypal"],
-    ["Reddit", "reddit"],
-    ["Signal", "signal"],
-    ["Spotify", "spotify"],
-    ["Steam", "steam"],
-    ["Stripe", "stripe"],
-    ["Telegram", "telegram"],
-    ["TikTok", "tiktok"],
-    ["Twitch", "twitch"],
-    ["X / Twitter", "x"],
-    ["Zalando", "zalando"],
-    ["Zoom", "zoom"],
+
+  const generatedLogoKeys = new Set([
+    "airbnb",
+    "adidas",
+    "aliexpress",
+    "alipay",
+    "bitwarden",
+    "cloudflare",
+    "deezer",
+    "deutschebahn",
+    "dhl",
+    "digitalocean",
+    "dm",
+    "docker",
+    "duolingo",
+    "etsy",
+    "fedex",
+    "figma",
+    "fiverr",
+    "gitea",
+    "glassdoor",
+    "heroku",
+    "ikea",
+    "kickstarter",
+    "lastpass",
+    "line",
+    "linktree",
+    "lufthansa",
+    "mailchimp",
+    "mastodon",
+    "medium",
+    "messenger",
+    "nextcloud",
+    "nordvpn",
+    "patreon",
+    "pinterest",
+    "plex",
+    "protonmail",
+    "quora",
+    "revolut",
+    "samsung",
+    "shazam",
+    "shopify",
+    "snapchat",
+    "sonos",
+    "soundcloud",
+    "squarespace",
+    "stackoverflow",
+    "strava",
+    "teamviewer",
+    "temu",
+    "threads",
+    "trello",
+    "tripadvisor",
+    "tumblr",
+    "uber",
+    "vimeo",
+    "vinted",
+    "vodafone",
+    "whatsapp",
+    "wise",
+    "wordpress",
+    "yelp",
+    "youtube",
   ]);
-  const serviceLogoHints = [
-    ["apple", ["apple", "icloud", "appstore"]],
-    ["booking", ["booking", "booking.com"]],
-    ["discord", ["discord"]],
-    ["dropbox", ["dropbox"]],
-    ["ebay", ["ebay"]],
-    ["facebook", ["facebook", "meta"]],
-    ["github", ["github"]],
-    ["gitlab", ["gitlab"]],
-    ["google", ["google", "gmail", "youtube"]],
-    ["instagram", ["instagram"]],
-    ["netflix", ["netflix"]],
-    ["notion", ["notion"]],
-    ["paypal", ["paypal"]],
-    ["reddit", ["reddit"]],
-    ["signal", ["signal"]],
-    ["spotify", ["spotify"]],
-    ["steam", ["steam"]],
-    ["stripe", ["stripe"]],
-    ["telegram", ["telegram"]],
-    ["tiktok", ["tiktok"]],
-    ["twitch", ["twitch"]],
+
+  const serviceLogoKeys = new Set([...bundledLogoKeys, ...generatedLogoKeys]);
+  const labelKeyOverrides = new Map([
+    ["bookingcom", "booking"],
+    ["xtwitter", "x"],
+  ]);
+  const specialLogoHints = new Map([
+    ["dm", ["dm", "drogeriemarkt"]],
+    ["dhl", ["dhl"]],
+    ["line", ["line"]],
     ["x", ["twitter", "x.com", "xcom"]],
-    ["zalando", ["zalando"]],
-    ["zoom", ["zoom"]],
-  ];
+  ]);
+
+  const logoHref = (key) => {
+    if (generatedLogoKeys.has(key)) {
+      return `/static/service-icons.generated.svg#service-${key}`;
+    }
+    if (bundledLogoKeys.has(key)) {
+      return `/static/service-icons.svg#service-${key}`;
+    }
+    return null;
+  };
+
+  window.MooliasServiceLogos = {
+    has: (key) => serviceLogoKeys.has(key),
+    href: logoHref,
+  };
+
+  const keyFromLabel = (label) => {
+    const normalized = (label || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return labelKeyOverrides.get(normalized) || (serviceLogoKeys.has(normalized) ? normalized : null);
+  };
 
   const inferServiceLogoKey = (badge) => {
-    const explicit = badge.dataset.serviceIconKey || serviceLogoKeysByLabel.get(badge.title);
+    const explicit = badge.dataset.serviceIconKey || keyFromLabel(badge.title);
     if (explicit) return explicit;
+
     const row = badge.closest(".recent-alias-row");
     const haystack = row?.textContent?.toLowerCase() || "";
-    for (const [key, hints] of serviceLogoHints) {
-      if (hints.some((hint) => haystack.includes(hint))) return key;
+    const normalized = haystack.replace(/[^a-z0-9]+/g, "");
+    const tokens = new Set(haystack.split(/[^a-z0-9]+/).filter(Boolean));
+
+    for (const [key, hints] of specialLogoHints) {
+      if (hints.some((hint) => tokens.has(hint) || haystack.includes(hint))) return key;
+    }
+    for (const key of [...serviceLogoKeys].sort((left, right) => right.length - left.length)) {
+      if (key.length >= 4 && normalized.includes(key)) return key;
+      if (tokens.has(key)) return key;
     }
     return null;
   };
@@ -104,7 +157,8 @@
     badge.dataset.serviceIconKey = key || "generic";
     badge.replaceChildren();
 
-    if (!key || !serviceLogoKeys.has(key)) {
+    const href = key ? logoHref(key) : null;
+    if (!href) {
       badge.textContent = fallback;
       return;
     }
@@ -117,7 +171,7 @@
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", `/static/service-icons.svg#service-${key}`);
+    use.setAttribute("href", href);
     svg.append(use);
     badge.append(svg);
   };
@@ -125,6 +179,92 @@
   document.querySelectorAll(".service-badge").forEach((badge) => {
     renderServiceBadge(badge, inferServiceLogoKey(badge), badge.textContent.trim());
   });
+
+  const copiedLabel = document.body.dataset.copiedLabel || "Copied";
+  const copyFeedbackObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      const button = mutation.target.nodeType === Node.TEXT_NODE
+        ? mutation.target.parentElement?.closest("[data-copy]")
+        : mutation.target.closest?.("[data-copy]");
+      if (!button || button.textContent.trim() !== copiedLabel) return;
+      button.textContent = "✓";
+      button.classList.add("copy-success");
+      window.setTimeout(() => button.classList.remove("copy-success"), 1200);
+    });
+  });
+  copyFeedbackObserver.observe(document.body, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
+
+  const installAliasHeaderSorting = () => {
+    const head = document.querySelector(".alias-table-head");
+    if (!head) return;
+
+    const cells = [...head.children];
+    if (cells.length < 6) return;
+
+    const params = new URLSearchParams(window.location.search);
+    let activeSort = params.get("sort") || "last_used";
+    if (activeSort === "most_used") activeSort = "usage";
+    const activeDirection = params.get("direction") === "asc" ? "asc" : "desc";
+    const definitions = [
+      { index: 1, key: "purpose", defaultDirection: "asc" },
+      { index: 2, key: "status", defaultDirection: "asc" },
+      { index: 3, key: "usage", defaultDirection: "desc" },
+      { index: 4, key: "last_used", defaultDirection: "desc" },
+    ];
+
+    head.removeAttribute("aria-hidden");
+    head.setAttribute("role", "row");
+    cells.forEach((cell) => cell.setAttribute("role", "columnheader"));
+
+    definitions.forEach(({ index, key, defaultDirection }) => {
+      const cell = cells[index];
+      if (!cell) return;
+      const label = cell.textContent.trim();
+      const isActive = activeSort === key;
+      const nextDirection = isActive
+        ? (activeDirection === "asc" ? "desc" : "asc")
+        : defaultDirection;
+      const nextParams = new URLSearchParams(params);
+      nextParams.set("sort", key);
+      nextParams.set("direction", nextDirection);
+      nextParams.delete("page");
+
+      const link = document.createElement("a");
+      link.className = `alias-sort-link${isActive ? " current" : ""}`;
+      link.href = `${window.location.pathname}?${nextParams.toString()}`;
+      link.textContent = label;
+      link.setAttribute(
+        "aria-label",
+        `${label}, ${nextDirection === "asc" ? "ascending" : "descending"}`,
+      );
+
+      const arrow = document.createElement("span");
+      arrow.className = "alias-sort-arrow";
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = isActive ? (activeDirection === "asc" ? "↑" : "↓") : "↕";
+      link.append(arrow);
+      cell.replaceChildren(link);
+      if (isActive) {
+        cell.setAttribute("aria-sort", activeDirection === "asc" ? "ascending" : "descending");
+      }
+    });
+
+    document.querySelector(".sort-controls")?.setAttribute("hidden", "");
+
+    if (!document.querySelector("link[data-alias-enhancements-styles]")) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = "/static/alias-enhancements.css?v=20260822-1";
+      stylesheet.dataset.aliasEnhancementsStyles = "";
+      document.head.append(stylesheet);
+    }
+  };
+
+  installAliasHeaderSorting();
 
   const openDrawer = (section = null) => {
     if (!drawer) return;
@@ -281,14 +421,14 @@
     if (!document.querySelector("link[data-service-icon-picker-styles]")) {
       const stylesheet = document.createElement("link");
       stylesheet.rel = "stylesheet";
-      stylesheet.href = "/static/service-icon-picker.css?v=20260822-1";
+      stylesheet.href = "/static/service-icon-picker.css?v=20260822-2";
       stylesheet.dataset.serviceIconPickerStyles = "";
       document.head.append(stylesheet);
     }
 
     if (!document.querySelector("script[data-service-icon-picker-script]")) {
       const script = document.createElement("script");
-      script.src = "/static/service-icon-picker.js?v=20260822-1";
+      script.src = "/static/service-icon-picker.js?v=20260822-2";
       script.dataset.serviceIconPickerScript = "";
       document.body.append(script);
     }
