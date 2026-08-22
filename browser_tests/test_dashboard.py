@@ -141,7 +141,8 @@ def test_action_required_can_disable_per_alias_unexpected_review(
     amazon_review = dialog.locator(".unexpected-review-alias").filter(has_text=AMAZON)
     checkbox = amazon_review.locator(".sender-review-settings input[type=checkbox]")
     expect(checkbox).not_to_be_checked()
-    checkbox.check()
+    with page.expect_navigation(wait_until="load"):
+        checkbox.check()
 
     expect(page).to_have_url(re.compile(rf"{re.escape(base_url)}/overview(?:[?#].*)?$"))
     page.goto(f"{base_url}/aliases")
