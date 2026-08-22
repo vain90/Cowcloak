@@ -61,12 +61,18 @@
 
   const csrfToken = () => document.body.dataset.csrfToken || "";
 
+  const setHidden = (element, hidden) => {
+    if (!element) return;
+    element.hidden = hidden;
+    element.style.display = hidden ? "none" : "";
+  };
+
   const syncActionRequired = (required) => {
     protectionRequiresAction = Boolean(required);
-    if (action) action.hidden = !protectionRequiresAction;
+    setHidden(action, !protectionRequiresAction);
     const total = baseActionCount + (protectionRequiresAction ? 1 : 0);
     if (actionCount) actionCount.textContent = String(total);
-    if (actionEmpty) actionEmpty.hidden = total > 0;
+    setHidden(actionEmpty, total > 0);
   };
 
   const syncOverview = (state, detail, attention = false) => {
