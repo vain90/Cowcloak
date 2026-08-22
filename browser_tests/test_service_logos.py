@@ -22,6 +22,16 @@ def test_bundled_service_logo_and_restricted_fallback(page: Page, base_url: str)
         "href",
         "/static/service-icons.svg#service-github",
     )
+    page.wait_for_function(
+        """() => {
+            const logo = document.querySelector(
+                '.alias-row:has([data-alias-select][data-address="github-m4@example.org"]) svg.service-logo'
+            );
+            if (!logo) return false;
+            const box = logo.getBBox();
+            return box.width > 0 && box.height > 0;
+        }"""
+    )
 
     amazon_badge = _alias_row(page, "amazon-k7@example.org").locator(".service-badge")
     expect(amazon_badge.locator("svg.service-logo")).to_have_count(0)
