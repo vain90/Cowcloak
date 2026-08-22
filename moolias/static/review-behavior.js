@@ -93,8 +93,25 @@
   const openActionRequired = async () => {
     const api = window.MooliasActionRequired;
     if (!api?.open) return;
-    await ensureOfflinePoolSource();
-    await api.open();
+
+    const poolPromise = ensureOfflinePoolSource();
+    const renderPromise = api.open();
+    const dialog = document.querySelector("dialog[data-action-required-dialog]");
+
+    // review.js creates the dialog and its loading state synchronously before it
+    // starts fetching the detailed data. Show that state immediately so the
+    // click always feels responsive instead of waiting on network requests.
+    if (dialog && !dialog.open) dialog.showModal();
+
+    await Promise.all([poolPromise, renderPromise]);
+
+    // The pool source and the first dialog render are loaded in parallel. If
+    // the dialog happened to finish first, refresh it once with the now local
+    // pool data instead of delaying the initial opening.
+    const hasUsedPoolItem = Boolean(document.querySelector(".pool-item.pool-item-used"));
+    if (hasUsedPoolItem && dialog && !dialog.querySelector(".action-required-pool-form")) {
+      await api.open();
+    }
   };
 
   const bindActionButtons = () => {
@@ -102,6 +119,8 @@
       if (button.dataset.actionRequiredBound === "1") return;
       button.dataset.actionRequiredBound = "1";
       button.addEventListener("click", openActionRequired);
+      button.addEventListener("pointerenter", () => void ensureOfflinePoolSource(), { once: true });
+      button.addEventListener("focus", () => void ensureOfflinePoolSource(), { once: true });
     });
   };
 
@@ -111,8 +130,7 @@
     if (params.get("action") !== "required") return;
 
     explicitQueryHandled = true;
-    await ensureOfflinePoolSource();
-    await api.open();
+    await openActionRequired();
     params.delete("action");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
