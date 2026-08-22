@@ -60,9 +60,12 @@ def test_bulk_failure_is_rendered_inside_moolias(page: Page, base_url: str) -> N
     page.route("**/aliases/bulk", lambda route: route.fulfill(status=500, body="failed"))
 
     page.locator("[data-alias-select]").first.check()
-    action = page.locator('[data-bulk-action="disable"]')
-    expect(action).to_be_enabled()
-    action.click()
+    action_select = page.locator("[data-bulk-action-select]")
+    expect(action_select).to_be_enabled()
+    action_select.select_option("disable")
+    apply = page.locator(".bulk-actions button")
+    expect(apply).to_be_enabled()
+    apply.click()
 
     dialog = page.locator('dialog[data-moolias-dialog="message"]')
     expect(dialog).to_be_visible(timeout=5000)
