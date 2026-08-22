@@ -41,8 +41,8 @@
       if (button.dataset.actionRequiredBound === "1") return;
       button.dataset.actionRequiredBound = "1";
       button.addEventListener("click", async () => {
-        if (!document.querySelector(".status-filters")) {
-          window.location.assign("/aliases?action=required");
+        if (!document.querySelector(".pool-item")) {
+          window.location.assign("/offline-pool?action=required");
           return;
         }
         await window.MooliasActionRequired?.open();
@@ -50,19 +50,8 @@
     });
   };
 
-  const refresh = async () => {
-    const aliasAction = ensureAliasAction();
-    bindActionButtons();
-    const api = window.MooliasActionRequired;
-    if (!aliasAction || !api?.summary) return;
-
-    const summary = await api.summary();
-    aliasAction.textContent = summary.total > 0
-      ? text.actionRequiredCount(summary.total)
-      : text.actionRequired;
-    aliasAction.classList.toggle("has-action-required", summary.total > 0);
-
-    if (explicitQueryHandled) return;
+  const handleExplicitQuery = async (api) => {
+    if (explicitQueryHandled || !api?.open) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("action") !== "required") return;
 
@@ -71,6 +60,23 @@
     params.delete("action");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  };
+
+  const refresh = async () => {
+    const aliasAction = ensureAliasAction();
+    bindActionButtons();
+    const api = window.MooliasActionRequired;
+    if (!api) return;
+
+    if (aliasAction && api.summary) {
+      const summary = await api.summary();
+      aliasAction.textContent = summary.total > 0
+        ? text.actionRequiredCount(summary.total)
+        : text.actionRequired;
+      aliasAction.classList.toggle("has-action-required", summary.total > 0);
+    }
+
+    await handleExplicitQuery(api);
   };
 
   const start = () => {
